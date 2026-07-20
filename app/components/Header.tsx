@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 import { PhoneIcon } from "./icons";
 
 const NAV_ITEMS = [
-  { label: "홈", href: "#home" },
-  { label: "추천매물", href: "#properties" },
-  { label: "아파트", href: "#properties" },
-  { label: "오피스텔", href: "#properties" },
-  { label: "상가", href: "#properties" },
-  { label: "문의하기", href: "#contact" },
+  { label: "홈", href: "/#home" },
+  { label: "추천매물", href: "/#properties" },
+  { label: "아파트", href: "/#properties" },
+  { label: "오피스텔", href: "/#properties" },
+  { label: "상가", href: "/#properties" },
+  { label: "문의하기", href: "/#contact" },
 ];
 
 export default function Header() {
@@ -19,12 +20,12 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-navy-900/10 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <a
-          href="#home"
+        <Link
+          href="/#home"
           className="text-lg font-bold tracking-tight text-navy-900 sm:text-xl"
         >
           호수공인중개사사무소
-        </a>
+        </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
           {NAV_ITEMS.map((item) => (

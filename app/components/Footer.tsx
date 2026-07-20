@@ -1,6 +1,7 @@
 import {
   ADDRESS_LINES,
   BUSINESS_HOURS,
+  BUSINESS_REG_NUMBER,
   CEO_NAME,
   COMPANY_NAME,
   NAVER_MAP_URL,
@@ -11,6 +12,7 @@ import { LocationIcon, PhoneIcon } from "./icons";
 
 const INFO_ROWS = [
   { label: "대표자", value: CEO_NAME },
+  { label: "사업자등록번호", value: BUSINESS_REG_NUMBER },
   {
     label: "주소",
     value: (
@@ -34,14 +36,14 @@ export default function Footer() {
           <dl className="mt-4 grid gap-2 text-sm text-navy-800/70 sm:grid-cols-2 sm:gap-x-8 lg:grid-cols-1">
             {INFO_ROWS.map((row) => (
               <div key={row.label} className="flex gap-2">
-                <dt className="w-14 shrink-0 font-semibold text-navy-800/50">
+                <dt className="w-28 shrink-0 whitespace-nowrap font-semibold text-navy-800/50">
                   {row.label}
                 </dt>
                 <dd>{row.value}</dd>
               </div>
             ))}
             <div className="flex gap-2">
-              <dt className="w-14 shrink-0 font-semibold text-navy-800/50">
+              <dt className="w-28 shrink-0 whitespace-nowrap font-semibold text-navy-800/50">
                 전화
               </dt>
               <dd>

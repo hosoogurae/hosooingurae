@@ -1,5 +1,6 @@
 export const COMPANY_NAME = "호수공인중개사사무소";
 export const CEO_NAME = "김병수";
+export const BUSINESS_REG_NUMBER = "210-15-47590";
 export const PHONE_NUMBER = "031-998-4556";
 export const PHONE_HREF = "tel:0319984556";
 export const ADDRESS_LINES = [

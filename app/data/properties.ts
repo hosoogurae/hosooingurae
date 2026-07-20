@@ -12,15 +12,6 @@ export interface Property {
 
 export const featuredProperties: Property[] = [
   {
-    id: "gurae-apt-01",
-    type: "아파트",
-    title: "한강신도시 구래동 33평 아파트",
-    price: "5억 8,000만원",
-    location: "김포시 구래동",
-    area: "전용 84㎡ (33평)",
-    features: ["로얄층", "남향", "즉시입주"],
-  },
-  {
     id: "gurae-officetel-01",
     type: "오피스텔",
     title: "구래역 도보 5분 신축 오피스텔",

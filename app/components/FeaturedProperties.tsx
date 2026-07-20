@@ -1,7 +1,13 @@
+import Link from "next/link";
 import { featuredProperties } from "../data/properties";
+import { getFeaturedListings } from "../lib/listings";
+import ListingCard from "./ListingCard";
 import PropertyCard from "./PropertyCard";
+import { ArrowIcon } from "./icons";
 
 export default function FeaturedProperties() {
+  const featuredListings = getFeaturedListings();
+
   return (
     <section id="properties" className="mx-auto max-w-6xl px-6 py-24">
       <div className="mx-auto mb-14 max-w-xl text-center">
@@ -18,9 +24,22 @@ export default function FeaturedProperties() {
       </div>
 
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        {featuredListings.map((listing) => (
+          <ListingCard key={listing.id} listing={listing} />
+        ))}
         {featuredProperties.map((property) => (
           <PropertyCard key={property.id} property={property} />
         ))}
+      </div>
+
+      <div className="mt-12 flex justify-center">
+        <Link
+          href="/listings"
+          className="group inline-flex items-center gap-2 rounded-full border border-navy-900/15 px-6 py-3 text-sm font-bold text-navy-900 transition-colors hover:border-gold-500 hover:text-gold-600"
+        >
+          전체 매물 보기
+          <ArrowIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </Link>
       </div>
     </section>
   );
