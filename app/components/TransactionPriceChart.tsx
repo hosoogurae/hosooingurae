@@ -78,6 +78,7 @@ export default function TransactionPriceChart({
   // 서버에서 내려준 mock 데이터로 먼저 그리고, 국토부 실거래가 API 응답이
   // 도착하면 조용히 교체합니다. 실패 시에는 초기 데이터를 그대로 유지합니다.
   const [transactions, setTransactions] = useState(initialTransactions);
+  const [source, setSource] = useState<"molit" | "mock" | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -98,11 +99,13 @@ export default function TransactionPriceChart({
         }
 
         const data = (await response.json()) as {
+          source?: "molit" | "mock";
           transactions?: ComplexTransaction[];
         };
 
         if (data.transactions && data.transactions.length > 0) {
           setTransactions(data.transactions);
+          setSource(data.source ?? null);
         }
       } catch {
         // 네트워크 오류 등은 무시하고 초기 데이터를 그대로 사용합니다.
@@ -122,15 +125,31 @@ export default function TransactionPriceChart({
     );
   }
 
-  const { latest, highestRecent, lowestRecent } =
+  const { latest, highestRecent, lowestRecent, averageRecentPrice } =
     getTransactionSummary(transactions);
 
   return (
     <div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      {source === "molit" && (
+        <p className="mb-4 text-xs font-medium text-navy-800/50">
+          국토교통부 실거래가 공개시스템 기준 · 최근 12개월 {transactions.length}건
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <SummaryCard label="최근 거래가" transaction={latest} />
-        <SummaryCard label="최근 3년 최고가" transaction={highestRecent} />
-        <SummaryCard label="최근 3년 최저가" transaction={lowestRecent} />
+        <SummaryCard label="최근 12개월 최고가" transaction={highestRecent} />
+        <SummaryCard label="최근 12개월 최저가" transaction={lowestRecent} />
+        <div className="rounded-xl border border-navy-900/10 p-4 sm:p-5">
+          <p className="text-xs font-semibold text-navy-800/50">
+            최근 12개월 평균가
+          </p>
+          <p className="mt-2 text-lg font-black text-navy-950 sm:text-xl">
+            {averageRecentPrice !== null
+              ? formatPriceFull(averageRecentPrice)
+              : "-"}
+          </p>
+        </div>
       </div>
 
       <figure className="mt-6">

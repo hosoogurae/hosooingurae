@@ -1,14 +1,35 @@
 import type { Metadata } from "next";
 import { getAllListings } from "../lib/listings";
+import {
+  hasActiveFilters,
+  parseListingSearchParams,
+  type RawSearchParams,
+} from "../lib/listingFilters";
 import ListingCard from "../components/ListingCard";
+import ListingsFilterBar from "../components/ListingsFilterBar";
 
 export const metadata: Metadata = {
   title: "전체 매물 | 호수공인중개사사무소",
   description: "호수공인중개사사무소가 확인한 김포 구래동 실제 매물을 모두 확인하세요.",
 };
 
-export default function ListingsPage() {
-  const listings = getAllListings();
+// 매물 데이터를 Supabase에서 매 요청마다 새로 읽어오므로 정적 캐싱을 끕니다.
+export const dynamic = "force-dynamic";
+
+interface ListingsPageProps {
+  searchParams: Promise<RawSearchParams>;
+}
+
+function firstValue(value: string | string[] | undefined): string {
+  return (Array.isArray(value) ? value[0] : value) ?? "";
+}
+
+export default async function ListingsPage({ searchParams }: ListingsPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const filters = parseListingSearchParams(resolvedSearchParams);
+  const filtersActive = hasActiveFilters(filters);
+
+  const listings = await getAllListings({ filters });
 
   return (
     <>
@@ -25,6 +46,14 @@ export default function ListingsPage() {
         </p>
       </section>
 
+      <div className="px-6">
+        <ListingsFilterBar
+          initialPropertyType={firstValue(resolvedSearchParams.propertyType)}
+          initialTransactionType={firstValue(resolvedSearchParams.transactionType)}
+          initialPriceRange={firstValue(resolvedSearchParams.priceRange)}
+        />
+      </div>
+
       <section className="mx-auto max-w-6xl px-6 py-16">
         {listings.length > 0 ? (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
@@ -34,7 +63,9 @@ export default function ListingsPage() {
           </div>
         ) : (
           <p className="py-16 text-center text-sm text-navy-800/60">
-            현재 등록된 매물이 없습니다. 곧 새로운 매물로 찾아뵙겠습니다.
+            {filtersActive
+              ? "조건에 맞는 매물이 없습니다."
+              : "현재 등록된 매물이 없습니다. 곧 새로운 매물로 찾아뵙겠습니다."}
           </p>
         )}
       </section>

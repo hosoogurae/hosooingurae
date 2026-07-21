@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  extractArticleNumber,
+  getComplexOptions,
+  getSuggestedComplexName,
+  transformToDraftListing,
+} from "../../lib/naverImport";
+import {
+  getUncertainFieldLabels,
+  parseNaverListingText,
+} from "../../lib/naverTextParser";
+import { getSupabaseClient } from "../../lib/supabase/client";
+
+export async function POST(request: NextRequest) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "요청 본문이 올바르지 않습니다." },
+      { status: 400 },
+    );
+  }
+
+  const { url, pastedText } =
+    (body as { url?: unknown; pastedText?: unknown } | null) ?? {};
+
+  if (typeof pastedText !== "string" || pastedText.trim().length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "네이버 부동산 매물 상세 화면에서 복사한 텍스트를 붙여넣어주세요.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const trimmedUrl = typeof url === "string" ? url.trim() : "";
+  // 서버는 이 URL로 어떤 요청도 보내지 않습니다. articleNo만 문자열에서 추출합니다.
+  const sourceArticleId = trimmedUrl
+    ? extractArticleNumber(trimmedUrl)
+    : undefined;
+
+  // source_article_id가 이미 등록돼 있으면 중복이므로 미리보기 단계로 가지 않고 바로 안내합니다.
+  if (sourceArticleId) {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data: existing, error } = await supabase
+        .from("listings")
+        .select("id, price_label")
+        .eq("source_article_id", sourceArticleId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("[api/import-naver] 중복 확인 실패", error);
+      } else if (existing) {
+        return NextResponse.json(
+          {
+            error: "이미 등록된 매물입니다.",
+            duplicate: {
+              listingId: existing.id,
+              priceLabel: existing.price_label,
+              editUrl: `/admin/listings/${existing.id}/edit`,
+            },
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
+  const parsed = parseNaverListingText(pastedText);
+  const uncertainFields = getUncertainFieldLabels(parsed);
+
+  const [draft, complexOptions] = await Promise.all([
+    transformToDraftListing(parsed, {
+      url: trimmedUrl || undefined,
+      sourceArticleId,
+      rawSourceText: pastedText,
+    }),
+    getComplexOptions(),
+  ]);
+
+  // 매칭되는 기존 단지가 없을 때만 "새 단지 등록" 폼에 채울 기본값을 함께 내려줍니다.
+  const suggestedComplexName = draft.complexId
+    ? undefined
+    : getSuggestedComplexName(pastedText);
+
+  return NextResponse.json({
+    draft,
+    complexOptions,
+    uncertainFields,
+    suggestedComplexName,
+  });
+}

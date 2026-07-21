@@ -22,7 +22,6 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { listings } from "../../data/listings";
 import { PHONE_HREF, PHONE_NUMBER } from "../../data/contact";
 import { getListingById } from "../../lib/listings";
 import { getTransactionsByComplexId } from "../../lib/transactions";
@@ -35,15 +34,15 @@ interface ListingPageProps {
   params: Promise<{ id: string }>;
 }
 
-export function generateStaticParams() {
-  return listings.map((listing) => ({ id: listing.id }));
-}
+// 매물 데이터를 Supabase에서 매 요청마다 새로 읽어오므로 정적 캐싱을 끕니다.
+// 관리자가 등록/수정/삭제한 매물이 재배포 없이 바로 반영됩니다.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
 }: ListingPageProps): Promise<Metadata> {
   const { id } = await params;
-  const listing = getListingById(id);
+  const listing = await getListingById(id);
 
   if (!listing) {
     return { title: "매물을 찾을 수 없습니다 | 호수공인중개사사무소" };
@@ -90,7 +89,7 @@ function InfoItem({
 
 export default async function ListingDetailPage({ params }: ListingPageProps) {
   const { id } = await params;
-  const listing = getListingById(id);
+  const listing = await getListingById(id);
 
   if (!listing) {
     notFound();
@@ -296,30 +295,52 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
         >
           <h2 className="text-lg font-bold text-navy-950">단지정보</h2>
           <dl className="mt-6 grid gap-x-6 gap-y-6 text-sm sm:grid-cols-2">
-            <InfoItem icon={MapPin} label="주소" value={complex.address} />
+            {complex.address && (
+              <InfoItem icon={MapPin} label="주소" value={complex.address} />
+            )}
             <InfoItem icon={TrainFront} label="교통" value={transportation} />
-            <InfoItem
-              icon={GraduationCap}
-              label="학교"
-              value={complex.nearbySchools.join(", ")}
-            />
-            <InfoItem
-              icon={Car}
-              label="주차"
-              value={`${complex.parkingCount.toLocaleString()}대 (세대당 ${complex.parkingPerHousehold}대)`}
-            />
-            <InfoItem icon={Building2} label="건설사" value={complex.builder} />
-            <InfoItem icon={Flame} label="난방" value={complex.heating} />
-            <InfoItem
-              icon={CalendarDays}
-              label="사용승인일"
-              value={complex.approvalDate}
-            />
-            <InfoItem
-              icon={Users}
-              label="세대수"
-              value={`${complex.totalHouseholds.toLocaleString()}세대 / ${complex.buildings}개동`}
-            />
+            {complex.nearbySchools.length > 0 && (
+              <InfoItem
+                icon={GraduationCap}
+                label="학교"
+                value={complex.nearbySchools.join(", ")}
+              />
+            )}
+            {complex.parkingCount !== undefined && (
+              <InfoItem
+                icon={Car}
+                label="주차"
+                value={
+                  complex.parkingPerHousehold !== undefined
+                    ? `${complex.parkingCount.toLocaleString()}대 (세대당 ${complex.parkingPerHousehold}대)`
+                    : `${complex.parkingCount.toLocaleString()}대`
+                }
+              />
+            )}
+            {complex.builder && (
+              <InfoItem icon={Building2} label="건설사" value={complex.builder} />
+            )}
+            {complex.heating && (
+              <InfoItem icon={Flame} label="난방" value={complex.heating} />
+            )}
+            {complex.approvalDate && (
+              <InfoItem
+                icon={CalendarDays}
+                label="사용승인일"
+                value={complex.approvalDate}
+              />
+            )}
+            {complex.totalHouseholds !== undefined && (
+              <InfoItem
+                icon={Users}
+                label="세대수"
+                value={
+                  complex.buildings !== undefined
+                    ? `${complex.totalHouseholds.toLocaleString()}세대 / ${complex.buildings}개동`
+                    : `${complex.totalHouseholds.toLocaleString()}세대`
+                }
+              />
+            )}
           </dl>
 
           {complex.features.length > 0 && (

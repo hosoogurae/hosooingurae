@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { featuredProperties } from "../data/properties";
 import { getFeaturedListings } from "../lib/listings";
 import ListingCard from "./ListingCard";
-import PropertyCard from "./PropertyCard";
 import { ArrowIcon } from "./icons";
 
-export default function FeaturedProperties() {
-  const featuredListings = getFeaturedListings();
+export default async function FeaturedProperties() {
+  const featuredListings = await getFeaturedListings();
 
   return (
     <section id="properties" className="mx-auto max-w-6xl px-6 py-24">
@@ -26,9 +24,6 @@ export default function FeaturedProperties() {
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {featuredListings.map((listing) => (
           <ListingCard key={listing.id} listing={listing} />
-        ))}
-        {featuredProperties.map((property) => (
-          <PropertyCard key={property.id} property={property} />
         ))}
       </div>
 

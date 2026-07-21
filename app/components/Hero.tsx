@@ -1,9 +1,15 @@
-import { NAVER_MAP_URL, PHONE_HREF } from "../data/contact";
-import { ArrowIcon, ChevronDownIcon, LocationIcon, SearchIcon } from "./icons";
+"use client";
 
-const PROPERTY_TYPES = ["아파트", "오피스텔", "상가"];
-const DEAL_TYPES = ["매매", "전세", "월세"];
-const PRICE_RANGES = ["전체 가격대", "1억 이하", "1억~3억", "3억~5억", "5억 이상"];
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
+import { NAVER_MAP_URL, PHONE_HREF } from "../data/contact";
+import {
+  PRICE_RANGE_OPTIONS,
+  PROPERTY_TYPE_OPTIONS,
+  TRANSACTION_TYPE_OPTIONS,
+  buildListingSearchQuery,
+} from "../lib/listingFilters";
+import { ArrowIcon, ChevronDownIcon, LocationIcon, SearchIcon } from "./icons";
 
 const STATS = [
   { value: "15년+", label: "구래동 중개 경력" },
@@ -93,6 +99,21 @@ function HeroBackground() {
 }
 
 export default function Hero() {
+  const router = useRouter();
+  const [propertyType, setPropertyType] = useState("");
+  const [transactionType, setTransactionType] = useState("");
+  const [priceRange, setPriceRange] = useState("");
+
+  function handleSearch(event: FormEvent) {
+    event.preventDefault();
+    const query = buildListingSearchQuery({
+      propertyType,
+      transactionType,
+      priceRange,
+    });
+    router.push(query ? `/listings?${query}` : "/listings");
+  }
+
   return (
     <section
       id="home"
@@ -123,7 +144,8 @@ export default function Hero() {
           정확하고 신속하게 안내합니다.
         </p>
 
-        <div
+        <form
+          onSubmit={handleSearch}
           className="animate-fade-in-up mt-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-white/95 p-4 text-left shadow-2xl shadow-black/40 backdrop-blur sm:p-5"
           style={{ animationDelay: "300ms" }}
         >
@@ -133,11 +155,14 @@ export default function Hero() {
                 매물종류
               </span>
               <select
-                defaultValue={PROPERTY_TYPES[0]}
+                value={propertyType}
+                onChange={(event) => setPropertyType(event.target.value)}
                 className="rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500"
               >
-                {PROPERTY_TYPES.map((type) => (
-                  <option key={type}>{type}</option>
+                {PROPERTY_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
               </select>
             </label>
@@ -147,11 +172,14 @@ export default function Hero() {
                 거래유형
               </span>
               <select
-                defaultValue={DEAL_TYPES[0]}
+                value={transactionType}
+                onChange={(event) => setTransactionType(event.target.value)}
                 className="rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500"
               >
-                {DEAL_TYPES.map((type) => (
-                  <option key={type}>{type}</option>
+                {TRANSACTION_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
               </select>
             </label>
@@ -161,24 +189,27 @@ export default function Hero() {
                 가격
               </span>
               <select
-                defaultValue={PRICE_RANGES[0]}
+                value={priceRange}
+                onChange={(event) => setPriceRange(event.target.value)}
                 className="rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500"
               >
-                {PRICE_RANGES.map((range) => (
-                  <option key={range}>{range}</option>
+                {PRICE_RANGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
               </select>
             </label>
 
-            <a
-              href="#properties"
+            <button
+              type="submit"
               className="flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.03] hover:shadow-lg hover:shadow-gold-500/40 sm:mt-5"
             >
               <SearchIcon className="h-4 w-4" />
               검색
-            </a>
+            </button>
           </div>
-        </div>
+        </form>
 
         <dl
           className="animate-fade-in-up mt-10 grid w-full max-w-2xl grid-cols-3 gap-4 border-y border-white/10 py-6"

@@ -16,15 +16,17 @@ export interface Complex {
   id: string;
   name: string;
   address: string;
-  propertyType: string;
-  approvalDate: string;
-  totalHouseholds: number;
-  buildings: number;
-  parkingCount: number;
-  parkingPerHousehold: number;
-  heating: string;
-  hallwayType: string;
-  builder: string;
+  /** "공동주택" 같은 법정 건축물 용도. 매물 화면의 "매물종류"(아파트/오피스텔/상가)와는 다른 개념. */
+  propertyType?: string;
+  /** 아래 세부 정보는 관리자가 "새 단지 추가"로 빠르게 등록할 때는 비워둘 수 있습니다. */
+  approvalDate?: string;
+  totalHouseholds?: number;
+  buildings?: number;
+  parkingCount?: number;
+  parkingPerHousehold?: number;
+  heating?: string;
+  hallwayType?: string;
+  builder?: string;
   nearbySchools: string[];
   transportation: ComplexTransportation;
   features: string[];

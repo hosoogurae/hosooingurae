@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test -f \"app/api/listings/[id]/route.ts\")",
+      "Bash(cp \"C:\\\\Users\\\\여니요니\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users------hosoogurae\\\\329a4e45-19b4-4914-a2f0-beae64865046\\\\scratchpad\\\\check-env.mjs\" \"/c/Users/여니요니/hosoogurae/.tmp-check-env.mjs\")",
+      "Bash(node .tmp-check-env.mjs)"
+    ]
+  }
+}

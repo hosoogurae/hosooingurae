@@ -27,7 +27,7 @@ export default function ListingCard({
 
       <div className="flex flex-1 flex-col gap-3 p-6">
         <span className="w-fit rounded-full bg-navy-900/5 px-3 py-1 text-xs font-semibold text-navy-800">
-          아파트
+          {listing.propertyType}
         </span>
 
         <h3 className="text-lg font-bold leading-snug text-navy-950">

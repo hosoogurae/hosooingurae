@@ -3,7 +3,7 @@ import {
   type ComplexTransaction,
 } from "../data/complexTransactions";
 
-const RECENT_YEARS = 3;
+const RECENT_MONTHS = 12;
 
 export function getTransactionsByComplexId(
   complexId: string,
@@ -18,6 +18,8 @@ export interface TransactionSummary {
   latest: ComplexTransaction | null;
   highestRecent: ComplexTransaction | null;
   lowestRecent: ComplexTransaction | null;
+  /** 최근 12개월 평균가 (만원, 반올림). 데이터가 없으면 null. */
+  averageRecentPrice: number | null;
 }
 
 /** transactions는 이미 계약일 오름차순 정렬되어 있다고 가정합니다. */
@@ -25,13 +27,18 @@ export function getTransactionSummary(
   transactions: ComplexTransaction[],
 ): TransactionSummary {
   if (transactions.length === 0) {
-    return { latest: null, highestRecent: null, lowestRecent: null };
+    return {
+      latest: null,
+      highestRecent: null,
+      lowestRecent: null,
+      averageRecentPrice: null,
+    };
   }
 
   const latest = transactions[transactions.length - 1];
 
   const cutoff = new Date();
-  cutoff.setFullYear(cutoff.getFullYear() - RECENT_YEARS);
+  cutoff.setMonth(cutoff.getMonth() - RECENT_MONTHS);
   const cutoffDate = cutoff.toISOString().slice(0, 10);
 
   const recentTransactions = transactions.filter(
@@ -45,8 +52,11 @@ export function getTransactionSummary(
   const lowestRecent = pool.reduce((min, transaction) =>
     transaction.price < min.price ? transaction : min,
   );
+  const averageRecentPrice = Math.round(
+    pool.reduce((sum, transaction) => sum + transaction.price, 0) / pool.length,
+  );
 
-  return { latest, highestRecent, lowestRecent };
+  return { latest, highestRecent, lowestRecent, averageRecentPrice };
 }
 
 /** 만원 단위 가격을 "4억 800만원" 형태의 한국식 금액 문자열로 변환합니다. */

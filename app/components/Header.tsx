@@ -6,11 +6,11 @@ import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 import { PhoneIcon } from "./icons";
 
 const NAV_ITEMS = [
-  { label: "홈", href: "/#home" },
-  { label: "추천매물", href: "/#properties" },
-  { label: "아파트", href: "/#properties" },
-  { label: "오피스텔", href: "/#properties" },
-  { label: "상가", href: "/#properties" },
+  { label: "홈", href: "/" },
+  { label: "추천매물", href: "/listings?featured=true" },
+  { label: "아파트", href: "/listings?propertyType=apartment" },
+  { label: "오피스텔", href: "/listings?propertyType=officetel" },
+  { label: "상가", href: "/listings?propertyType=commercial" },
   { label: "문의하기", href: "/#contact" },
 ];
 
