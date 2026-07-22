@@ -187,6 +187,8 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   <InquirySmsButton
                     phoneNumber={inquiryMobileNumber}
                     message={inquiryMessage}
+                    officePhoneNumber={PHONE_NUMBER}
+                    officePhoneHref={PHONE_HREF}
                   />
                 ) : (
                   <Link
