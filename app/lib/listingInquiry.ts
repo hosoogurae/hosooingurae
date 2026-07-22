@@ -21,28 +21,31 @@ export function buildInquiryMessage(params: {
   floor: number;
   transactionType: string;
   priceLabel: string;
-  /** 현재 상세페이지의 절대 URL. 없으면 안내 문구를 생략합니다. */
+  /** 현재 상세페이지의 절대 URL. 없으면 링크 영역을 생략합니다. */
   pageUrl?: string;
 }): string {
-  const identifierParts = [params.complexName];
+  const buildingFloorParts: string[] = [];
   if (params.building && params.building.trim() !== "") {
-    identifierParts.push(params.building);
+    buildingFloorParts.push(params.building);
   }
   if (params.floor !== undefined && params.floor !== null) {
-    identifierParts.push(`${params.floor}층`);
+    buildingFloorParts.push(`${params.floor}층`);
   }
 
   const lines = [
     "[매물 문의]",
     "",
-    identifierParts.join(" "),
+    params.complexName,
+    ...(buildingFloorParts.length > 0 ? [buildingFloorParts.join(" ")] : []),
+    "",
     `${params.transactionType} ${params.priceLabel}`,
     "",
+    "안녕하세요.",
     "이 매물 상담을 받고 싶습니다.",
   ];
 
   if (params.pageUrl) {
-    lines.push(`매물 보기: ${params.pageUrl}`);
+    lines.push("", "매물 링크", params.pageUrl);
   }
 
   return lines.join("\n");
