@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { complexes } from "../../data/complexes";
 import type { ComplexTransaction } from "../../data/complexTransactions";
+import { getComplexById } from "../../lib/complexes";
 import { formatPriceFull, getTransactionsByComplexId } from "../../lib/transactions";
 import { fetchRecentAptTrades } from "../../lib/molit";
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   const fallback = getTransactionsByComplexId(complexId);
-  const complex = complexes.find((item) => item.id === complexId);
+  const complex = await getComplexById(complexId);
 
   if (!complex?.molit) {
     return NextResponse.json<TransactionsResponse>({

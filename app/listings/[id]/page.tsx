@@ -100,6 +100,16 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const transportation = complex.transportation.subway
     ? `${complex.transportation.subway} ${complex.transportation.subwayDistance ?? ""}`.trim()
     : "-";
+  const hasComplexInfo =
+    Boolean(complex.address) ||
+    Boolean(complex.transportation.subway) ||
+    complex.nearbySchools.length > 0 ||
+    complex.parkingCount !== undefined ||
+    Boolean(complex.builder) ||
+    Boolean(complex.heating) ||
+    Boolean(complex.approvalDate) ||
+    complex.totalHouseholds !== undefined ||
+    complex.features.length > 0;
   const heroImage = listing.images?.[0] ?? listing.image;
   const transactions = getTransactionsByComplexId(complex.id);
   const floorPlanImages = listing.unitType
@@ -320,70 +330,80 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           style={{ animationDelay: "320ms" }}
         >
           <h2 className="text-lg font-bold text-navy-950">단지정보</h2>
-          <dl className="mt-6 grid gap-x-6 gap-y-6 text-sm sm:grid-cols-2">
-            {complex.address && (
-              <InfoItem icon={MapPin} label="주소" value={complex.address} />
-            )}
-            <InfoItem icon={TrainFront} label="교통" value={transportation} />
-            {complex.nearbySchools.length > 0 && (
-              <InfoItem
-                icon={GraduationCap}
-                label="학교"
-                value={complex.nearbySchools.join(", ")}
-              />
-            )}
-            {complex.parkingCount !== undefined && (
-              <InfoItem
-                icon={Car}
-                label="주차"
-                value={
-                  complex.parkingPerHousehold !== undefined
-                    ? `${complex.parkingCount.toLocaleString()}대 (세대당 ${complex.parkingPerHousehold}대)`
-                    : `${complex.parkingCount.toLocaleString()}대`
-                }
-              />
-            )}
-            {complex.builder && (
-              <InfoItem icon={Building2} label="건설사" value={complex.builder} />
-            )}
-            {complex.heating && (
-              <InfoItem icon={Flame} label="난방" value={complex.heating} />
-            )}
-            {complex.approvalDate && (
-              <InfoItem
-                icon={CalendarDays}
-                label="사용승인일"
-                value={complex.approvalDate}
-              />
-            )}
-            {complex.totalHouseholds !== undefined && (
-              <InfoItem
-                icon={Users}
-                label="세대수"
-                value={
-                  complex.buildings !== undefined
-                    ? `${complex.totalHouseholds.toLocaleString()}세대 / ${complex.buildings}개동`
-                    : `${complex.totalHouseholds.toLocaleString()}세대`
-                }
-              />
-            )}
-          </dl>
+          {hasComplexInfo ? (
+            <>
+              <dl className="mt-6 grid gap-x-6 gap-y-6 text-sm sm:grid-cols-2">
+                {complex.address && (
+                  <InfoItem icon={MapPin} label="주소" value={complex.address} />
+                )}
+                {complex.transportation.subway && (
+                  <InfoItem icon={TrainFront} label="교통" value={transportation} />
+                )}
+                {complex.nearbySchools.length > 0 && (
+                  <InfoItem
+                    icon={GraduationCap}
+                    label="학교"
+                    value={complex.nearbySchools.join(", ")}
+                  />
+                )}
+                {complex.parkingCount !== undefined && (
+                  <InfoItem
+                    icon={Car}
+                    label="주차"
+                    value={
+                      complex.parkingPerHousehold !== undefined
+                        ? `${complex.parkingCount.toLocaleString()}대 (세대당 ${complex.parkingPerHousehold}대)`
+                        : `${complex.parkingCount.toLocaleString()}대`
+                    }
+                  />
+                )}
+                {complex.builder && (
+                  <InfoItem icon={Building2} label="건설사" value={complex.builder} />
+                )}
+                {complex.heating && (
+                  <InfoItem icon={Flame} label="난방" value={complex.heating} />
+                )}
+                {complex.approvalDate && (
+                  <InfoItem
+                    icon={CalendarDays}
+                    label="사용승인일"
+                    value={complex.approvalDate}
+                  />
+                )}
+                {complex.totalHouseholds !== undefined && (
+                  <InfoItem
+                    icon={Users}
+                    label="세대수"
+                    value={
+                      complex.buildings !== undefined
+                        ? `${complex.totalHouseholds.toLocaleString()}세대 / ${complex.buildings}개동`
+                        : `${complex.totalHouseholds.toLocaleString()}세대`
+                    }
+                  />
+                )}
+              </dl>
 
-          {complex.features.length > 0 && (
-            <div className="mt-6">
-              <p className="text-sm font-semibold text-navy-800/50">
-                단지 특징
-              </p>
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {complex.features.map((feature) => (
-                  <li
-                    key={feature}
-                    className="rounded-md bg-navy-900/5 px-3 py-1.5 text-sm text-navy-800"
-                  >
-                    {feature}
-                  </li>
-                ))}
-              </ul>
+              {complex.features.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-sm font-semibold text-navy-800/50">
+                    단지 특징
+                  </p>
+                  <ul className="mt-3 flex flex-wrap gap-2">
+                    {complex.features.map((feature) => (
+                      <li
+                        key={feature}
+                        className="rounded-md bg-navy-900/5 px-3 py-1.5 text-sm text-navy-800"
+                      >
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="mt-6 rounded-xl border border-navy-900/10 bg-navy-900/[0.02] px-6 py-16 text-center text-sm text-navy-800/50">
+              등록된 단지정보가 없습니다.
             </div>
           )}
         </div>
