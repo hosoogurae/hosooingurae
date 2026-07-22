@@ -9,6 +9,7 @@ function rowToFloorPlanImage(row: FloorPlanImageRow): FloorPlanImage {
     id: row.id,
     complexId: row.complex_id,
     unitType: row.unit_type,
+    exclusiveArea: row.exclusive_area ?? undefined,
     url: row.url,
     sortOrder: row.sort_order,
   };
@@ -86,6 +87,8 @@ function slugifyForPath(text: string): string {
 export interface UploadFloorPlanInput {
   complexId: string;
   unitType: string;
+  /** ㎡ 단위. 없으면 자동 매칭 대상에서 빠질 뿐 업로드 자체는 그대로 됩니다. */
+  exclusiveArea?: number;
   fileName: string;
   contentType: string;
   bytes: Uint8Array | Buffer | ArrayBuffer;
@@ -142,6 +145,7 @@ export async function uploadFloorPlanImage(
     .insert({
       complex_id: input.complexId,
       unit_type: input.unitType,
+      exclusive_area: input.exclusiveArea ?? null,
       url: publicUrl,
       sort_order: nextSortOrder,
     })
@@ -157,32 +161,77 @@ export async function uploadFloorPlanImage(
   return { image: rowToFloorPlanImage(inserted) };
 }
 
-/** 타입명을 잘못 입력했을 때 고치는 용도. */
-export async function renameFloorPlanUnitType(
+export interface FloorPlanImageUpdate {
+  unitType?: string;
+  /** null을 넘기면 값을 지웁니다(빈 값으로). undefined면 건드리지 않습니다. */
+  exclusiveArea?: number | null;
+}
+
+/** 타입명 오타 수정, 또는 기존에 올려둔 평면도에 전용면적만 나중에 채워 넣을 때 사용. */
+export async function updateFloorPlanImage(
   id: string,
-  unitType: string,
+  updates: FloorPlanImageUpdate,
 ): Promise<{ image?: FloorPlanImage; error?: string }> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return { error: "Supabase가 설정되어 있지 않습니다." };
   }
 
+  const patch: { unit_type?: string; exclusive_area?: number | null } = {};
+  if (updates.unitType !== undefined) patch.unit_type = updates.unitType;
+  if (updates.exclusiveArea !== undefined) {
+    patch.exclusive_area = updates.exclusiveArea;
+  }
+
   const { data, error } = await supabase
     .from("floor_plan_images")
-    .update({ unit_type: unitType })
+    .update(patch)
     .eq("id", id)
     .select("*")
     .maybeSingle();
 
   if (error) {
-    console.error("[floorPlans] 타입명 수정 실패", error);
-    return { error: "타입명 수정에 실패했습니다." };
+    console.error("[floorPlans] 평면도 수정 실패", error);
+    return { error: "수정에 실패했습니다." };
   }
   if (!data) {
     return { error: "평면도를 찾을 수 없습니다." };
   }
 
   return { image: rowToFloorPlanImage(data) };
+}
+
+/** 자동 매칭에 쓰는 전용면적 허용 오차(㎡). */
+export const EXCLUSIVE_AREA_MATCH_TOLERANCE = 0.05;
+
+/**
+ * 매물 원문에서 파싱된 전용면적과, 그 단지에 이미 등록된 평면도의 전용면적을
+ * 비교해 후보 타입명을 찾습니다. 전용면적이 없는(null) 평면도는 비교 대상에서
+ * 제외합니다 — 값이 없는 걸 억지로 맞다고 추측하지 않습니다.
+ */
+export async function findMatchingUnitTypes(
+  complexId: string,
+  exclusiveArea: number,
+): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("floor_plan_images")
+    .select("unit_type")
+    .eq("complex_id", complexId)
+    .not("exclusive_area", "is", null)
+    .gte("exclusive_area", exclusiveArea - EXCLUSIVE_AREA_MATCH_TOLERANCE)
+    .lte("exclusive_area", exclusiveArea + EXCLUSIVE_AREA_MATCH_TOLERANCE);
+
+  if (error || !data) {
+    console.error("[floorPlans] 전용면적 매칭 조회 실패", error);
+    return [];
+  }
+
+  return Array.from(new Set(data.map((row) => row.unit_type))).sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 export async function deleteFloorPlanImage(

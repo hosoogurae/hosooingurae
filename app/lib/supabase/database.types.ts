@@ -168,6 +168,7 @@ export interface Database {
           id: string;
           complex_id: string;
           unit_type: string;
+          exclusive_area: number | null;
           url: string;
           sort_order: number;
           created_at: string;
@@ -177,6 +178,7 @@ export interface Database {
           id?: string;
           complex_id: string;
           unit_type: string;
+          exclusive_area?: number | null;
           url: string;
           sort_order?: number;
           created_at?: string;

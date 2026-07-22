@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   const complexId = form.get("complexId");
   const unitType = form.get("unitType");
+  const exclusiveAreaRaw = form.get("exclusiveArea");
   const file = form.get("file");
 
   if (typeof complexId !== "string" || complexId.trim() === "") {
@@ -59,11 +60,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let exclusiveArea: number | undefined;
+  if (typeof exclusiveAreaRaw === "string" && exclusiveAreaRaw.trim() !== "") {
+    const parsed = Number(exclusiveAreaRaw);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return NextResponse.json(
+        { errors: ["전용면적은 0보다 큰 숫자로 입력해주세요."] },
+        { status: 400 },
+      );
+    }
+    exclusiveArea = parsed;
+  }
+
   const bytes = new Uint8Array(await file.arrayBuffer());
 
   const { image, error } = await uploadFloorPlanImage({
     complexId: complexId.trim(),
     unitType: unitType.trim(),
+    exclusiveArea,
     fileName: file.name,
     contentType: file.type,
     bytes,

@@ -12,6 +12,8 @@ interface PendingFile {
   key: string;
   file: File;
   unitType: string;
+  /** 문자열로 들고 있다가 업로드 시점에 숫자로 변환합니다(빈 값 허용). */
+  exclusiveArea: string;
   previewUrl: string;
 }
 
@@ -34,6 +36,11 @@ export default function AdminFloorPlansPage() {
   const [renameValue, setRenameValue] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+
+  const [editingAreaType, setEditingAreaType] = useState<string | null>(null);
+  const [areaValue, setAreaValue] = useState("");
+  const [areaSaving, setAreaSaving] = useState(false);
+  const [areaError, setAreaError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadComplexes() {
@@ -106,6 +113,7 @@ export default function AdminFloorPlansPage() {
       key: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
       file,
       unitType: stripExtension(file.name),
+      exclusiveArea: "",
       previewUrl: URL.createObjectURL(file),
     }));
     setPendingFiles((prev) => [...prev, ...next]);
@@ -114,6 +122,14 @@ export default function AdminFloorPlansPage() {
   function updatePendingUnitType(key: string, value: string) {
     setPendingFiles((prev) =>
       prev.map((item) => (item.key === key ? { ...item, unitType: value } : item)),
+    );
+  }
+
+  function updatePendingExclusiveArea(key: string, value: string) {
+    setPendingFiles((prev) =>
+      prev.map((item) =>
+        item.key === key ? { ...item, exclusiveArea: value } : item,
+      ),
     );
   }
 
@@ -144,6 +160,9 @@ export default function AdminFloorPlansPage() {
       const form = new FormData();
       form.append("complexId", complexId);
       form.append("unitType", item.unitType.trim());
+      if (item.exclusiveArea.trim() !== "") {
+        form.append("exclusiveArea", item.exclusiveArea.trim());
+      }
       form.append("file", item.file);
 
       try {
@@ -192,6 +211,46 @@ export default function AdminFloorPlansPage() {
       await loadImages(complexId);
     } catch {
       setRowErrors((prev) => ({ ...prev, [id]: "네트워크 오류가 발생했습니다." }));
+    }
+  }
+
+  /**
+   * 전용면적은 이미지 1장이 아니라 "타입" 단위 개념이라, 그룹에 속한 이미지
+   * 전체에 같은 값을 적용합니다(기존에 올려둔 평면도에 나중에 채워 넣는 용도 포함).
+   */
+  async function handleSaveGroupArea(unitType: string, group: FloorPlanImage[]) {
+    const trimmed = areaValue.trim();
+    let exclusiveArea: number | null = null;
+    if (trimmed !== "") {
+      const parsed = Number(trimmed);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setAreaError("전용면적은 0보다 큰 숫자로 입력해주세요.");
+        return;
+      }
+      exclusiveArea = parsed;
+    }
+
+    setAreaSaving(true);
+    setAreaError(null);
+    try {
+      for (const image of group) {
+        const response = await fetch(`/api/admin/floor-plans/${image.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ exclusiveArea }),
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          setAreaError(data.errors?.[0] ?? "전용면적 저장에 실패했습니다.");
+          return;
+        }
+      }
+      setEditingAreaType(null);
+      await loadImages(complexId);
+    } catch {
+      setAreaError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setAreaSaving(false);
     }
   }
 
@@ -303,6 +362,16 @@ export default function AdminFloorPlansPage() {
                       placeholder="타입명 (예: 84A)"
                       className={`${inputClass} mt-1 w-full`}
                     />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={item.exclusiveArea}
+                      onChange={(event) =>
+                        updatePendingExclusiveArea(item.key, event.target.value)
+                      }
+                      placeholder="전용면적 ㎡ (선택)"
+                      className={`${inputClass} mt-1 w-full`}
+                    />
                   </div>
                   <button
                     type="button"
@@ -354,12 +423,61 @@ export default function AdminFloorPlansPage() {
         )}
 
         <div className="mt-4 flex flex-col gap-6">
-          {groupedImages.map(([unitType, group]) => (
+          {groupedImages.map(([unitType, group]) => {
+            const groupArea = group.find((img) => img.exclusiveArea !== undefined)
+              ?.exclusiveArea;
+            return (
             <div
               key={unitType}
               className="rounded-xl border border-navy-900/10 p-5"
             >
-              <p className="text-sm font-bold text-navy-950">{unitType}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-bold text-navy-950">{unitType}</p>
+
+                {editingAreaType === unitType ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={areaValue}
+                      onChange={(event) => setAreaValue(event.target.value)}
+                      placeholder="전용면적 ㎡"
+                      className={`${inputClass} w-32 px-2 py-1 text-xs`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveGroupArea(unitType, group)}
+                      disabled={areaSaving}
+                      className="text-xs font-semibold text-gold-600 disabled:opacity-50"
+                    >
+                      {areaSaving ? "저장 중..." : "저장"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingAreaType(null)}
+                      className="text-xs font-medium text-navy-800/50 hover:underline"
+                    >
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingAreaType(unitType);
+                      setAreaValue(groupArea !== undefined ? String(groupArea) : "");
+                      setAreaError(null);
+                    }}
+                    className="text-xs font-medium text-navy-800/60 hover:text-gold-600 hover:underline"
+                  >
+                    전용면적:{" "}
+                    {groupArea !== undefined ? `${groupArea}㎡` : "미입력 (입력하기)"}
+                  </button>
+                )}
+              </div>
+              {editingAreaType === unitType && areaError && (
+                <p className="mt-1 text-xs text-red-600">{areaError}</p>
+              )}
               <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
                 {group.map((image) => (
                   <div key={image.id} className="flex flex-col gap-1.5">
@@ -415,7 +533,8 @@ export default function AdminFloorPlansPage() {
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

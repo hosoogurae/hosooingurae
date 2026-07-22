@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   deleteFloorPlanImage,
-  renameFloorPlanUnitType,
+  updateFloorPlanImage,
 } from "../../../../lib/floorPlans";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-/** 타입명 오타 등을 고칠 때 사용합니다. */
+/**
+ * 타입명 오타 수정, 또는 기존에 올려둔 평면도에 전용면적만 나중에 채워 넣을 때
+ * 사용합니다. unitType/exclusiveArea 중 있는 것만 반영합니다.
+ */
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const { id } = await params;
 
@@ -22,15 +25,42 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     );
   }
 
-  const unitType = (body as { unitType?: unknown })?.unitType;
-  if (typeof unitType !== "string" || unitType.trim() === "") {
+  const payload = body as { unitType?: unknown; exclusiveArea?: unknown };
+  const updates: { unitType?: string; exclusiveArea?: number | null } = {};
+
+  if (payload.unitType !== undefined) {
+    if (typeof payload.unitType !== "string" || payload.unitType.trim() === "") {
+      return NextResponse.json(
+        { errors: ["타입명을 입력해주세요."] },
+        { status: 400 },
+      );
+    }
+    updates.unitType = payload.unitType.trim();
+  }
+
+  if (payload.exclusiveArea !== undefined) {
+    if (payload.exclusiveArea === null || payload.exclusiveArea === "") {
+      updates.exclusiveArea = null;
+    } else {
+      const parsed = Number(payload.exclusiveArea);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return NextResponse.json(
+          { errors: ["전용면적은 0보다 큰 숫자로 입력해주세요."] },
+          { status: 400 },
+        );
+      }
+      updates.exclusiveArea = parsed;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
     return NextResponse.json(
-      { errors: ["타입명을 입력해주세요."] },
+      { errors: ["수정할 값이 없습니다."] },
       { status: 400 },
     );
   }
 
-  const { image, error } = await renameFloorPlanUnitType(id, unitType.trim());
+  const { image, error } = await updateFloorPlanImage(id, updates);
   if (!image) {
     return NextResponse.json(
       { errors: [error ?? "수정에 실패했습니다."] },
