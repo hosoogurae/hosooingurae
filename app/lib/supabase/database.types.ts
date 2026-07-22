@@ -177,6 +177,7 @@ export interface Database {
           supply_area: number | null;
           exclusive_area: number | null;
           url: string;
+          preview_url: string | null;
           sort_order: number;
           created_at: string;
           updated_at: string;
@@ -188,6 +189,7 @@ export interface Database {
           supply_area?: number | null;
           exclusive_area?: number | null;
           url: string;
+          preview_url?: string | null;
           sort_order?: number;
           created_at?: string;
           updated_at?: string;

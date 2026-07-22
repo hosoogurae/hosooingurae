@@ -8,5 +8,7 @@ export interface FloorPlanImage {
   /** ㎡ 단위 전용면적. 매물 원문에서 파싱된 전용면적과 자동 매칭할 때 씁니다. 없을 수 있음. */
   exclusiveArea?: number;
   url: string;
+  /** 카드/썸네일용 미리보기(상단 정보 배너를 잘라낸 버전). 없으면 원본(url)을 그대로 씁니다. */
+  previewUrl?: string;
   sortOrder: number;
 }

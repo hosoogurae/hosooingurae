@@ -1,4 +1,5 @@
 import type { FloorPlanImage } from "../data/floorPlans";
+import { cropFloorPlanPreview } from "./floorPlanImageProcessing";
 import { getSupabaseAdminClient, getSupabaseClient } from "./supabase/client";
 import type { FloorPlanImageRow } from "./supabase/database.types";
 
@@ -35,6 +36,7 @@ function rowToFloorPlanImage(row: FloorPlanImageRow): FloorPlanImage {
     supplyArea: row.supply_area ?? undefined,
     exclusiveArea: row.exclusive_area ?? undefined,
     url: row.url,
+    previewUrl: row.preview_url ?? undefined,
     sortOrder: row.sort_order,
   };
 }
@@ -140,6 +142,7 @@ export async function uploadFloorPlanImage(input: UploadFloorPlanInput): Promise
     input.unitType,
   )}/${Date.now()}-${slugifyForPath(input.fileName)}`;
 
+  // 원본은 손대지 않고 그대로 업로드합니다(확대 보기에서 면적표 등 원문 전체를 보여줘야 함).
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(path, input.bytes, {
@@ -158,6 +161,31 @@ export async function uploadFloorPlanImage(input: UploadFloorPlanInput): Promise
   const {
     data: { publicUrl },
   } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+  // 카드/썸네일에서 상단 정보 배너를 잘라낸 미리보기를 별도로 만들어 올립니다.
+  // 실패해도 업로드 자체는 막지 않고(원본은 이미 저장됨), 표시할 때 원본으로 대체됩니다.
+  let previewUrl: string | null = null;
+  try {
+    const originalBuffer = Buffer.isBuffer(input.bytes)
+      ? input.bytes
+      : Buffer.from(input.bytes as ArrayBuffer);
+    const previewBuffer = await cropFloorPlanPreview(originalBuffer);
+    const previewPath = path.replace(/(\.[^./]+)$/, "-preview$1");
+
+    const { error: previewUploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(previewPath, previewBuffer, {
+        contentType: input.contentType,
+        upsert: false,
+      });
+
+    if (previewUploadError) throw previewUploadError;
+
+    previewUrl = supabase.storage.from(BUCKET).getPublicUrl(previewPath).data
+      .publicUrl;
+  } catch (error) {
+    console.error("[floorPlans] 미리보기 이미지 생성 실패, 원본으로 대체", error);
+  }
 
   const { data: existingMax } = await supabase
     .from("floor_plan_images")
@@ -178,6 +206,7 @@ export async function uploadFloorPlanImage(input: UploadFloorPlanInput): Promise
       supply_area: input.supplyArea ?? null,
       exclusive_area: input.exclusiveArea ?? null,
       url: publicUrl,
+      preview_url: previewUrl,
       sort_order: nextSortOrder,
     })
     .select("*")
@@ -345,6 +374,100 @@ export function resolveUnitTypeCandidates(
     return [rule.buildings.includes(building) ? rule.preferred : rule.fallback];
   }
   return candidates;
+}
+
+export interface ReprocessResult {
+  id: string;
+  unitType: string;
+  success: boolean;
+  error?: string;
+  previewBytes?: number;
+}
+
+/**
+ * 이미 업로드된 평면도 원본은 그대로 두고, 카드/썸네일용 미리보기 이미지만
+ * 새로 만들어(cropFloorPlanPreview) 업로드하고 preview_url을 채웁니다.
+ * floor_plan_images.url(원본)이나 매물/평면도 연결 관계는 전혀 바뀌지
+ * 않습니다. 관리자 화면 버튼이나 일회성 스크립트에서 호출하는 용도입니다.
+ */
+export async function reprocessAllFloorPlanImages(): Promise<{
+  results: ReprocessResult[];
+}> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return { results: [] };
+
+  const { data: rows, error } = await supabase
+    .from("floor_plan_images")
+    .select("*");
+
+  if (error || !rows) {
+    console.error("[floorPlans] 재처리 대상 조회 실패", error);
+    return { results: [] };
+  }
+
+  const marker = `/object/public/${BUCKET}/`;
+  const results: ReprocessResult[] = [];
+
+  for (const row of rows) {
+    const markerIndex = row.url.indexOf(marker);
+    if (markerIndex === -1) {
+      results.push({
+        id: row.id,
+        unitType: row.unit_type,
+        success: false,
+        error: "Storage 경로를 URL에서 찾지 못했습니다.",
+      });
+      continue;
+    }
+    const originalPath = row.url.slice(markerIndex + marker.length);
+    const previewPath = originalPath.replace(/(\.[^./]+)$/, "-preview$1");
+
+    try {
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from(BUCKET)
+        .download(originalPath);
+      if (downloadError || !fileData) {
+        throw downloadError ?? new Error("다운로드 결과가 비어있습니다.");
+      }
+
+      const originalBuffer = Buffer.from(await fileData.arrayBuffer());
+      const previewBuffer = await cropFloorPlanPreview(originalBuffer);
+
+      const { error: previewUploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(previewPath, previewBuffer, {
+          contentType: fileData.type || "image/jpeg",
+          upsert: true,
+        });
+      if (previewUploadError) throw previewUploadError;
+
+      const previewUrl = supabase.storage.from(BUCKET).getPublicUrl(
+        previewPath,
+      ).data.publicUrl;
+
+      const { error: updateError } = await supabase
+        .from("floor_plan_images")
+        .update({ preview_url: previewUrl })
+        .eq("id", row.id);
+      if (updateError) throw updateError;
+
+      results.push({
+        id: row.id,
+        unitType: row.unit_type,
+        success: true,
+        previewBytes: previewBuffer.length,
+      });
+    } catch (err) {
+      results.push({
+        id: row.id,
+        unitType: row.unit_type,
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return { results };
 }
 
 export async function deleteFloorPlanImage(

@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PHONE_HREF, PHONE_NUMBER } from "../../data/contact";
+import FloorPlanImage from "../../components/FloorPlanImage";
 import { getFloorPlanImages } from "../../lib/floorPlans";
 import { getListingById } from "../../lib/listings";
 import {
@@ -213,16 +214,13 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   className="aspect-[4/3] w-full rounded-2xl object-cover"
                 />
               ) : heroFloorPlan ? (
-                <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-navy-900/10 bg-neutral-50 p-4 sm:p-6">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={heroFloorPlan.url}
-                    alt={`${listing.unitType} 평면도`}
-                    className="h-full w-full object-contain"
+                <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl border border-navy-900/10 bg-white p-1.5 sm:p-2">
+                  <FloorPlanImage
+                    url={heroFloorPlan.url}
+                    previewUrl={heroFloorPlan.previewUrl}
+                    unitType={listing.unitType ?? ""}
+                    className="rounded-xl"
                   />
-                  <span className="absolute right-3 top-3 rounded-full bg-navy-950/80 px-3 py-1 text-xs font-bold text-gold-400 backdrop-blur">
-                    {listing.unitType} 평면도
-                  </span>
                 </div>
               ) : (
                 <ListingMediaPlaceholder className="aspect-[4/3] w-full rounded-2xl" />
@@ -330,13 +328,13 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               {floorPlanImages.map((image) => (
                 <div
                   key={image.id}
-                  className="aspect-[4/3] rounded-lg border border-navy-900/10 bg-neutral-50 p-4 sm:p-6"
+                  className="aspect-[4/3] overflow-hidden rounded-lg border border-navy-900/10 bg-white p-1.5 sm:p-2"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={image.url}
-                    alt={`${listing.unitType} 평면도`}
-                    className="h-full w-full object-contain"
+                  <FloorPlanImage
+                    url={image.url}
+                    previewUrl={image.previewUrl}
+                    unitType={listing.unitType ?? ""}
+                    className="rounded-md"
                   />
                 </div>
               ))}
