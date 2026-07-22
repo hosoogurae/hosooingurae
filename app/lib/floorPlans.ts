@@ -172,9 +172,12 @@ export async function uploadFloorPlanImage(input: UploadFloorPlanInput): Promise
     const previewBuffer = await cropFloorPlanPreview(originalBuffer);
     const previewPath = path.replace(/(\.[^./]+)$/, "-preview$1");
 
+    // Node Buffer를 그대로 넘기면 일부 런타임(Vercel 서버리스 등)의 fetch
+    // 구현이 이를 문자열처럼 다뤄 바이너리가 깨지는 사례가 있어, 순수
+    // Uint8Array로 변환해 넘깁니다.
     const { error: previewUploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(previewPath, previewBuffer, {
+      .upload(previewPath, new Uint8Array(previewBuffer), {
         contentType: input.contentType,
         upsert: false,
       });
@@ -435,7 +438,7 @@ export async function reprocessAllFloorPlanImages(): Promise<{
 
       const { error: previewUploadError } = await supabase.storage
         .from(BUCKET)
-        .upload(previewPath, previewBuffer, {
+        .upload(previewPath, new Uint8Array(previewBuffer), {
           contentType: fileData.type || "image/jpeg",
           upsert: true,
         });

@@ -63,7 +63,7 @@ export async function GET() {
     const freshPath = `hosumaeul-epyeonhansesang-2/109c/debug-fresh-${Date.now()}.jpg`;
     const { error: freshUploadError } = await supabase.storage
       .from("floor-plans")
-      .upload(freshPath, croppedBuffer, {
+      .upload(freshPath, new Uint8Array(croppedBuffer), {
         contentType: "image/jpeg",
         upsert: false,
       });
