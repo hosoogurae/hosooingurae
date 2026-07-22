@@ -124,10 +124,11 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const inquiryMessage = buildInquiryMessage({
     complexName: complex.name,
     building: listing.building,
+    floor: listing.floor,
     transactionType: listing.transactionType,
     priceLabel: listing.priceLabel,
-    listingId: listing.id,
   });
+  const heroFloorPlan = floorPlanImages[0];
 
   return (
     <>
@@ -147,6 +148,9 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             >
               <p className="text-sm font-semibold tracking-wide text-gold-400">
                 {formatComplexAndBuilding(complex.name, listing.building)}
+              </p>
+              <p className="mt-1 text-sm font-medium text-white/70">
+                {listing.floor}층 / {listing.totalFloors}층
               </p>
               <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">
                 {listing.transactionType} {listing.priceLabel}
@@ -204,6 +208,18 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   alt={`${complex.name} 대표 이미지`}
                   className="aspect-[4/3] w-full rounded-2xl object-cover"
                 />
+              ) : heroFloorPlan ? (
+                <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-navy-900/10 bg-neutral-50 p-4 sm:p-6">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={heroFloorPlan.url}
+                    alt={`${listing.unitType} 평면도`}
+                    className="h-full w-full object-contain"
+                  />
+                  <span className="absolute right-3 top-3 rounded-full bg-navy-950/80 px-3 py-1 text-xs font-bold text-gold-400 backdrop-blur">
+                    {listing.unitType} 평면도
+                  </span>
+                </div>
               ) : (
                 <ListingMediaPlaceholder className="aspect-[4/3] w-full rounded-2xl" />
               )}
@@ -308,13 +324,17 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             </h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               {floorPlanImages.map((image) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <div
                   key={image.id}
-                  src={image.url}
-                  alt={`${listing.unitType} 평면도`}
-                  className="w-full rounded-lg border border-navy-900/10 object-contain"
-                />
+                  className="aspect-[4/3] rounded-lg border border-navy-900/10 bg-neutral-50 p-4 sm:p-6"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image.url}
+                    alt={`${listing.unitType} 평면도`}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
               ))}
             </div>
           </div>
