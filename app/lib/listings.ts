@@ -42,6 +42,78 @@ export interface PublicListing {
   isFeatured: boolean;
 }
 
+export interface ListingStats {
+  total: number;
+  published: number;
+  featured: number;
+  byPropertyType: Record<"아파트" | "오피스텔" | "상가", number>;
+}
+
+/**
+ * 관리자 매물 관리 화면 상단 통계 카드용. 행 데이터를 내려받지 않고
+ * count(head: true)만 조회해 매물 수가 늘어나도 가벼운 상태를 유지합니다.
+ */
+export async function getListingStats(): Promise<ListingStats> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return {
+      total: 0,
+      published: 0,
+      featured: 0,
+      byPropertyType: { 아파트: 0, 오피스텔: 0, 상가: 0 },
+    };
+  }
+
+  const [total, published, featured, apartment, officetel, retail] =
+    await Promise.all([
+      supabase.from("listings").select("*", { count: "exact", head: true }),
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "published"),
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("is_featured", true),
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("property_type", "아파트"),
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("property_type", "오피스텔"),
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("property_type", "상가"),
+    ]);
+
+  for (const [label, result] of [
+    ["전체", total],
+    ["공개", published],
+    ["대표매물", featured],
+    ["아파트", apartment],
+    ["오피스텔", officetel],
+    ["상가", retail],
+  ] as const) {
+    if (result.error) {
+      console.error(`[listings] ${label} 통계 조회 실패`, result.error);
+    }
+  }
+
+  return {
+    total: total.count ?? 0,
+    published: published.count ?? 0,
+    featured: featured.count ?? 0,
+    byPropertyType: {
+      아파트: apartment.count ?? 0,
+      오피스텔: officetel.count ?? 0,
+      상가: retail.count ?? 0,
+    },
+  };
+}
+
 export function toPublicListing(listing: ListingWithComplex): PublicListing {
   return {
     id: listing.id,
