@@ -232,6 +232,10 @@ export default function AdminRegisterPage() {
         <Link href="/admin/import-naver" className="underline-offset-4 hover:underline">
           네이버 매물 가져오기 (테스트 기능) →
         </Link>
+        {" · "}
+        <Link href="/admin/floor-plans" className="underline-offset-4 hover:underline">
+          단지 평면도 관리 →
+        </Link>
       </p>
     </div>
   );

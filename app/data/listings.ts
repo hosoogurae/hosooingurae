@@ -27,6 +27,8 @@ export interface Listing {
   maintenanceFee?: string;
   shortDescription: string;
   features: string[];
+  /** 평형 타입("84A" 등). 값이 있으면 같은 단지·같은 타입의 평면도를 상세페이지에 자동으로 보여줍니다. */
+  unitType?: string;
   /** 대표 이미지 경로. 없으면 "매물 사진 준비 중" 플레이스홀더로 대체. */
   image?: string;
   /** 갤러리용 전체 이미지 목록. 추가되는 즉시 상세페이지 갤러리에 자동 반영됨. */

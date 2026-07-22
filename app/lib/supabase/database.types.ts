@@ -89,6 +89,7 @@ export interface Database {
           source_type: string | null;
           source_article_id: string | null;
           raw_source_text: string | null;
+          unit_type: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -119,6 +120,7 @@ export interface Database {
           source_type?: string | null;
           source_article_id?: string | null;
           raw_source_text?: string | null;
+          unit_type?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -161,6 +163,38 @@ export interface Database {
           },
         ];
       };
+      floor_plan_images: {
+        Row: {
+          id: string;
+          complex_id: string;
+          unit_type: string;
+          url: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex_id: string;
+          unit_type: string;
+          url: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["floor_plan_images"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "floor_plan_images_complex_id_fkey";
+            columns: ["complex_id"];
+            isOneToOne: false;
+            referencedRelation: "complexes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -175,3 +209,7 @@ export type ListingImageRow =
   Database["public"]["Tables"]["listing_images"]["Row"];
 export type ListingImageInsert =
   Database["public"]["Tables"]["listing_images"]["Insert"];
+export type FloorPlanImageRow =
+  Database["public"]["Tables"]["floor_plan_images"]["Row"];
+export type FloorPlanImageInsert =
+  Database["public"]["Tables"]["floor_plan_images"]["Insert"];

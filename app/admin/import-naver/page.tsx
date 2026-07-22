@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { Listing } from "../../data/listings";
 import type { ComplexOption } from "../../lib/naverImport";
+import { buildNaverPhotosBookmarklet } from "../../lib/naverPhotosBookmarklet";
 import { Field, ListingFormFields, inputClass } from "../ListingFields";
 
 type Step = "input" | "preview" | "done";
@@ -46,6 +47,18 @@ export default function AdminImportPage() {
   const [registeredListing, setRegisteredListing] = useState<Listing | null>(
     null,
   );
+
+  // window.location.origin은 클라이언트에서만 알 수 있습니다. 리렌더를 일으킬
+  // 필요가 없는 값이라 state 대신 ref로 마운트 후 직접 href를 채웁니다
+  // (서버 렌더링과 달라지는 hydration 불일치도 피할 수 있습니다).
+  const bookmarkletRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (bookmarkletRef.current) {
+      bookmarkletRef.current.href = buildNaverPhotosBookmarklet(
+        window.location.origin,
+      );
+    }
+  }, []);
 
   function updateDraft<K extends keyof Listing>(key: K, value: Listing[K]) {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -215,6 +228,47 @@ export default function AdminImportPage() {
         ※ 이 페이지는 관리자용 도구이며 별도 로그인 보호가 적용되어 있지
         않습니다. 실제 운영 전 접근 제한을 추가하는 것을 권장합니다.
       </p>
+
+      <div className="mt-6 rounded-xl border border-gold-500/30 bg-gold-500/5 p-5">
+        <p className="text-sm font-bold text-navy-950">
+          📷 사진 가져오기 (프로토타입)
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-navy-800/70">
+          아래 버튼을 <strong>북마크바로 드래그</strong>해서 등록해주세요.
+          이후 네이버 매물 상세 페이지를 열고(사진이 다 로딩된 상태에서) 그
+          북마크를 클릭하면, 그 페이지에 있는 사진들이 새 탭의 테스트
+          화면으로 전달됩니다.
+        </p>
+        <p className="mt-2 text-xs text-navy-800/50">
+          ※ 아직 프로토타입입니다 — 사진 URL을 무사히 받아오는지만
+          확인하는 단계이고, 저장·출처 선택·공개 기능은 없습니다.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <a
+            ref={bookmarkletRef}
+            href="#"
+            className="cursor-move rounded-md border-2 border-dashed border-gold-500 bg-white px-4 py-2 text-sm font-bold text-navy-900"
+            onClick={(event) => {
+              // 클릭(드래그가 아니라)했을 때는 이 페이지 안에서 실행돼도
+              // 의미가 없으므로 안내만 띄우고 실제 이동은 막습니다.
+              event.preventDefault();
+              alert(
+                "이 버튼은 클릭이 아니라 북마크바로 드래그해서 등록해주세요. 등록 후 네이버 매물 페이지에서 클릭해야 동작합니다.",
+              );
+            }}
+          >
+            📷 사진 가져오기
+          </a>
+          <Link
+            href="/admin/import-naver/photos-test"
+            target="_blank"
+            className="text-sm font-medium text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
+          >
+            테스트 결과 화면 미리 열어두기 →
+          </Link>
+        </div>
+      </div>
 
       {step === "input" && (
         <form

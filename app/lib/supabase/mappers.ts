@@ -99,6 +99,7 @@ export function listingRowToListing(
     maintenanceFee: row.maintenance_fee ?? undefined,
     shortDescription: row.short_description,
     features: row.features,
+    unitType: row.unit_type ?? undefined,
     image: images[0],
     images: images.length > 0 ? images : undefined,
     naverUrl: row.naver_url ?? undefined,
@@ -142,6 +143,7 @@ export function listingToInsert(listing: Listing): ListingInsert {
     source_type: listing.sourceType ?? null,
     source_article_id: listing.sourceArticleId ?? null,
     raw_source_text: listing.rawSourceText ?? null,
+    unit_type: listing.unitType ?? null,
   };
 }
 

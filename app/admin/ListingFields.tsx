@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   Listing,
   ListingStatus,
   PropertyType,
   TransactionType,
 } from "../data/listings";
+import type { FloorPlanImage } from "../data/floorPlans";
 import type { ComplexOption } from "../lib/naverImport";
 
 export const inputClass =
@@ -86,6 +87,36 @@ export function ListingFormFields({
   const selectedComplex = complexOptions.find(
     (option) => option.id === draft.complexId,
   );
+
+  // 선택된 단지에 이미 등록된 평면도 타입 목록. 있으면 드롭다운으로 고르게 하고,
+  // 없으면(또는 단지 미선택) 새로 입력할 수 있게 자유 입력칸을 보여줍니다.
+  const [unitTypeOptions, setUnitTypeOptions] = useState<string[]>([]);
+  useEffect(() => {
+    async function load() {
+      if (!draft.complexId) {
+        setUnitTypeOptions([]);
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/api/admin/floor-plans?complexId=${encodeURIComponent(draft.complexId)}`,
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          setUnitTypeOptions([]);
+          return;
+        }
+        const images = data.images as FloorPlanImage[];
+        const types = Array.from(new Set(images.map((image) => image.unitType))).sort(
+          (a, b) => a.localeCompare(b),
+        );
+        setUnitTypeOptions(types);
+      } catch {
+        setUnitTypeOptions([]);
+      }
+    }
+    load();
+  }, [draft.complexId]);
 
   return (
     <>
@@ -294,6 +325,41 @@ export function ListingFormFields({
             }
             className={inputClass}
           />
+        </Field>
+
+        <Field
+          label="평형 타입 (선택)"
+          hint={
+            unitTypeOptions.length > 0
+              ? "이 단지에 등록된 평면도 타입 중에서 골라주세요."
+              : "이 단지에 등록된 평면도가 아직 없습니다. 새 타입명을 입력해주세요(예: 84A)."
+          }
+        >
+          {unitTypeOptions.length > 0 ? (
+            <select
+              value={draft.unitType ?? ""}
+              onChange={(event) => onChangeField("unitType", event.target.value)}
+              className={inputClass}
+            >
+              <option value="">선택 안 함</option>
+              {/* 예전에 자유 입력으로 저장된 값이 목록에 없으면(오타 등) 잃어버리지 않도록 같이 보여줍니다. */}
+              {draft.unitType && !unitTypeOptions.includes(draft.unitType) && (
+                <option value={draft.unitType}>{draft.unitType} (목록에 없음)</option>
+              )}
+              {unitTypeOptions.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={draft.unitType ?? ""}
+              onChange={(event) => onChangeField("unitType", event.target.value)}
+              placeholder="예: 84A"
+              className={inputClass}
+            />
+          )}
         </Field>
 
         <Field label="방 개수">

@@ -23,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PHONE_HREF, PHONE_NUMBER } from "../../data/contact";
+import { getFloorPlanImages } from "../../lib/floorPlans";
 import { getListingById } from "../../lib/listings";
 import { getTransactionsByComplexId } from "../../lib/transactions";
 import ListingMediaPlaceholder from "../../components/ListingMediaPlaceholder";
@@ -101,6 +102,9 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
     : "-";
   const heroImage = listing.images?.[0] ?? listing.image;
   const transactions = getTransactionsByComplexId(complex.id);
+  const floorPlanImages = listing.unitType
+    ? await getFloorPlanImages(complex.id, listing.unitType)
+    : [];
 
   return (
     <>
@@ -261,6 +265,28 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             ))}
           </ul>
         </div>
+
+        {floorPlanImages.length > 0 && (
+          <div
+            className="animate-fade-in-up mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8"
+            style={{ animationDelay: "180ms" }}
+          >
+            <h2 className="text-lg font-bold text-navy-950">
+              평면도 ({listing.unitType})
+            </h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {floorPlanImages.map((image) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={image.id}
+                  src={image.url}
+                  alt={`${listing.unitType} 평면도`}
+                  className="w-full rounded-lg border border-navy-900/10 object-contain"
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         <div
           className="animate-fade-in-up mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8"

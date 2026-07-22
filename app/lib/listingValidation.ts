@@ -151,6 +151,10 @@ export function parseListingPayload(input: unknown): {
         : undefined,
     rawSourceText:
       typeof data.rawSourceText === "string" ? data.rawSourceText : undefined,
+    unitType:
+      typeof data.unitType === "string" && data.unitType.trim() !== ""
+        ? data.unitType.trim()
+        : undefined,
   };
 
   return { listing, errors: [] };
