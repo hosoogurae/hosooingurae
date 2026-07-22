@@ -58,7 +58,37 @@ export async function GET() {
       croppedMetaError = e instanceof Error ? e.message : String(e);
     }
 
+    // 캐시 문제인지 확인: 한 번도 쓰인 적 없는 새 경로에 업로드하고 바로 다시
+    // 받아봅니다. 여기서도 깨지면 캐시가 아니라 업로드/다운로드 자체의 문제입니다.
+    const freshPath = `hosumaeul-epyeonhansesang-2/109c/debug-fresh-${Date.now()}.jpg`;
+    const { error: freshUploadError } = await supabase.storage
+      .from("floor-plans")
+      .upload(freshPath, croppedBuffer, {
+        contentType: "image/jpeg",
+        upsert: false,
+      });
+
+    let freshRedownloadBytes: number | undefined;
+    let freshRedownloadFirstBytes: string | undefined;
+    let freshRedownloadValidSoi: boolean | undefined;
+    if (!freshUploadError) {
+      const { data: freshData, error: freshDownloadError } =
+        await supabase.storage.from("floor-plans").download(freshPath);
+      if (freshData && !freshDownloadError) {
+        const freshBuffer = Buffer.from(await freshData.arrayBuffer());
+        freshRedownloadBytes = freshBuffer.length;
+        freshRedownloadFirstBytes = freshBuffer.subarray(0, 16).toString("hex");
+        freshRedownloadValidSoi =
+          freshBuffer[0] === 0xff && freshBuffer[1] === 0xd8;
+      }
+      await supabase.storage.from("floor-plans").remove([freshPath]);
+    }
+
     return NextResponse.json({
+      freshUploadError: freshUploadError?.message,
+      freshRedownloadBytes,
+      freshRedownloadFirstBytes,
+      freshRedownloadValidSoi,
       downloadedBytes: originalBuffer.length,
       originalFirstBytes,
       originalValidSoi,
