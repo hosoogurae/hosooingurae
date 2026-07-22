@@ -134,7 +134,8 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const protocol = host?.startsWith("localhost") ? "http" : "https";
   const pageUrl = host ? `${protocol}://${host}/listings/${listing.id}` : undefined;
 
-  const inquiryMobileNumber = process.env.NEXT_PUBLIC_INQUIRY_MOBILE;
+  const inquiryMobileNumber =
+    process.env.NEXT_PUBLIC_INQUIRY_MOBILE?.trim() || undefined;
 
   const inquiryMessage = buildInquiryMessage({
     complexName: complex.name,
