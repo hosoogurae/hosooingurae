@@ -69,7 +69,7 @@ export default function FloorPlanImage({
           <img
             src={url}
             alt={`${unitType} 평면도 확대`}
-            className="max-h-full max-w-full rounded-lg bg-white object-contain"
+            className="h-[80vh] w-[90vw] max-h-[95vh] max-w-[95vw] rounded-lg bg-white object-contain sm:h-[85vh] sm:w-[80vw]"
             onClick={(event) => event.stopPropagation()}
           />
         </div>

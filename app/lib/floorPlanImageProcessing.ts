@@ -28,7 +28,25 @@ export async function cropFloorPlanPreview(
 
   const top = Math.round(height * HEADER_CROP_RATIO);
 
-  return sharp(buffer)
+  const cropped = await sharp(buffer)
     .extract({ left: 0, top, width, height: height - top })
     .toBuffer();
+
+  // sharp/libvips가 드물게 손상된 결과를 조용히 반환하는 경우가 있어(예외 없이
+  // 헤더만 깨진 파일), 업로드하기 전에 실제로 다시 디코딩되는지 확인합니다.
+  // 확인에 실패하면 깨진 이미지를 저장/노출하지 않도록 에러를 던집니다.
+  try {
+    const verifyMetadata = await sharp(cropped).metadata();
+    if (!verifyMetadata.width || !verifyMetadata.height) {
+      throw new Error("검증 결과 크기 정보가 없습니다.");
+    }
+  } catch (verifyError) {
+    throw new Error(
+      `크롭된 이미지가 손상되어 검증에 실패했습니다: ${
+        verifyError instanceof Error ? verifyError.message : String(verifyError)
+      }`,
+    );
+  }
+
+  return cropped;
 }
