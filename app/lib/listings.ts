@@ -10,6 +10,67 @@ export interface ListingWithComplex extends Listing {
   complex: Complex;
 }
 
+/**
+ * 로그인 없이 누구나 호출 가능한 공개 API(app/api/listings) 응답 형태.
+ * rawSourceText, sourceType, sourceArticleId, status 등 관리자 전용/내부 정보는
+ * 절대 포함하지 않습니다 — 그런 정보가 필요하면 app/api/admin/listings를 씁니다.
+ */
+export interface PublicListing {
+  id: string;
+  title: string;
+  complexId: string;
+  complexName: string;
+  propertyType: string;
+  transactionType: string;
+  price: number;
+  priceLabel: string;
+  supplyArea: number;
+  exclusiveArea: number;
+  floor: number;
+  totalFloors: number;
+  direction: string;
+  roomCount: number;
+  bathroomCount: number;
+  moveInDate: string;
+  maintenanceFee?: string;
+  description: string;
+  features: string[];
+  thumbnail?: string;
+  images?: string[];
+  naverUrl?: string;
+  verifiedDate?: string;
+  isFeatured: boolean;
+}
+
+export function toPublicListing(listing: ListingWithComplex): PublicListing {
+  return {
+    id: listing.id,
+    title: `${listing.complex.name} ${listing.transactionType} ${listing.priceLabel}`,
+    complexId: listing.complexId,
+    complexName: listing.complex.name,
+    propertyType: listing.propertyType,
+    transactionType: listing.transactionType,
+    price: listing.price,
+    priceLabel: listing.priceLabel,
+    supplyArea: listing.supplyArea,
+    exclusiveArea: listing.exclusiveArea,
+    floor: listing.floor,
+    totalFloors: listing.totalFloors,
+    direction: listing.direction,
+    roomCount: listing.roomCount,
+    bathroomCount: listing.bathroomCount,
+    moveInDate: listing.moveInDate,
+    maintenanceFee: listing.maintenanceFee,
+    description: listing.shortDescription,
+    features: listing.features,
+    thumbnail: listing.images?.[0] ?? listing.image,
+    images: listing.images,
+    naverUrl: listing.naverUrl,
+    verifiedDate: listing.verifiedDate,
+    isFeatured: listing.isFeatured,
+  };
+}
+
 type SupabaseClient = NonNullable<ReturnType<typeof getSupabaseClient>>;
 
 /** 여러 매물의 이미지를 한 번에 조회해 listing_id별로 묶습니다(sort_order 순). */

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createComplex } from "../../lib/complexes";
-import { getAllListings } from "../../lib/listings";
+import { getAllListings, toPublicListing } from "../../lib/listings";
 import { parseListingPayload } from "../../lib/listingValidation";
 import { generateListingId } from "../../lib/naverImport";
 import { getSupabaseAdminClient } from "../../lib/supabase/client";
@@ -13,10 +13,14 @@ const NOT_CONFIGURED_ERROR =
   "Supabase가 설정되어 있지 않습니다. .env.local의 NEXT_PUBLIC_SUPABASE_URL / " +
   "SUPABASE_SECRET_KEY를 확인해주세요.";
 
-/** 관리자 매물 관리 화면(/admin/listings)에서 목록을 보여줄 때 사용합니다(임시저장 포함). */
+/**
+ * 누구나 호출할 수 있는 공개 조회 API입니다. 공개(published) 매물만, 그것도
+ * 공개용으로 정리된 필드만 내려줍니다(rawSourceText 등 제외). 임시저장 매물이나
+ * 관리자 전용 정보가 필요하면 app/api/admin/listings를 쓰세요.
+ */
 export async function GET() {
-  const listings = await getAllListings({ includeDrafts: true });
-  return NextResponse.json({ listings });
+  const listings = await getAllListings();
+  return NextResponse.json({ listings: listings.map(toPublicListing) });
 }
 
 interface NewComplexPayload {

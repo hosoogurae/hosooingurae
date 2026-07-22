@@ -15,7 +15,7 @@ export default function AdminListingsPage() {
 
     async function loadListings() {
       try {
-        const response = await fetch("/api/listings");
+        const response = await fetch("/api/admin/listings");
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error ?? "매물 목록을 불러오지 못했습니다.");

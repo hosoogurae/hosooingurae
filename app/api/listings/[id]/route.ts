@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseListingPayload } from "../../../lib/listingValidation";
-import { getListingById } from "../../../lib/listings";
+import { getListingById, toPublicListing } from "../../../lib/listings";
 import { getSupabaseAdminClient } from "../../../lib/supabase/client";
 import {
   listingToImageInserts,
@@ -15,16 +15,19 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+/**
+ * 공개 조회 API — 공개(published) 매물만, 공개용으로 정리된 필드만 내려줍니다.
+ * 임시저장 매물이나 rawSourceText가 필요하면 app/api/admin/listings/[id]를 쓰세요.
+ */
 export async function GET(_request: NextRequest, { params }: RouteContext) {
   const { id } = await params;
-  // 관리자 수정 화면에서 쓰므로 임시저장(draft) 매물도 조회할 수 있어야 합니다.
-  const listing = await getListingById(id, { includeDrafts: true });
+  const listing = await getListingById(id);
 
   if (!listing) {
     return NextResponse.json({ error: "매물을 찾을 수 없습니다." }, { status: 404 });
   }
 
-  return NextResponse.json({ listing });
+  return NextResponse.json({ listing: toPublicListing(listing) });
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {

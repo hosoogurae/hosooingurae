@@ -26,7 +26,7 @@ export default function EditListingPage({
     async function load() {
       try {
         const [listingRes, complexesRes] = await Promise.all([
-          fetch(`/api/listings/${id}`),
+          fetch(`/api/admin/listings/${id}`),
           fetch("/api/complexes"),
         ]);
         const listingData = await listingRes.json();
