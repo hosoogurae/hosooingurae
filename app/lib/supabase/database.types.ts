@@ -25,6 +25,9 @@ export interface Database {
           heating: string | null;
           hallway_type: string | null;
           builder: string | null;
+          max_floor: number | null;
+          floor_area_ratio: number | null;
+          building_coverage_ratio: number | null;
           nearby_schools: string[];
           subway: string | null;
           subway_distance: string | null;
@@ -48,6 +51,9 @@ export interface Database {
           heating?: string | null;
           hallway_type?: string | null;
           builder?: string | null;
+          max_floor?: number | null;
+          floor_area_ratio?: number | null;
+          building_coverage_ratio?: number | null;
           nearby_schools?: string[];
           subway?: string | null;
           subway_distance?: string | null;

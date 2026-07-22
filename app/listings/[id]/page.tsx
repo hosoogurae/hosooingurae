@@ -16,6 +16,7 @@ import {
   Home,
   Layers,
   MapPin,
+  Percent,
   Ruler,
   TrainFront,
   Users,
@@ -115,6 +116,9 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
     Boolean(complex.heating) ||
     Boolean(complex.approvalDate) ||
     complex.totalHouseholds !== undefined ||
+    complex.maxFloor !== undefined ||
+    complex.floorAreaRatio !== undefined ||
+    complex.buildingCoverageRatio !== undefined ||
     complex.features.length > 0;
   const heroImage = listing.images?.[0] ?? listing.image;
   const transactions = getTransactionsByComplexId(complex.id);
@@ -421,6 +425,25 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                         ? `${complex.totalHouseholds.toLocaleString()}세대 / ${complex.buildings}개동`
                         : `${complex.totalHouseholds.toLocaleString()}세대`
                     }
+                  />
+                )}
+                {complex.maxFloor !== undefined && (
+                  <InfoItem icon={Layers} label="최고층" value={`${complex.maxFloor}층`} />
+                )}
+                {(complex.floorAreaRatio !== undefined ||
+                  complex.buildingCoverageRatio !== undefined) && (
+                  <InfoItem
+                    icon={Percent}
+                    label="용적률 / 건폐율"
+                    value={`${
+                      complex.floorAreaRatio !== undefined
+                        ? `${complex.floorAreaRatio}%`
+                        : "-"
+                    } / ${
+                      complex.buildingCoverageRatio !== undefined
+                        ? `${complex.buildingCoverageRatio}%`
+                        : "-"
+                    }`}
                   />
                 )}
               </dl>

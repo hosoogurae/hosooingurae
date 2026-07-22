@@ -27,6 +27,11 @@ export interface Complex {
   heating?: string;
   hallwayType?: string;
   builder?: string;
+  maxFloor?: number;
+  /** 용적률(%) */
+  floorAreaRatio?: number;
+  /** 건폐율(%) */
+  buildingCoverageRatio?: number;
   nearbySchools: string[];
   transportation: ComplexTransportation;
   features: string[];
