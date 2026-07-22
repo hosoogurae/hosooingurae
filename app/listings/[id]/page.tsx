@@ -25,9 +25,15 @@ import {
 import { PHONE_HREF, PHONE_NUMBER } from "../../data/contact";
 import { getFloorPlanImages } from "../../lib/floorPlans";
 import { getListingById } from "../../lib/listings";
+import {
+  BUILDING_UNKNOWN_LABEL,
+  buildInquiryMessage,
+  formatComplexAndBuilding,
+} from "../../lib/listingInquiry";
 import { getTransactionsByComplexId } from "../../lib/transactions";
 import ListingMediaPlaceholder from "../../components/ListingMediaPlaceholder";
 import ListingGallery from "../../components/ListingGallery";
+import ListingInquiryMessage from "../../components/ListingInquiryMessage";
 import TransactionPriceChart from "../../components/TransactionPriceChart";
 import { PhoneIcon } from "../../components/icons";
 
@@ -50,7 +56,7 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${listing.complex.name} ${listing.transactionType} ${listing.priceLabel} | 호수공인중개사사무소`,
+    title: `${formatComplexAndBuilding(listing.complex.name, listing.building)} ${listing.transactionType} ${listing.priceLabel} | 호수공인중개사사무소`,
     description: listing.shortDescription,
   };
 }
@@ -115,6 +121,13 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const floorPlanImages = listing.unitType
     ? await getFloorPlanImages(complex.id, listing.unitType)
     : [];
+  const inquiryMessage = buildInquiryMessage({
+    complexName: complex.name,
+    building: listing.building,
+    transactionType: listing.transactionType,
+    priceLabel: listing.priceLabel,
+    listingId: listing.id,
+  });
 
   return (
     <>
@@ -133,7 +146,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               style={{ animationDelay: "0ms" }}
             >
               <p className="text-sm font-semibold tracking-wide text-gold-400">
-                {complex.name}
+                {formatComplexAndBuilding(complex.name, listing.building)}
               </p>
               <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">
                 {listing.transactionType} {listing.priceLabel}
@@ -174,6 +187,10 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   </a>
                 )}
               </div>
+
+              <div className="mt-4">
+                <ListingInquiryMessage message={inquiryMessage} />
+              </div>
             </div>
 
             <div
@@ -212,6 +229,11 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
         >
           <h2 className="text-lg font-bold text-navy-950">매물 핵심정보</h2>
           <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 text-sm sm:grid-cols-4">
+            <InfoItem
+              icon={Building2}
+              label="동"
+              value={listing.building || BUILDING_UNKNOWN_LABEL}
+            />
             <InfoItem
               icon={Ruler}
               label="공급면적"
