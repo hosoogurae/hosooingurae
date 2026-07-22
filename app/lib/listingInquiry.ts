@@ -36,7 +36,7 @@ export function buildInquiryMessage(params: {
     "[매물 문의]",
     "",
     params.complexName,
-    ...(buildingFloorParts.length > 0 ? [buildingFloorParts.join(" ")] : []),
+    ...(buildingFloorParts.length > 0 ? [buildingFloorParts.join(" / ")] : []),
     "",
     `${params.transactionType} ${params.priceLabel}`,
     "",
@@ -45,7 +45,7 @@ export function buildInquiryMessage(params: {
   ];
 
   if (params.pageUrl) {
-    lines.push("", "매물 링크", params.pageUrl);
+    lines.push("", "상세보기", params.pageUrl);
   }
 
   return lines.join("\n");
