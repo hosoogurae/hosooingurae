@@ -13,6 +13,7 @@ interface PendingFile {
   file: File;
   unitType: string;
   /** 문자열로 들고 있다가 업로드 시점에 숫자로 변환합니다(빈 값 허용). */
+  supplyArea: string;
   exclusiveArea: string;
   previewUrl: string;
 }
@@ -20,6 +21,25 @@ interface PendingFile {
 function stripExtension(fileName: string): string {
   const dot = fileName.lastIndexOf(".");
   return dot > 0 ? fileName.slice(0, dot) : fileName;
+}
+
+interface ApiErrorDetail {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+/** 서버가 보내준 Supabase 원본 에러(code/message/details/hint)를 그대로 붙여 보여줍니다. */
+function formatErrorDetail(detail: ApiErrorDetail | undefined): string {
+  if (!detail) return "";
+  const parts = [
+    detail.code && `code: ${detail.code}`,
+    detail.message && `message: ${detail.message}`,
+    detail.details && `details: ${detail.details}`,
+    detail.hint && `hint: ${detail.hint}`,
+  ].filter(Boolean);
+  return parts.length > 0 ? ` [${parts.join(" / ")}]` : "";
 }
 
 export default function AdminFloorPlansPage() {
@@ -38,7 +58,8 @@ export default function AdminFloorPlansPage() {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
 
   const [editingAreaType, setEditingAreaType] = useState<string | null>(null);
-  const [areaValue, setAreaValue] = useState("");
+  const [supplyAreaValue, setSupplyAreaValue] = useState("");
+  const [exclusiveAreaValue, setExclusiveAreaValue] = useState("");
   const [areaSaving, setAreaSaving] = useState(false);
   const [areaError, setAreaError] = useState<string | null>(null);
 
@@ -113,6 +134,7 @@ export default function AdminFloorPlansPage() {
       key: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
       file,
       unitType: stripExtension(file.name),
+      supplyArea: "",
       exclusiveArea: "",
       previewUrl: URL.createObjectURL(file),
     }));
@@ -122,6 +144,12 @@ export default function AdminFloorPlansPage() {
   function updatePendingUnitType(key: string, value: string) {
     setPendingFiles((prev) =>
       prev.map((item) => (item.key === key ? { ...item, unitType: value } : item)),
+    );
+  }
+
+  function updatePendingSupplyArea(key: string, value: string) {
+    setPendingFiles((prev) =>
+      prev.map((item) => (item.key === key ? { ...item, supplyArea: value } : item)),
     );
   }
 
@@ -160,6 +188,9 @@ export default function AdminFloorPlansPage() {
       const form = new FormData();
       form.append("complexId", complexId);
       form.append("unitType", item.unitType.trim());
+      if (item.supplyArea.trim() !== "") {
+        form.append("supplyArea", item.supplyArea.trim());
+      }
       if (item.exclusiveArea.trim() !== "") {
         form.append("exclusiveArea", item.exclusiveArea.trim());
       }
@@ -172,7 +203,9 @@ export default function AdminFloorPlansPage() {
         });
         const data = await response.json();
         if (!response.ok) {
-          failed.push(`${item.file.name}: ${data.errors?.[0] ?? "업로드 실패"}`);
+          const message = data.errors?.[0] ?? "업로드 실패";
+          const detail = formatErrorDetail(data.errorDetail);
+          failed.push(`${item.file.name}: ${message}${detail}`);
         }
       } catch {
         failed.push(`${item.file.name}: 네트워크 오류`);
@@ -215,19 +248,32 @@ export default function AdminFloorPlansPage() {
   }
 
   /**
-   * 전용면적은 이미지 1장이 아니라 "타입" 단위 개념이라, 그룹에 속한 이미지
-   * 전체에 같은 값을 적용합니다(기존에 올려둔 평면도에 나중에 채워 넣는 용도 포함).
+   * 면적은 이미지 1장이 아니라 "타입" 단위 개념이라, 그룹에 속한 이미지 전체에
+   * 같은 값을 적용합니다(기존에 올려둔 평면도에 나중에 채워 넣는 용도 포함).
    */
+  function parseAreaInput(
+    value: string,
+    label: string,
+  ): { value?: number | null; error?: string } {
+    const trimmed = value.trim();
+    if (trimmed === "") return { value: null };
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return { error: `${label}은 0보다 큰 숫자로 입력해주세요.` };
+    }
+    return { value: parsed };
+  }
+
   async function handleSaveGroupArea(unitType: string, group: FloorPlanImage[]) {
-    const trimmed = areaValue.trim();
-    let exclusiveArea: number | null = null;
-    if (trimmed !== "") {
-      const parsed = Number(trimmed);
-      if (!Number.isFinite(parsed) || parsed <= 0) {
-        setAreaError("전용면적은 0보다 큰 숫자로 입력해주세요.");
-        return;
-      }
-      exclusiveArea = parsed;
+    const supplyResult = parseAreaInput(supplyAreaValue, "공급면적");
+    if (supplyResult.error) {
+      setAreaError(supplyResult.error);
+      return;
+    }
+    const exclusiveResult = parseAreaInput(exclusiveAreaValue, "전용면적");
+    if (exclusiveResult.error) {
+      setAreaError(exclusiveResult.error);
+      return;
     }
 
     setAreaSaving(true);
@@ -237,11 +283,15 @@ export default function AdminFloorPlansPage() {
         const response = await fetch(`/api/admin/floor-plans/${image.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ exclusiveArea }),
+          body: JSON.stringify({
+            supplyArea: supplyResult.value,
+            exclusiveArea: exclusiveResult.value,
+          }),
         });
         if (!response.ok) {
           const data = await response.json();
-          setAreaError(data.errors?.[0] ?? "전용면적 저장에 실패했습니다.");
+          const message = data.errors?.[0] ?? "면적 저장에 실패했습니다.";
+          setAreaError(`${message}${formatErrorDetail(data.errorDetail)}`);
           return;
         }
       }
@@ -359,19 +409,31 @@ export default function AdminFloorPlansPage() {
                       onChange={(event) =>
                         updatePendingUnitType(item.key, event.target.value)
                       }
-                      placeholder="타입명 (예: 84A)"
+                      placeholder="타입명 (예: 108B)"
                       className={`${inputClass} mt-1 w-full`}
                     />
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={item.exclusiveArea}
-                      onChange={(event) =>
-                        updatePendingExclusiveArea(item.key, event.target.value)
-                      }
-                      placeholder="전용면적 ㎡ (선택)"
-                      className={`${inputClass} mt-1 w-full`}
-                    />
+                    <div className="mt-1 flex gap-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={item.supplyArea}
+                        onChange={(event) =>
+                          updatePendingSupplyArea(item.key, event.target.value)
+                        }
+                        placeholder="공급면적 ㎡ (선택)"
+                        className={`${inputClass} w-full`}
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={item.exclusiveArea}
+                        onChange={(event) =>
+                          updatePendingExclusiveArea(item.key, event.target.value)
+                        }
+                        placeholder="전용면적 ㎡ (선택)"
+                        className={`${inputClass} w-full`}
+                      />
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -424,8 +486,12 @@ export default function AdminFloorPlansPage() {
 
         <div className="mt-4 flex flex-col gap-6">
           {groupedImages.map(([unitType, group]) => {
-            const groupArea = group.find((img) => img.exclusiveArea !== undefined)
-              ?.exclusiveArea;
+            const groupSupplyArea = group.find(
+              (img) => img.supplyArea !== undefined,
+            )?.supplyArea;
+            const groupExclusiveArea = group.find(
+              (img) => img.exclusiveArea !== undefined,
+            )?.exclusiveArea;
             return (
             <div
               key={unitType}
@@ -439,10 +505,18 @@ export default function AdminFloorPlansPage() {
                     <input
                       type="number"
                       step="0.01"
-                      value={areaValue}
-                      onChange={(event) => setAreaValue(event.target.value)}
+                      value={supplyAreaValue}
+                      onChange={(event) => setSupplyAreaValue(event.target.value)}
+                      placeholder="공급면적 ㎡"
+                      className={`${inputClass} w-28 px-2 py-1 text-xs`}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={exclusiveAreaValue}
+                      onChange={(event) => setExclusiveAreaValue(event.target.value)}
                       placeholder="전용면적 ㎡"
-                      className={`${inputClass} w-32 px-2 py-1 text-xs`}
+                      className={`${inputClass} w-28 px-2 py-1 text-xs`}
                     />
                     <button
                       type="button"
@@ -465,13 +539,21 @@ export default function AdminFloorPlansPage() {
                     type="button"
                     onClick={() => {
                       setEditingAreaType(unitType);
-                      setAreaValue(groupArea !== undefined ? String(groupArea) : "");
+                      setSupplyAreaValue(
+                        groupSupplyArea !== undefined ? String(groupSupplyArea) : "",
+                      );
+                      setExclusiveAreaValue(
+                        groupExclusiveArea !== undefined
+                          ? String(groupExclusiveArea)
+                          : "",
+                      );
                       setAreaError(null);
                     }}
                     className="text-xs font-medium text-navy-800/60 hover:text-gold-600 hover:underline"
                   >
-                    전용면적:{" "}
-                    {groupArea !== undefined ? `${groupArea}㎡` : "미입력 (입력하기)"}
+                    {groupSupplyArea !== undefined || groupExclusiveArea !== undefined
+                      ? `공급 ${groupSupplyArea ?? "-"}㎡ / 전용 ${groupExclusiveArea ?? "-"}㎡`
+                      : "면적 미입력 (입력하기)"}
                   </button>
                 )}
               </div>

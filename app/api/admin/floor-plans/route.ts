@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   const complexId = form.get("complexId");
   const unitType = form.get("unitType");
+  const supplyAreaRaw = form.get("supplyArea");
   const exclusiveAreaRaw = form.get("exclusiveArea");
   const file = form.get("file");
 
@@ -60,24 +61,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let exclusiveArea: number | undefined;
-  if (typeof exclusiveAreaRaw === "string" && exclusiveAreaRaw.trim() !== "") {
-    const parsed = Number(exclusiveAreaRaw);
+  function parsePositiveArea(
+    raw: FormDataEntryValue | null,
+    label: string,
+  ): { value?: number; error?: string } {
+    if (typeof raw !== "string" || raw.trim() === "") return {};
+    const parsed = Number(raw);
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      return NextResponse.json(
-        { errors: ["전용면적은 0보다 큰 숫자로 입력해주세요."] },
-        { status: 400 },
-      );
+      return { error: `${label}은 0보다 큰 숫자로 입력해주세요.` };
     }
-    exclusiveArea = parsed;
+    return { value: parsed };
+  }
+
+  const supplyAreaResult = parsePositiveArea(supplyAreaRaw, "공급면적");
+  if (supplyAreaResult.error) {
+    return NextResponse.json({ errors: [supplyAreaResult.error] }, { status: 400 });
+  }
+  const exclusiveAreaResult = parsePositiveArea(exclusiveAreaRaw, "전용면적");
+  if (exclusiveAreaResult.error) {
+    return NextResponse.json(
+      { errors: [exclusiveAreaResult.error] },
+      { status: 400 },
+    );
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const { image, error } = await uploadFloorPlanImage({
+  const { image, error, errorDetail } = await uploadFloorPlanImage({
     complexId: complexId.trim(),
     unitType: unitType.trim(),
-    exclusiveArea,
+    supplyArea: supplyAreaResult.value,
+    exclusiveArea: exclusiveAreaResult.value,
     fileName: file.name,
     contentType: file.type,
     bytes,
@@ -85,7 +99,7 @@ export async function POST(request: NextRequest) {
 
   if (!image) {
     return NextResponse.json(
-      { errors: [error ?? "업로드에 실패했습니다."] },
+      { errors: [error ?? "업로드에 실패했습니다."], errorDetail },
       { status: 500 },
     );
   }

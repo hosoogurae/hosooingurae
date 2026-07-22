@@ -352,7 +352,7 @@ export default function AdminImportPage() {
 
           {draft.unitType && unitTypeCandidates.length === 1 && (
             <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
-              전용면적이 일치하는 평면도를 찾아 평형 타입을{" "}
+              공급/전용면적이 일치하는 평면도를 찾아 평형 타입을{" "}
               <strong>{draft.unitType}</strong>(으)로 자동으로 채웠습니다.
               다르면 아래에서 직접 수정해주세요.
             </div>
@@ -360,7 +360,7 @@ export default function AdminImportPage() {
 
           {!draft.unitType && unitTypeCandidates.length > 1 && (
             <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
-              전용면적이 일치하는 평형 타입 후보가 여러 개입니다:{" "}
+              공급/전용면적이 일치하는 평형 타입 후보가 여러 개입니다:{" "}
               <strong>{unitTypeCandidates.join(", ")}</strong>. 자동으로
               정하지 않았으니 아래 드롭다운에서 직접 선택해주세요.
             </div>

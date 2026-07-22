@@ -4,11 +4,35 @@ import type { FloorPlanImageRow } from "./supabase/database.types";
 
 const BUCKET = "floor-plans";
 
+/** Supabase가 돌려준 원본 에러 정보. 관리자 화면에 그대로 보여줘서 원인을 바로 알 수 있게 합니다. */
+export interface FloorPlanErrorDetail {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+function toErrorDetail(error: {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+} | null): FloorPlanErrorDetail | undefined {
+  if (!error) return undefined;
+  return {
+    code: error.code,
+    message: error.message,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+  };
+}
+
 function rowToFloorPlanImage(row: FloorPlanImageRow): FloorPlanImage {
   return {
     id: row.id,
     complexId: row.complex_id,
     unitType: row.unit_type,
+    supplyArea: row.supply_area ?? undefined,
     exclusiveArea: row.exclusive_area ?? undefined,
     url: row.url,
     sortOrder: row.sort_order,
@@ -88,6 +112,7 @@ export interface UploadFloorPlanInput {
   complexId: string;
   unitType: string;
   /** ㎡ 단위. 없으면 자동 매칭 대상에서 빠질 뿐 업로드 자체는 그대로 됩니다. */
+  supplyArea?: number;
   exclusiveArea?: number;
   fileName: string;
   contentType: string;
@@ -99,9 +124,11 @@ export interface UploadFloorPlanInput {
  * 관리자가 직접 올리는 파일이므로 출처 확인 없이 그대로 저장합니다(네이버
  * 자동 수집 기능과는 무관 — 그건 보류 상태).
  */
-export async function uploadFloorPlanImage(
-  input: UploadFloorPlanInput,
-): Promise<{ image?: FloorPlanImage; error?: string }> {
+export async function uploadFloorPlanImage(input: UploadFloorPlanInput): Promise<{
+  image?: FloorPlanImage;
+  error?: string;
+  errorDetail?: FloorPlanErrorDetail;
+}> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return { error: "Supabase가 설정되어 있지 않습니다." };
@@ -122,7 +149,10 @@ export async function uploadFloorPlanImage(
 
   if (uploadError) {
     console.error("[floorPlans] Storage 업로드 실패", uploadError);
-    return { error: "이미지 업로드에 실패했습니다." };
+    return {
+      error: "이미지 업로드에 실패했습니다.",
+      errorDetail: toErrorDetail({ message: uploadError.message }),
+    };
   }
 
   const {
@@ -145,6 +175,7 @@ export async function uploadFloorPlanImage(
     .insert({
       complex_id: input.complexId,
       unit_type: input.unitType,
+      supply_area: input.supplyArea ?? null,
       exclusive_area: input.exclusiveArea ?? null,
       url: publicUrl,
       sort_order: nextSortOrder,
@@ -153,9 +184,29 @@ export async function uploadFloorPlanImage(
     .single();
 
   if (insertError || !inserted) {
-    console.error("[floorPlans] 행 저장 실패", insertError);
-    // 스토리지에는 이미 올라갔지만 정리하지 않고 에러만 알립니다(수동 정리 필요).
-    return { error: "이미지는 업로드됐지만 정보 저장에 실패했습니다." };
+    console.error("[floorPlans] 행 저장 실패", {
+      code: insertError?.code,
+      message: insertError?.message,
+      details: insertError?.details,
+      hint: insertError?.hint,
+    });
+
+    // DB 저장이 실패했으니 방금 올린 Storage 파일을 롤백해서 고아 파일이
+    // 남지 않게 합니다.
+    const { error: rollbackError } = await supabase.storage
+      .from(BUCKET)
+      .remove([path]);
+    if (rollbackError) {
+      console.error(
+        "[floorPlans] 롤백용 Storage 파일 삭제 실패(고아 파일로 남을 수 있음)",
+        rollbackError,
+      );
+    }
+
+    return {
+      error: "정보 저장에 실패해 업로드를 취소했습니다(이미지 파일도 함께 삭제됨).",
+      errorDetail: toErrorDetail(insertError),
+    };
   }
 
   return { image: rowToFloorPlanImage(inserted) };
@@ -164,21 +215,31 @@ export async function uploadFloorPlanImage(
 export interface FloorPlanImageUpdate {
   unitType?: string;
   /** null을 넘기면 값을 지웁니다(빈 값으로). undefined면 건드리지 않습니다. */
+  supplyArea?: number | null;
   exclusiveArea?: number | null;
 }
 
-/** 타입명 오타 수정, 또는 기존에 올려둔 평면도에 전용면적만 나중에 채워 넣을 때 사용. */
+/** 타입명 오타 수정, 또는 기존에 올려둔 평면도에 면적만 나중에 채워 넣을 때 사용. */
 export async function updateFloorPlanImage(
   id: string,
   updates: FloorPlanImageUpdate,
-): Promise<{ image?: FloorPlanImage; error?: string }> {
+): Promise<{
+  image?: FloorPlanImage;
+  error?: string;
+  errorDetail?: FloorPlanErrorDetail;
+}> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return { error: "Supabase가 설정되어 있지 않습니다." };
   }
 
-  const patch: { unit_type?: string; exclusive_area?: number | null } = {};
+  const patch: {
+    unit_type?: string;
+    supply_area?: number | null;
+    exclusive_area?: number | null;
+  } = {};
   if (updates.unitType !== undefined) patch.unit_type = updates.unitType;
+  if (updates.supplyArea !== undefined) patch.supply_area = updates.supplyArea;
   if (updates.exclusiveArea !== undefined) {
     patch.exclusive_area = updates.exclusiveArea;
   }
@@ -191,8 +252,13 @@ export async function updateFloorPlanImage(
     .maybeSingle();
 
   if (error) {
-    console.error("[floorPlans] 평면도 수정 실패", error);
-    return { error: "수정에 실패했습니다." };
+    console.error("[floorPlans] 평면도 수정 실패", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return { error: "수정에 실패했습니다.", errorDetail: toErrorDetail(error) };
   }
   if (!data) {
     return { error: "평면도를 찾을 수 없습니다." };
@@ -201,16 +267,17 @@ export async function updateFloorPlanImage(
   return { image: rowToFloorPlanImage(data) };
 }
 
-/** 자동 매칭에 쓰는 전용면적 허용 오차(㎡). */
-export const EXCLUSIVE_AREA_MATCH_TOLERANCE = 0.05;
+/** 자동 매칭에 쓰는 면적 허용 오차(㎡). 공급/전용 둘 다 이 오차 안에 있어야 후보로 봅니다. */
+export const AREA_MATCH_TOLERANCE = 0.05;
 
 /**
- * 매물 원문에서 파싱된 전용면적과, 그 단지에 이미 등록된 평면도의 전용면적을
- * 비교해 후보 타입명을 찾습니다. 전용면적이 없는(null) 평면도는 비교 대상에서
- * 제외합니다 — 값이 없는 걸 억지로 맞다고 추측하지 않습니다.
+ * 매물 원문에서 파싱된 공급면적·전용면적과, 그 단지에 이미 등록된 평면도의
+ * 공급면적·전용면적을 비교해 후보 타입명을 찾습니다. 둘 중 하나라도 없는(null)
+ * 평면도는 비교 대상에서 제외합니다 — 값이 없는 걸 억지로 맞다고 추측하지 않습니다.
  */
 export async function findMatchingUnitTypes(
   complexId: string,
+  supplyArea: number,
   exclusiveArea: number,
 ): Promise<string[]> {
   const supabase = getSupabaseClient();
@@ -220,18 +287,64 @@ export async function findMatchingUnitTypes(
     .from("floor_plan_images")
     .select("unit_type")
     .eq("complex_id", complexId)
+    .not("supply_area", "is", null)
     .not("exclusive_area", "is", null)
-    .gte("exclusive_area", exclusiveArea - EXCLUSIVE_AREA_MATCH_TOLERANCE)
-    .lte("exclusive_area", exclusiveArea + EXCLUSIVE_AREA_MATCH_TOLERANCE);
+    .gte("supply_area", supplyArea - AREA_MATCH_TOLERANCE)
+    .lte("supply_area", supplyArea + AREA_MATCH_TOLERANCE)
+    .gte("exclusive_area", exclusiveArea - AREA_MATCH_TOLERANCE)
+    .lte("exclusive_area", exclusiveArea + AREA_MATCH_TOLERANCE);
 
   if (error || !data) {
-    console.error("[floorPlans] 전용면적 매칭 조회 실패", error);
+    console.error("[floorPlans] 면적 매칭 조회 실패", error);
     return [];
   }
 
   return Array.from(new Set(data.map((row) => row.unit_type))).sort((a, b) =>
     a.localeCompare(b),
   );
+}
+
+interface UnitTypeBuildingOverride {
+  /** 면적만으로는 구분 안 되는 후보 타입 집합(순서 무관, 정확히 일치해야 적용). */
+  candidates: string[];
+  /** 이 동 목록에 해당하면 preferred를, 아니면 fallback을 선택합니다. */
+  buildings: string[];
+  preferred: string;
+  fallback: string;
+}
+
+/**
+ * 면적이 같아 구분되지 않는 타입들의 동 기반 예외 규칙.
+ * (2026-07-22 기준 호수마을e편한세상2단지 실제 데이터: 110D/110D-1은 공급
+ * 110.88 / 전용 84.65로 동일하지만, 110D-1은 205동·207동에만 존재합니다.)
+ * 앞으로 같은 종류의 예외가 더 생기면 이 목록에 추가하면 됩니다.
+ */
+const UNIT_TYPE_BUILDING_OVERRIDES: UnitTypeBuildingOverride[] = [
+  {
+    candidates: ["110D", "110D-1"],
+    buildings: ["205동", "207동"],
+    preferred: "110D-1",
+    fallback: "110D",
+  },
+];
+
+/**
+ * 면적 매칭 후보가 위 예외 규칙에 해당하면 동 번호로 하나로 좁힙니다.
+ * 규칙에 해당하지 않거나 동 정보가 없으면 후보를 그대로 돌려줍니다(추측하지 않음).
+ */
+export function resolveUnitTypeCandidates(
+  candidates: string[],
+  building: string | undefined,
+): string[] {
+  for (const rule of UNIT_TYPE_BUILDING_OVERRIDES) {
+    const isExactMatch =
+      candidates.length === rule.candidates.length &&
+      rule.candidates.every((candidate) => candidates.includes(candidate));
+    if (!isExactMatch) continue;
+    if (!building) return candidates;
+    return [rule.buildings.includes(building) ? rule.preferred : rule.fallback];
+  }
+  return candidates;
 }
 
 export async function deleteFloorPlanImage(

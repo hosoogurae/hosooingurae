@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findMatchingUnitTypes } from "../../lib/floorPlans";
+import {
+  findMatchingUnitTypes,
+  resolveUnitTypeCandidates,
+} from "../../lib/floorPlans";
 import {
   extractArticleNumber,
   getComplexOptions,
@@ -87,14 +90,21 @@ export async function POST(request: NextRequest) {
     ? undefined
     : getSuggestedComplexName(pastedText);
 
-  // 원문에서 파싱된 전용면적과, 그 단지에 이미 등록된 평면도의 전용면적을
-  // ±0.05㎡ 오차로 비교합니다. 후보가 정확히 1개일 때만 자동으로 채우고,
-  // 없거나 여러 개면 추측하지 않고 빈 값으로 둔 채 후보 목록만 알려줍니다.
+  // 원문에서 파싱된 공급/전용면적과, 그 단지에 이미 등록된 평면도의 공급/전용
+  // 면적을 ±0.05㎡ 오차로 비교합니다. 면적만으로 안 좁혀지면(예: 110D/110D-1처럼
+  // 면적이 같은 타입) 동 번호 기반 예외 규칙으로 한 번 더 좁혀봅니다. 그래도
+  // 후보가 정확히 1개일 때만 자동으로 채우고, 없거나 여러 개면 추측하지 않고
+  // 빈 값으로 둔 채 후보 목록만 알려줍니다.
   let unitTypeCandidates: string[] = [];
-  if (draft.complexId && draft.exclusiveArea > 0) {
-    unitTypeCandidates = await findMatchingUnitTypes(
+  if (draft.complexId && draft.supplyArea > 0 && draft.exclusiveArea > 0) {
+    const areaCandidates = await findMatchingUnitTypes(
       draft.complexId,
+      draft.supplyArea,
       draft.exclusiveArea,
+    );
+    unitTypeCandidates = resolveUnitTypeCandidates(
+      areaCandidates,
+      draft.building || undefined,
     );
     if (unitTypeCandidates.length === 1) {
       draft.unitType = unitTypeCandidates[0];
