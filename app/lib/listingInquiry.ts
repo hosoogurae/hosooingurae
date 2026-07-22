@@ -10,9 +10,10 @@ export function formatComplexAndBuilding(
 }
 
 /**
- * 전화상담·문의하기 등 어떤 경로로 연락하든 상담원이 매물을 정확히 특정할 수 있도록
- * 단지명·동·층·거래유형·가격을 담은 문의 문구를 만듭니다. 고객 화면에는 내부
- * listing id(매물번호)를 노출하지 않습니다 — DB 식별은 관리자 화면에서만 씁니다.
+ * 전화상담·문자문의 등 어떤 경로로 연락하든 상담원이 매물을 정확히 특정할 수
+ * 있도록 단지명·동·층·거래유형·가격과 상세페이지 링크를 담은 문의 문구를
+ * 만듭니다. 고객 화면/문자에는 내부 listing id(매물번호)를 노출하지
+ * 않습니다 — DB 식별은 관리자 화면에서만 씁니다.
  */
 export function buildInquiryMessage(params: {
   complexName: string;
@@ -20,16 +21,48 @@ export function buildInquiryMessage(params: {
   floor: number;
   transactionType: string;
   priceLabel: string;
+  /** 현재 상세페이지의 절대 URL. 없으면 안내 문구를 생략합니다. */
+  pageUrl?: string;
 }): string {
   const identifierParts = [params.complexName];
   if (params.building && params.building.trim() !== "") {
     identifierParts.push(params.building);
   }
-  identifierParts.push(`${params.floor}층`);
+  if (params.floor !== undefined && params.floor !== null) {
+    identifierParts.push(`${params.floor}층`);
+  }
 
-  return [
+  const lines = [
     "[매물 문의]",
+    "",
     identifierParts.join(" "),
     `${params.transactionType} ${params.priceLabel}`,
-  ].join("\n");
+    "",
+    "이 매물 상담을 받고 싶습니다.",
+  ];
+
+  if (params.pageUrl) {
+    lines.push(`매물 보기: ${params.pageUrl}`);
+  }
+
+  return lines.join("\n");
+}
+
+function isIOS(): boolean {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+/** 데스크톱/모바일 구분 없이 브라우저 환경에서만 호출합니다(서버에서는 항상 false). */
+export function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+/**
+ * sms: 링크를 만듭니다. iOS는 본문 파라미터에 `&`를, Android(및 그 외)는
+ * `?`를 써야 문자 앱이 본문을 정상적으로 미리 채웁니다.
+ */
+export function buildSmsHref(phoneNumber: string, body: string): string {
+  const separator = typeof navigator !== "undefined" && isIOS() ? "&" : "?";
+  return `sms:${phoneNumber}${separator}body=${encodeURIComponent(body)}`;
 }

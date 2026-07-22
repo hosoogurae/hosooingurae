@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import { PHONE_HREF, PHONE_NUMBER } from "../../data/contact";
 import FloorPlanImage from "../../components/FloorPlanImage";
+import InquirySmsButton from "../../components/InquirySmsButton";
 import { getFloorPlanImages } from "../../lib/floorPlans";
 import { getListingById } from "../../lib/listings";
 import {
@@ -126,12 +128,21 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const floorPlanImages = listing.unitType
     ? await getFloorPlanImages(complex.id, listing.unitType)
     : [];
+
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host");
+  const protocol = host?.startsWith("localhost") ? "http" : "https";
+  const pageUrl = host ? `${protocol}://${host}/listings/${listing.id}` : undefined;
+
+  const inquiryMobileNumber = process.env.NEXT_PUBLIC_INQUIRY_MOBILE;
+
   const inquiryMessage = buildInquiryMessage({
     complexName: complex.name,
     building: listing.building,
     floor: listing.floor,
     transactionType: listing.transactionType,
     priceLabel: listing.priceLabel,
+    pageUrl,
   });
   const heroFloorPlan = floorPlanImages[0];
 
@@ -171,12 +182,19 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               )}
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Link
-                  href="/#contact"
-                  className="rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-6 py-3 text-center text-sm font-bold text-navy-950 shadow-lg shadow-gold-500/30 transition-transform hover:scale-[1.03]"
-                >
-                  문의하기
-                </Link>
+                {inquiryMobileNumber ? (
+                  <InquirySmsButton
+                    phoneNumber={inquiryMobileNumber}
+                    message={inquiryMessage}
+                  />
+                ) : (
+                  <Link
+                    href="/#contact"
+                    className="rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-6 py-3 text-center text-sm font-bold text-navy-950 shadow-lg shadow-gold-500/30 transition-transform hover:scale-[1.03]"
+                  >
+                    문의하기
+                  </Link>
+                )}
                 <a
                   href={PHONE_HREF}
                   className="flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/5 px-6 py-3 text-sm font-bold text-white backdrop-blur transition-colors hover:border-gold-400 hover:text-gold-400"
