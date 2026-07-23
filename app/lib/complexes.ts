@@ -109,9 +109,11 @@ export interface ComplexUpdateInput {
   name?: string;
   address?: string;
   propertyType?: string;
+  /** null을 넘기면 값을 지웁니다(모름으로 되돌림). undefined면 건드리지 않습니다. */
+  subwayWalkMinutes?: number | null;
 }
 
-/** 단지 정보 관리 화면(/admin/complexes)에서 단지명·주소·건축물 용도를 고칠 때 씁니다. */
+/** 단지 정보 관리 화면(/admin/complexes)에서 단지명·주소·건축물 용도·지하철 도보 시간을 고칠 때 씁니다. */
 export async function updateComplex(
   id: string,
   patch: ComplexUpdateInput,
@@ -125,6 +127,9 @@ export async function updateComplex(
   if (patch.name !== undefined) dbPatch.name = patch.name;
   if (patch.address !== undefined) dbPatch.address = patch.address;
   if (patch.propertyType !== undefined) dbPatch.property_type = patch.propertyType;
+  if (patch.subwayWalkMinutes !== undefined) {
+    dbPatch.subway_walk_minutes = patch.subwayWalkMinutes;
+  }
 
   const { data, error } = await supabase
     .from("complexes")

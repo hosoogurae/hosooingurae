@@ -17,11 +17,12 @@ export async function PATCH(
     );
   }
 
-  const { name, address, propertyType } =
+  const { name, address, propertyType, subwayWalkMinutes } =
     (body as {
       name?: unknown;
       address?: unknown;
       propertyType?: unknown;
+      subwayWalkMinutes?: unknown;
     } | null) ?? {};
 
   if (name !== undefined && typeof name !== "string") {
@@ -42,6 +43,16 @@ export async function PATCH(
       { status: 400 },
     );
   }
+  if (
+    subwayWalkMinutes !== undefined &&
+    subwayWalkMinutes !== null &&
+    !(typeof subwayWalkMinutes === "number" && Number.isInteger(subwayWalkMinutes) && subwayWalkMinutes >= 0)
+  ) {
+    return NextResponse.json(
+      { errors: ["지하철 도보 시간은 0 이상의 정수(분)로 입력해주세요."] },
+      { status: 400 },
+    );
+  }
 
   const trimmedName = typeof name === "string" ? name.trim() : undefined;
   if (trimmedName === "") {
@@ -55,6 +66,10 @@ export async function PATCH(
     name: trimmedName,
     address: typeof address === "string" ? address.trim() : undefined,
     propertyType: typeof propertyType === "string" ? propertyType.trim() : undefined,
+    subwayWalkMinutes:
+      subwayWalkMinutes === undefined
+        ? undefined
+        : (subwayWalkMinutes as number | null),
   });
 
   if (!complex) {

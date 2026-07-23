@@ -60,6 +60,28 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
   if (parsedQuery?.wantsImmediateMoveIn) {
     interpretedLines.push("입주: 즉시 입주 가능 여부를 반영했습니다.");
   }
+  if (parsedQuery?.stationName) {
+    interpretedLines.push(
+      `교통: "${parsedQuery.stationName}" 도보 10분 이내(11~15분은 부분 반영)로 검색했습니다.`,
+    );
+  } else if (parsedQuery?.wantsStationProximity) {
+    interpretedLines.push(
+      "교통: 지하철역 도보 10분 이내(11~15분은 부분 반영)를 역세권 기준으로 검색했습니다.",
+    );
+  }
+  if (parsedQuery?.schoolLevel) {
+    interpretedLines.push(
+      parsedQuery.schoolLevel === "학교"
+        ? "학교: 인근 학교로 등록된 단지인지 확인했습니다."
+        : `학교: "${parsedQuery.schoolLevel}"가 인근 학교로 등록된 단지인지 확인했습니다.`,
+    );
+  }
+  if (parsedQuery?.wantsAmpleParking) {
+    interpretedLines.push("주차: 세대당 1.3대 이상(1.1~1.3대는 부분 반영)을 넉넉함 기준으로 검색했습니다.");
+  }
+  if (parsedQuery?.wantsLargeComplex) {
+    interpretedLines.push("단지 규모: 1,000세대 이상(700~999세대는 부분 반영)을 대단지 기준으로 검색했습니다.");
+  }
 
   return (
     <>
@@ -89,8 +111,8 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
             </p>
             <p className="mt-2 text-sm text-navy-800/60">
               가격, 거래유형(매매/전세/월세), 매물종류(아파트/오피스텔/상가),
-              단지명, 방 개수, 고층/저층, 즉시입주 같은 표현으로 다시
-              적어주세요.
+              단지명, 방 개수, 고층/저층, 즉시입주, 역세권(또는 &quot;OO역&quot;),
+              학교, 주차, 대단지 같은 표현으로 다시 적어주세요.
             </p>
           </div>
         )}
@@ -144,6 +166,11 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                           {ranked.reasons.join(" ")}
                         </p>
                       </div>
+                    )}
+                    {ranked.notes.length > 0 && (
+                      <p className="mt-2 text-xs text-navy-800/40">
+                        {ranked.notes.join(" · ")}
+                      </p>
                     )}
                     <CompareToggle listingId={ranked.listing.id} />
                   </li>

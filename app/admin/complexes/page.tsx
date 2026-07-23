@@ -10,6 +10,8 @@ interface EditState {
   name: string;
   address: string;
   propertyType: string;
+  /** 입력창은 문자열로 들고 있다가 저장 시점에 숫자로 바꿉니다(빈 값은 "모름"으로 저장). */
+  subwayWalkMinutes: string;
 }
 
 export default function AdminComplexesPage() {
@@ -21,6 +23,7 @@ export default function AdminComplexesPage() {
     name: "",
     address: "",
     propertyType: "",
+    subwayWalkMinutes: "",
   });
   const [saving, setSaving] = useState(false);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
@@ -60,6 +63,10 @@ export default function AdminComplexesPage() {
       name: complex.name,
       address: complex.address,
       propertyType: complex.propertyType ?? "",
+      subwayWalkMinutes:
+        complex.transportation.subwayWalkMinutes !== undefined
+          ? String(complex.transportation.subwayWalkMinutes)
+          : "",
     });
     setRowErrors((prev) => ({ ...prev, [complex.id]: "" }));
   }
@@ -67,10 +74,16 @@ export default function AdminComplexesPage() {
   async function handleSave(id: string) {
     setSaving(true);
     try {
+      const trimmedMinutes = editValue.subwayWalkMinutes.trim();
       const response = await fetch(`/api/admin/complexes/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editValue),
+        body: JSON.stringify({
+          name: editValue.name,
+          address: editValue.address,
+          propertyType: editValue.propertyType,
+          subwayWalkMinutes: trimmedMinutes === "" ? null : Number(trimmedMinutes),
+        }),
       });
       const data = await response.json();
 
@@ -169,6 +182,29 @@ export default function AdminComplexesPage() {
                       className={inputClass}
                     />
                   </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-navy-800/60">
+                      지하철 도보 시간(분)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={editValue.subwayWalkMinutes}
+                      onChange={(event) =>
+                        setEditValue((prev) => ({
+                          ...prev,
+                          subwayWalkMinutes: event.target.value,
+                        }))
+                      }
+                      placeholder={
+                        complex.transportation.subway
+                          ? `예: ${complex.transportation.subway}까지 12`
+                          : "예: 12 (비우면 모름으로 저장)"
+                      }
+                      className={inputClass}
+                    />
+                  </label>
 
                   {rowErrors[complex.id] && (
                     <p className="text-xs text-red-600">{rowErrors[complex.id]}</p>
@@ -207,6 +243,15 @@ export default function AdminComplexesPage() {
                         {complex.propertyType}
                       </p>
                     )}
+                    <p className="mt-0.5 text-xs text-navy-800/50">
+                      {complex.transportation.subway
+                        ? `${complex.transportation.subway} · ${
+                            complex.transportation.subwayWalkMinutes !== undefined
+                              ? `도보 약 ${complex.transportation.subwayWalkMinutes}분`
+                              : "도보 시간 미입력"
+                          }`
+                        : "지하철 정보 미등록"}
+                    </p>
                   </div>
                   <button
                     type="button"

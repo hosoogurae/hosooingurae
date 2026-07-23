@@ -1,6 +1,8 @@
 export interface ComplexTransportation {
   subway?: string;
   subwayDistance?: string;
+  /** 지하철역까지 도보 시간(분). 관리자가 직접 입력한 값만 있고, 없으면 추정하지 않습니다. */
+  subwayWalkMinutes?: number;
   buses?: string[];
 }
 

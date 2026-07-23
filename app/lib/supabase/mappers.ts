@@ -35,6 +35,7 @@ export function complexRowToComplex(row: ComplexRow): Complex {
     transportation: {
       subway: row.subway ?? undefined,
       subwayDistance: row.subway_distance ?? undefined,
+      subwayWalkMinutes: row.subway_walk_minutes ?? undefined,
       buses: row.buses.length > 0 ? row.buses : undefined,
     },
     features: row.features,
@@ -66,6 +67,7 @@ export function complexToInsert(complex: Complex): ComplexInsert {
     nearby_schools: complex.nearbySchools,
     subway: complex.transportation.subway ?? null,
     subway_distance: complex.transportation.subwayDistance ?? null,
+    subway_walk_minutes: complex.transportation.subwayWalkMinutes ?? null,
     buses: complex.transportation.buses ?? [],
     features: complex.features,
     molit_lawd_code: complex.molit?.lawdCode ?? null,

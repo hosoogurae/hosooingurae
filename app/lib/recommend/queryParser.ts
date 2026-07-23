@@ -3,6 +3,7 @@ import { parseKoreanAmountToManwon } from "../naverTextParser";
 import { formatPriceFull } from "../transactions";
 
 export type FloorTier = "high" | "low";
+export type SchoolLevel = "초등학교" | "중학교" | "고등학교" | "학교";
 
 export interface PriceCondition {
   /** 만원 단위. */
@@ -24,6 +25,14 @@ export interface ParsedQuery {
   roomCount?: number;
   floorTier?: FloorTier;
   wantsImmediateMoveIn?: boolean;
+  /** "구래역에서 가까운"처럼 특정 역이 언급된 경우 그 역 이름. */
+  stationName?: string;
+  /** 특정 역 지정 없이 "역세권"/"지하철 가까운"처럼 일반적인 역 근접을 요청한 경우. */
+  wantsStationProximity?: boolean;
+  /** "초등학교"/"중학교"/"고등학교"가 명시되면 해당 레벨, "학교"만 있으면 레벨 무관. */
+  schoolLevel?: SchoolLevel;
+  wantsAmpleParking?: boolean;
+  wantsLargeComplex?: boolean;
   /** 인식하지 못하고 남은 표현(사용자에게 "반영하지 못한 조건"으로 보여줄 용도). */
   unrecognizedPhrases: string[];
 }
@@ -88,6 +97,14 @@ const STOPWORDS = new Set([
   "가능한",
   "가능",
   "보증금",
+  "가까운",
+  "가깝다",
+  "가깝고",
+  "가까이",
+  "근처",
+  "인근",
+  "주변",
+  "인접",
 ]);
 
 function escapeRegExp(text: string): string {
@@ -122,6 +139,43 @@ function parseFloorTier(text: string): FloorTier | undefined {
 
 function parseImmediateMoveIn(text: string): boolean {
   return /즉시\s*입주|바로\s*입주/.test(text);
+}
+
+/**
+ * "구래역에서 가까운"처럼 특정 역 이름을 찾습니다. "역세권"은 "역"이 앞이 아니라
+ * 뒤에 붙는 고유어라 이 패턴(한글 1~10자 + "역")에 걸리지 않습니다.
+ */
+function parseStationName(text: string): { name: string; matched: string } | undefined {
+  const match = text.match(/([가-힣]{1,10}역)(?:에서|까지|근처|주변|부근)?/);
+  if (!match) return undefined;
+  return { name: match[1], matched: match[0] };
+}
+
+function parseGenericStationProximity(text: string): string | undefined {
+  const match = text.match(
+    /역세권|지하철\s*역?\s*(?:가까운|가깝|근처|인접|주변)|전철\s*역?\s*(?:가까운|가깝|근처|인접|주변)/,
+  );
+  return match ? match[0] : undefined;
+}
+
+function parseSchoolLevel(
+  text: string,
+): { level: SchoolLevel; matched: string } | undefined {
+  for (const level of ["초등학교", "중학교", "고등학교"] as const) {
+    if (text.includes(level)) return { level, matched: level };
+  }
+  if (text.includes("학교")) return { level: "학교", matched: "학교" };
+  return undefined;
+}
+
+function parseAmpleParking(text: string): string | undefined {
+  const match = text.match(/주차\s*(?:가|이)?\s*(?:넉넉|충분|여유)[^\s]*/);
+  return match ? match[0] : undefined;
+}
+
+function parseLargeComplex(text: string): string | undefined {
+  const match = text.match(/대단지|대규모\s*단지|세대\s*(?:수)?\s*많은/);
+  return match ? match[0] : undefined;
 }
 
 /**
@@ -291,6 +345,33 @@ function ruleBasedParse(query: string, context: QueryParserContext): ParsedQuery
   const wantsImmediateMoveIn = parseImmediateMoveIn(remaining);
   if (wantsImmediateMoveIn) remaining = consume(remaining, /즉시\s*입주|바로\s*입주/);
 
+  const stationMatch = parseStationName(remaining);
+  let stationName: string | undefined;
+  let wantsStationProximity: boolean | undefined;
+  if (stationMatch) {
+    stationName = stationMatch.name;
+    wantsStationProximity = true;
+    remaining = consume(remaining, new RegExp(escapeRegExp(stationMatch.matched)));
+  } else {
+    const genericStation = parseGenericStationProximity(remaining);
+    if (genericStation) {
+      wantsStationProximity = true;
+      remaining = consume(remaining, new RegExp(escapeRegExp(genericStation)));
+    }
+  }
+
+  const schoolMatch = parseSchoolLevel(remaining);
+  const schoolLevel = schoolMatch?.level;
+  if (schoolMatch) remaining = consume(remaining, new RegExp(escapeRegExp(schoolMatch.matched)));
+
+  const parkingMatch = parseAmpleParking(remaining);
+  const wantsAmpleParking = parkingMatch !== undefined;
+  if (parkingMatch) remaining = consume(remaining, new RegExp(escapeRegExp(parkingMatch)));
+
+  const largeComplexMatch = parseLargeComplex(remaining);
+  const wantsLargeComplex = largeComplexMatch !== undefined;
+  if (largeComplexMatch) remaining = consume(remaining, new RegExp(escapeRegExp(largeComplexMatch)));
+
   const { condition: price, consumedText } = parsePriceCondition(remaining);
   remaining = consumedText;
 
@@ -316,6 +397,11 @@ function ruleBasedParse(query: string, context: QueryParserContext): ParsedQuery
     roomCount,
     floorTier,
     wantsImmediateMoveIn: wantsImmediateMoveIn || undefined,
+    stationName,
+    wantsStationProximity,
+    schoolLevel,
+    wantsAmpleParking: wantsAmpleParking || undefined,
+    wantsLargeComplex: wantsLargeComplex || undefined,
     unrecognizedPhrases,
   };
 }

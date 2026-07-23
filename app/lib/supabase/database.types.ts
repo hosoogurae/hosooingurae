@@ -31,6 +31,7 @@ export interface Database {
           nearby_schools: string[];
           subway: string | null;
           subway_distance: string | null;
+          subway_walk_minutes: number | null;
           buses: string[];
           features: string[];
           molit_lawd_code: string | null;
@@ -57,6 +58,7 @@ export interface Database {
           nearby_schools?: string[];
           subway?: string | null;
           subway_distance?: string | null;
+          subway_walk_minutes?: number | null;
           buses?: string[];
           features?: string[];
           molit_lawd_code?: string | null;
