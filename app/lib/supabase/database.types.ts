@@ -207,6 +207,58 @@ export interface Database {
           },
         ];
       };
+      listing_submissions: {
+        Row: {
+          id: string;
+          complex_name: string;
+          building: string | null;
+          floor: number | null;
+          transaction_type: "매매" | "전세" | "월세";
+          desired_price_label: string;
+          occupancy_status: string | null;
+          interior_condition: string | null;
+          move_out_date: string | null;
+          viewing_availability: string | null;
+          notes: string | null;
+          contact_name: string;
+          contact_phone: string;
+          status: "new" | "confirmed" | "converted";
+          converted_listing_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex_name: string;
+          building?: string | null;
+          floor?: number | null;
+          transaction_type: "매매" | "전세" | "월세";
+          desired_price_label: string;
+          occupancy_status?: string | null;
+          interior_condition?: string | null;
+          move_out_date?: string | null;
+          viewing_availability?: string | null;
+          notes?: string | null;
+          contact_name: string;
+          contact_phone: string;
+          status?: "new" | "confirmed" | "converted";
+          converted_listing_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["listing_submissions"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "listing_submissions_converted_listing_id_fkey";
+            columns: ["converted_listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -225,3 +277,7 @@ export type FloorPlanImageRow =
   Database["public"]["Tables"]["floor_plan_images"]["Row"];
 export type FloorPlanImageInsert =
   Database["public"]["Tables"]["floor_plan_images"]["Insert"];
+export type ListingSubmissionRow =
+  Database["public"]["Tables"]["listing_submissions"]["Row"];
+export type ListingSubmissionInsert =
+  Database["public"]["Tables"]["listing_submissions"]["Insert"];

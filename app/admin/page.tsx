@@ -236,6 +236,13 @@ export default function AdminRegisterPage() {
         <Link href="/admin/floor-plans" className="underline-offset-4 hover:underline">
           단지 평면도 관리 →
         </Link>
+        {" · "}
+        <Link
+          href="/admin/listing-submissions"
+          className="underline-offset-4 hover:underline"
+        >
+          매물 접수 확인 →
+        </Link>
       </p>
     </div>
   );
