@@ -49,13 +49,13 @@ function SummaryCard({
   transaction: ComplexTransaction | null;
 }) {
   return (
-    <div className="rounded-xl border border-navy-900/10 p-3 sm:p-5">
-      <p className="text-xs font-semibold text-navy-800/50">{label}</p>
-      <p className="mt-1.5 whitespace-nowrap text-2xl font-black text-navy-950 sm:mt-2 sm:text-xl">
+    <div className="rounded-xl border border-navy-900/10 p-4 sm:p-5">
+      <p className="text-sm font-semibold text-navy-800/50">{label}</p>
+      <p className="mt-2 whitespace-nowrap tracking-tight text-lg font-black text-navy-950 sm:text-xl">
         {transaction ? formatPriceFull(transaction.price) : "-"}
       </p>
       {transaction && (
-        <p className="mt-1 text-xs text-navy-800/50">
+        <p className="mt-1 text-sm text-navy-800/50">
           {formatContractDate(transaction.contractDate)} · {transaction.floor}층
         </p>
       )}
@@ -170,15 +170,15 @@ export default function TransactionPriceChart({
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 sm:gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <SummaryCard label="최근 거래가" transaction={latest} />
         <SummaryCard label="최근 12개월 최고가" transaction={highestRecent} />
         <SummaryCard label="최근 12개월 최저가" transaction={lowestRecent} />
-        <div className="rounded-xl border border-navy-900/10 p-3 sm:p-5">
-          <p className="text-xs font-semibold text-navy-800/50">
+        <div className="rounded-xl border border-navy-900/10 p-4 sm:p-5">
+          <p className="text-sm font-semibold text-navy-800/50">
             최근 12개월 평균가
           </p>
-          <p className="mt-1.5 whitespace-nowrap text-2xl font-black text-navy-950 sm:mt-2 sm:text-xl">
+          <p className="mt-2 whitespace-nowrap tracking-tight text-lg font-black text-navy-950 sm:text-xl">
             {averageRecentPrice !== null
               ? formatPriceFull(averageRecentPrice)
               : "-"}
