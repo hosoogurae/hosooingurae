@@ -4,19 +4,24 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { SearchIcon } from "./icons";
 
-const EXAMPLE_QUERIES = ["4억 이하 아파트", "바로 입주", "고층", "월세"];
+const DEFAULT_EXAMPLE_QUERIES = ["4억 이하 아파트", "바로 입주", "고층", "월세"];
+const DEFAULT_PLACEHOLDER = "예: 4억 초반, 고층, 바로 입주 가능한 아파트";
 
 export default function RecommendSearchBox({
   initialQuery = "",
   size = "large",
   variant = "light",
   submitLabel = "검색",
+  placeholder = DEFAULT_PLACEHOLDER,
+  exampleQueries = DEFAULT_EXAMPLE_QUERIES,
 }: {
   initialQuery?: string;
   size?: "large" | "compact";
   /** "dark"는 Hero의 네이비 배경 위에서도 예시 버튼이 잘 보이도록 톤을 맞춥니다. */
   variant?: "light" | "dark";
   submitLabel?: string;
+  placeholder?: string;
+  exampleQueries?: string[];
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
@@ -48,7 +53,7 @@ export default function RecommendSearchBox({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="예: 4억 초반, 고층, 바로 입주 가능한 아파트"
+            placeholder={placeholder}
             className={`w-full rounded-full border border-navy-900/15 bg-white pl-12 pr-4 text-navy-900 outline-none focus:border-gold-500 ${
               isLarge ? "py-4 text-base sm:text-lg" : "py-3 text-sm"
             }`}
@@ -65,7 +70,7 @@ export default function RecommendSearchBox({
       </form>
 
       <div className="mt-4 flex flex-wrap justify-center gap-2">
-        {EXAMPLE_QUERIES.map((example) => (
+        {exampleQueries.map((example) => (
           <button
             key={example}
             type="button"

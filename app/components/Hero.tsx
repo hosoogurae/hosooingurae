@@ -124,10 +124,25 @@ export default function Hero() {
           className="animate-fade-in-up mt-10 w-full max-w-2xl"
           style={{ animationDelay: "300ms" }}
         >
-          <p className="mb-4 text-lg font-bold text-white sm:text-xl">
-            원하는 집을 말해보세요
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-500/40 bg-gold-500/10 px-4 py-1 text-xs font-bold tracking-wide text-gold-400">
+            ✦ 호수 AI 매물찾기
+          </span>
+          <p className="mt-3 text-xl font-black text-white sm:text-2xl">
+            AI에게 원하는 집을 말해보세요.
           </p>
-          <RecommendSearchBox size="large" variant="dark" submitLabel="찾아보기" />
+          <p className="mt-2 text-sm leading-relaxed text-white/70 sm:text-base">
+            호수공인중개사가 보유한 실제 매물 중 조건에 가장 가까운 집을
+            찾아드립니다.
+          </p>
+          <div className="mt-5">
+            <RecommendSearchBox
+              size="large"
+              variant="dark"
+              submitLabel="AI로 찾아보기"
+              placeholder="예: 구래역 가까운 4억대 아파트, 바로 입주 가능한 집"
+              exampleQueries={["구래역 가까운 집", "4억 이하 아파트", "바로 입주"]}
+            />
+          </div>
         </div>
 
         <dl
