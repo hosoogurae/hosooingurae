@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { ComplexOption } from "../lib/naverImport";
 import type { ComplexTransaction } from "../data/complexTransactions";
+import type { FloorPlanImage } from "../data/floorPlans";
 import {
   type ExclusiveAreaGroup,
   formatContractDate,
@@ -22,16 +23,55 @@ const STEP_LABELS: { key: Step; label: string }[] = [
   { key: "result", label: "3. 결과" },
 ];
 
-function buildSellHref(
-  complexName: string,
-  areaGroup: ExclusiveAreaGroup | null,
-): string {
+/** MOLIT 실거래 매칭에 쓰는 오차와 동일하게 맞춰, 타입 간 면적 겹침 여부를 판단합니다. */
+const AREA_MATCH_TOLERANCE = 1;
+
+interface UnitTypeOption {
+  unitType: string;
+  supplyArea?: number;
+  exclusiveArea: number;
+  thumbnailUrl?: string;
+}
+
+interface SelectedArea {
+  /** 결과 화면 제목과 "우리 집 내놓기" 메모에 쓰는 표시용 라벨(타입명 또는 "전용 n㎡"). */
+  label: string;
+  exclusiveArea: number;
+  supplyArea?: number;
+  /** 같은 면적대에 다른 타입도 있어, MOLIT 결과가 이 타입만의 거래라고 단정할 수 없는 경우. */
+  showTypeAmbiguityNotice: boolean;
+}
+
+/**
+ * floor_plan_images를 평면 타입 카드용으로 정리합니다. 같은 타입에 이미지가
+ * 여러 장이면 첫 장(sort_order 기준)만 대표로 씁니다. exclusiveArea가 없는
+ * 타입은 국토부 실거래가와 매칭할 기준이 없어 후보에서 제외합니다(값을
+ * 추측하지 않음).
+ */
+function buildUnitTypeOptions(images: FloorPlanImage[]): UnitTypeOption[] {
+  const byType = new Map<string, FloorPlanImage>();
+  for (const image of images) {
+    if (image.exclusiveArea === undefined) continue;
+    const existing = byType.get(image.unitType);
+    if (!existing || image.sortOrder < existing.sortOrder) {
+      byType.set(image.unitType, image);
+    }
+  }
+
+  return Array.from(byType.values())
+    .map((image) => ({
+      unitType: image.unitType,
+      supplyArea: image.supplyArea,
+      exclusiveArea: image.exclusiveArea as number,
+      thumbnailUrl: image.previewUrl ?? image.url,
+    }))
+    .sort((a, b) => a.exclusiveArea - b.exclusiveArea);
+}
+
+function buildSellHref(complexName: string, area: SelectedArea | null): string {
   const params = new URLSearchParams({ complexName });
-  if (areaGroup) {
-    params.set(
-      "notes",
-      `전용 ${areaGroup.representativeArea}㎡ 시세 확인 후 접수합니다.`,
-    );
+  if (area) {
+    params.set("notes", `${area.label} 시세 확인 후 접수합니다.`);
   }
   return `/sell?${params.toString()}`;
 }
@@ -49,17 +89,32 @@ export default function ValuationPage() {
     null,
   );
 
-  const [loadingTransactions, setLoadingTransactions] = useState(false);
-  const [transactionsError, setTransactionsError] = useState<string | null>(
+  // 2단계: 평면 타입(우선) 또는 실거래 전용면적 그룹(평면도가 없을 때 대체).
+  const [loadingAreaOptions, setLoadingAreaOptions] = useState(false);
+  const [areaOptionsError, setAreaOptionsError] = useState<string | null>(
     null,
   );
-  const [allTransactions, setAllTransactions] = useState<
+  const [unitTypeOptions, setUnitTypeOptions] = useState<
+    UnitTypeOption[] | null
+  >(null);
+  const [fallbackAreaGroups, setFallbackAreaGroups] = useState<
+    ExclusiveAreaGroup[] | null
+  >(null);
+  const [fallbackSource, setFallbackSource] = useState<
+    "molit" | "mock" | null
+  >(null);
+
+  const [selectedArea, setSelectedArea] = useState<SelectedArea | null>(null);
+
+  // 3단계: 선택한 평형(전용면적) 기준으로 새로 조회한 실거래가.
+  const [loadingResult, setLoadingResult] = useState(false);
+  const [resultError, setResultError] = useState<string | null>(null);
+  const [resultTransactions, setResultTransactions] = useState<
     ComplexTransaction[] | null
   >(null);
-  const [source, setSource] = useState<"molit" | "mock" | null>(null);
-
-  const [selectedAreaGroup, setSelectedAreaGroup] =
-    useState<ExclusiveAreaGroup | null>(null);
+  const [resultSource, setResultSource] = useState<"molit" | "mock" | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -98,64 +153,154 @@ export default function ValuationPage() {
     );
   }, [complexOptions, complexFilter]);
 
-  // 실거래 데이터가 국토부(molit) 기준으로 실제 존재할 때만 정상 결과로 취급합니다.
-  // mock(사무실이 직접 입력해둔 임시 데이터)을 실제 시세처럼 보여주지 않기 위함입니다.
-  const hasRealData =
-    source === "molit" && (allTransactions?.length ?? 0) > 0;
-
-  const areaGroups = useMemo(() => {
-    if (!allTransactions || !hasRealData) return [];
-    return groupTransactionsByExclusiveArea(allTransactions);
-  }, [allTransactions, hasRealData]);
+  const usingFloorPlanTypes = (unitTypeOptions?.length ?? 0) > 0;
+  const hasAnyAreaOptions =
+    usingFloorPlanTypes ||
+    (fallbackSource === "molit" && (fallbackAreaGroups?.length ?? 0) > 0);
 
   async function handleSelectComplex(option: ComplexOption) {
     setSelectedComplex(option);
-    setSelectedAreaGroup(null);
-    setAllTransactions(null);
-    setSource(null);
-    setTransactionsError(null);
     setStep("area");
-    setLoadingTransactions(true);
+    setSelectedArea(null);
+    setUnitTypeOptions(null);
+    setFallbackAreaGroups(null);
+    setFallbackSource(null);
+    setAreaOptionsError(null);
+    setLoadingAreaOptions(true);
 
     try {
-      const response = await fetch(
-        `/api/transactions?complexId=${encodeURIComponent(option.id)}`,
+      const floorPlanResponse = await fetch(
+        `/api/floor-plans?complexId=${encodeURIComponent(option.id)}`,
       );
-      const data = await response.json();
-      if (!response.ok) {
-        setTransactionsError("실거래가 정보를 불러오지 못했습니다.");
+      const floorPlanData = await floorPlanResponse.json();
+      if (!floorPlanResponse.ok) {
+        setAreaOptionsError("평면도 정보를 불러오지 못했습니다.");
         return;
       }
-      setAllTransactions(data.transactions as ComplexTransaction[]);
-      setSource((data.source as "molit" | "mock" | undefined) ?? null);
+
+      const options = buildUnitTypeOptions(
+        floorPlanData.images as FloorPlanImage[],
+      );
+
+      if (options.length > 0) {
+        setUnitTypeOptions(options);
+        return;
+      }
+      setUnitTypeOptions([]);
+
+      // 등록된 평면 타입이 없는 단지는 실거래 전용면적만으로 후보를 만듭니다.
+      const txResponse = await fetch(
+        `/api/transactions?complexId=${encodeURIComponent(option.id)}`,
+      );
+      const txData = await txResponse.json();
+      if (!txResponse.ok) {
+        setAreaOptionsError("실거래가 정보를 불러오지 못했습니다.");
+        return;
+      }
+
+      const txSource = (txData.source as "molit" | "mock" | undefined) ?? null;
+      setFallbackSource(txSource);
+      setFallbackAreaGroups(
+        txSource === "molit"
+          ? groupTransactionsByExclusiveArea(
+              txData.transactions as ComplexTransaction[],
+            )
+          : [],
+      );
     } catch {
-      setTransactionsError("네트워크 오류로 실거래가 정보를 불러오지 못했습니다.");
+      setAreaOptionsError("네트워크 오류로 정보를 불러오지 못했습니다.");
     } finally {
-      setLoadingTransactions(false);
+      setLoadingAreaOptions(false);
     }
   }
 
-  function handleSelectArea(group: ExclusiveAreaGroup) {
-    setSelectedAreaGroup(group);
+  function handleSelectUnitType(option: UnitTypeOption) {
+    const overlapCount = (unitTypeOptions ?? []).filter(
+      (candidate) =>
+        Math.abs(candidate.exclusiveArea - option.exclusiveArea) <=
+        AREA_MATCH_TOLERANCE,
+    ).length;
+
+    setSelectedArea({
+      label: option.unitType,
+      exclusiveArea: option.exclusiveArea,
+      supplyArea: option.supplyArea,
+      showTypeAmbiguityNotice: overlapCount > 1,
+    });
+    setStep("result");
+  }
+
+  function handleSelectFallbackGroup(group: ExclusiveAreaGroup) {
+    setSelectedArea({
+      label: `전용 ${group.representativeArea}㎡`,
+      exclusiveArea: group.representativeArea,
+      showTypeAmbiguityNotice: false,
+    });
     setStep("result");
   }
 
   function handleBackToComplex() {
     setStep("complex");
     setSelectedComplex(null);
-    setSelectedAreaGroup(null);
-    setAllTransactions(null);
-    setSource(null);
+    setSelectedArea(null);
+    setUnitTypeOptions(null);
+    setFallbackAreaGroups(null);
+    setFallbackSource(null);
   }
 
   function handleBackToArea() {
     setStep("area");
-    setSelectedAreaGroup(null);
+    setSelectedArea(null);
+    setResultTransactions(null);
+    setResultSource(null);
+    setResultError(null);
   }
 
-  const filteredTransactions = selectedAreaGroup?.transactions ?? [];
-  const summary = getTransactionSummary(filteredTransactions, 6);
-  const recentFive = [...filteredTransactions]
+  useEffect(() => {
+    if (step !== "result" || !selectedComplex || !selectedArea) return;
+
+    let cancelled = false;
+
+    async function loadResultTransactions() {
+      setLoadingResult(true);
+      setResultError(null);
+      try {
+        const params = new URLSearchParams({
+          complexId: selectedComplex!.id,
+          exclusiveArea: String(selectedArea!.exclusiveArea),
+        });
+        const response = await fetch(`/api/transactions?${params.toString()}`);
+        const data = await response.json();
+        if (!response.ok) {
+          if (!cancelled) {
+            setResultError("실거래가 정보를 불러오지 못했습니다.");
+          }
+          return;
+        }
+        if (!cancelled) {
+          setResultTransactions(data.transactions as ComplexTransaction[]);
+          setResultSource((data.source as "molit" | "mock" | undefined) ?? null);
+        }
+      } catch {
+        if (!cancelled) {
+          setResultError("네트워크 오류로 실거래가 정보를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!cancelled) setLoadingResult(false);
+      }
+    }
+
+    loadResultTransactions();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, selectedComplex, selectedArea]);
+
+  const hasResultData =
+    resultSource === "molit" && (resultTransactions?.length ?? 0) > 0;
+  const resultTransactionList = resultTransactions ?? [];
+  const summary = getTransactionSummary(resultTransactionList, 6);
+  const recentFive = [...resultTransactionList]
     .sort((a, b) => b.contractDate.localeCompare(a.contractDate))
     .slice(0, 5);
 
@@ -257,19 +402,17 @@ export default function ValuationPage() {
               평형(전용면적)을 선택해주세요.
             </p>
 
-            {loadingTransactions && (
-              <p className="mt-8 text-sm text-navy-800/50">
-                실거래가 정보를 불러오는 중...
-              </p>
+            {loadingAreaOptions && (
+              <p className="mt-8 text-sm text-navy-800/50">불러오는 중...</p>
             )}
 
-            {!loadingTransactions && transactionsError && (
+            {!loadingAreaOptions && areaOptionsError && (
               <p className="mt-8 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-                {transactionsError}
+                {areaOptionsError}
               </p>
             )}
 
-            {!loadingTransactions && !transactionsError && !hasRealData && (
+            {!loadingAreaOptions && !areaOptionsError && !hasAnyAreaOptions && (
               <div className="mt-8 rounded-xl border border-navy-900/10 px-6 py-12 text-center">
                 <p className="text-sm font-semibold text-navy-950">
                   현재 확인 가능한 실거래 데이터가 없습니다.
@@ -294,30 +437,72 @@ export default function ValuationPage() {
               </div>
             )}
 
-            {!loadingTransactions && !transactionsError && hasRealData && (
-              <ul className="mt-6 flex flex-col gap-2">
-                {areaGroups.map((group) => (
-                  <li key={group.representativeArea}>
+            {!loadingAreaOptions && !areaOptionsError && usingFloorPlanTypes && (
+              <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {(unitTypeOptions ?? []).map((option) => (
+                  <li key={option.unitType}>
                     <button
                       type="button"
-                      onClick={() => handleSelectArea(group)}
-                      className="w-full rounded-lg border border-navy-900/15 px-5 py-4 text-left transition-colors hover:border-gold-500 hover:bg-gold-500/5"
+                      onClick={() => handleSelectUnitType(option)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-navy-900/15 p-3 text-left transition-colors hover:border-gold-500 hover:bg-gold-500/5"
                     >
-                      <p className="text-base font-bold text-navy-950">
-                        전용 {group.representativeArea}㎡
-                      </p>
-                      <p className="mt-1 text-sm text-navy-800/60">
-                        최근 거래 {group.transactions.length}건
-                      </p>
+                      {option.thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={option.thumbnailUrl}
+                          alt={`${option.unitType} 평면도`}
+                          className="h-16 w-16 shrink-0 rounded-md border border-navy-900/10 object-cover"
+                        />
+                      ) : (
+                        <div className="h-16 w-16 shrink-0 rounded-md border border-navy-900/10 bg-navy-900/[0.03]" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-base font-bold text-navy-950">
+                          {option.unitType}
+                        </p>
+                        <p className="mt-1 text-xs text-navy-800/60">
+                          {option.supplyArea !== undefined
+                            ? `공급 ${option.supplyArea}㎡`
+                            : "공급면적 미등록"}
+                        </p>
+                        <p className="text-xs text-navy-800/60">
+                          전용 {option.exclusiveArea}㎡
+                        </p>
+                      </div>
                     </button>
                   </li>
                 ))}
               </ul>
             )}
+
+            {!loadingAreaOptions &&
+              !areaOptionsError &&
+              !usingFloorPlanTypes &&
+              fallbackSource === "molit" &&
+              (fallbackAreaGroups?.length ?? 0) > 0 && (
+                <ul className="mt-6 flex flex-col gap-2">
+                  {(fallbackAreaGroups ?? []).map((group) => (
+                    <li key={group.representativeArea}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectFallbackGroup(group)}
+                        className="w-full rounded-lg border border-navy-900/15 px-5 py-4 text-left transition-colors hover:border-gold-500 hover:bg-gold-500/5"
+                      >
+                        <p className="text-base font-bold text-navy-950">
+                          전용 {group.representativeArea}㎡
+                        </p>
+                        <p className="mt-1 text-sm text-navy-800/60">
+                          최근 거래 {group.transactions.length}건
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
           </div>
         )}
 
-        {step === "result" && selectedComplex && selectedAreaGroup && (
+        {step === "result" && selectedComplex && selectedArea && (
           <div>
             <button
               type="button"
@@ -328,94 +513,147 @@ export default function ValuationPage() {
             </button>
 
             <h2 className="mt-3 text-lg font-bold text-navy-950">
-              {selectedComplex.name}
+              {selectedComplex.name} · {selectedArea.label}
             </h2>
             <p className="mt-1 text-sm text-navy-800/60">
-              전용 {selectedAreaGroup.representativeArea}㎡ 기준 실거래가
+              {selectedArea.supplyArea !== undefined
+                ? `공급 ${selectedArea.supplyArea}㎡ / `
+                : ""}
+              전용 {selectedArea.exclusiveArea}㎡ 기준 실거래가
             </p>
 
-            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-navy-900/10 p-4">
-                <p className="text-sm font-semibold text-navy-800/50">
-                  최근 거래가
-                </p>
-                <p className="mt-2 text-lg font-black text-navy-950">
-                  {summary.latest ? formatPriceFull(summary.latest.price) : "-"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-navy-900/10 p-4">
-                <p className="text-sm font-semibold text-navy-800/50">
-                  최근 6개월 최고가
-                </p>
-                <p className="mt-2 text-lg font-black text-navy-950">
-                  {summary.highestRecent
-                    ? formatPriceFull(summary.highestRecent.price)
-                    : "-"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-navy-900/10 p-4">
-                <p className="text-sm font-semibold text-navy-800/50">
-                  최근 6개월 최저가
-                </p>
-                <p className="mt-2 text-lg font-black text-navy-950">
-                  {summary.lowestRecent
-                    ? formatPriceFull(summary.lowestRecent.price)
-                    : "-"}
-                </p>
-              </div>
-            </div>
+            {loadingResult && (
+              <p className="mt-8 text-sm text-navy-800/50">
+                실거래가 정보를 불러오는 중...
+              </p>
+            )}
 
-            <div className="mt-8">
-              <TransactionPriceChart
-                transactions={filteredTransactions}
-                complexId={selectedComplex.id}
-                exclusiveArea={selectedAreaGroup.representativeArea}
-              />
-            </div>
+            {!loadingResult && resultError && (
+              <p className="mt-8 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                {resultError}
+              </p>
+            )}
 
-            <div className="mt-8">
-              <h3 className="text-sm font-bold text-navy-950">
-                최근 거래 내역 {Math.min(5, recentFive.length)}건
-              </h3>
-              <ul className="mt-3 flex flex-col divide-y divide-navy-900/10 rounded-xl border border-navy-900/10">
-                {recentFive.map((transaction) => (
-                  <li
-                    key={transaction.id}
-                    className="flex items-center justify-between gap-3 px-4 py-3"
+            {!loadingResult && !resultError && !hasResultData && (
+              <div className="mt-8 rounded-xl border border-navy-900/10 px-6 py-12 text-center">
+                <p className="text-sm font-semibold text-navy-950">
+                  현재 확인 가능한 실거래 데이터가 없습니다.
+                </p>
+                <p className="mt-2 text-sm text-navy-800/60">
+                  대신 담당자가 직접 확인해드릴 수 있어요.
+                </p>
+                <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+                  <Link
+                    href={buildSellHref(selectedComplex.name, selectedArea)}
+                    className="rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2.5 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30"
                   >
-                    <span className="text-sm text-navy-800/60">
-                      {formatContractDate(transaction.contractDate)}
-                    </span>
-                    <span className="text-sm font-bold text-navy-950">
-                      {formatPriceFull(transaction.price)}
-                    </span>
-                    <span className="text-sm text-navy-800/60">
-                      {transaction.floor}층
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                    우리 집 내놓기
+                  </Link>
+                  <a
+                    href={PHONE_HREF}
+                    className="rounded-md border border-navy-900/15 px-6 py-2.5 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+                  >
+                    전화 문의 {PHONE_NUMBER}
+                  </a>
+                </div>
+              </div>
+            )}
 
-            <p className="mt-6 text-xs leading-relaxed text-navy-800/50">
-              실제 매도 가능 가격은 동·층·향·내부상태 등에 따라 달라질 수
-              있습니다.
-            </p>
+            {!loadingResult && !resultError && hasResultData && (
+              <>
+                <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-navy-900/10 p-4">
+                    <p className="text-sm font-semibold text-navy-800/50">
+                      최근 거래가
+                    </p>
+                    <p className="mt-2 text-lg font-black text-navy-950">
+                      {summary.latest
+                        ? formatPriceFull(summary.latest.price)
+                        : "-"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-navy-900/10 p-4">
+                    <p className="text-sm font-semibold text-navy-800/50">
+                      최근 6개월 최고가
+                    </p>
+                    <p className="mt-2 text-lg font-black text-navy-950">
+                      {summary.highestRecent
+                        ? formatPriceFull(summary.highestRecent.price)
+                        : "-"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-navy-900/10 p-4">
+                    <p className="text-sm font-semibold text-navy-800/50">
+                      최근 6개월 최저가
+                    </p>
+                    <p className="mt-2 text-lg font-black text-navy-950">
+                      {summary.lowestRecent
+                        ? formatPriceFull(summary.lowestRecent.price)
+                        : "-"}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-              <Link
-                href={buildSellHref(selectedComplex.name, selectedAreaGroup)}
-                className="w-full rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-3 text-center text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 sm:w-auto"
-              >
-                우리 집 내놓기
-              </Link>
-              <a
-                href={PHONE_HREF}
-                className="w-full rounded-md border border-navy-900/15 px-6 py-3 text-center text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600 sm:w-auto"
-              >
-                문의하기
-              </a>
-            </div>
+                <div className="mt-8">
+                  <TransactionPriceChart
+                    transactions={resultTransactionList}
+                    complexId={selectedComplex.id}
+                    exclusiveArea={selectedArea.exclusiveArea}
+                  />
+                </div>
+
+                <div className="mt-8">
+                  <h3 className="text-sm font-bold text-navy-950">
+                    최근 거래 내역 {Math.min(5, recentFive.length)}건
+                  </h3>
+                  <ul className="mt-3 flex flex-col divide-y divide-navy-900/10 rounded-xl border border-navy-900/10">
+                    {recentFive.map((transaction) => (
+                      <li
+                        key={transaction.id}
+                        className="flex items-center justify-between gap-3 px-4 py-3"
+                      >
+                        <span className="text-sm text-navy-800/60">
+                          {formatContractDate(transaction.contractDate)}
+                        </span>
+                        <span className="text-sm font-bold text-navy-950">
+                          {formatPriceFull(transaction.price)}
+                        </span>
+                        <span className="text-sm text-navy-800/60">
+                          {transaction.floor}층
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {selectedArea.showTypeAmbiguityNotice && (
+                  <p className="mt-6 rounded-md border border-navy-900/10 bg-navy-900/[0.03] px-3 py-2 text-xs leading-relaxed text-navy-800/60">
+                    국토부 실거래가는 전용면적 기준으로 제공되며, 동일 면적의
+                    여러 타입 거래가 함께 포함될 수 있습니다.
+                  </p>
+                )}
+
+                <p className="mt-6 text-xs leading-relaxed text-navy-800/50">
+                  실제 매도 가능 가격은 동·층·향·내부상태 등에 따라 달라질 수
+                  있습니다.
+                </p>
+
+                <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+                  <Link
+                    href={buildSellHref(selectedComplex.name, selectedArea)}
+                    className="w-full rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-3 text-center text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 sm:w-auto"
+                  >
+                    우리 집 내놓기
+                  </Link>
+                  <a
+                    href={PHONE_HREF}
+                    className="w-full rounded-md border border-navy-900/15 px-6 py-3 text-center text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600 sm:w-auto"
+                  >
+                    문의하기
+                  </a>
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>
