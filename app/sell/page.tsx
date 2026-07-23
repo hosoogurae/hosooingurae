@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Field, inputClass } from "../admin/ListingFields";
 import type { ComplexOption } from "../lib/naverImport";
 
@@ -38,8 +39,15 @@ const EMPTY_FORM: FormState = {
 const selectClass =
   "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-gold-500";
 
-export default function SellPage() {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+function SellForm() {
+  const searchParams = useSearchParams();
+  // "우리 집 시세 확인"(/valuation) 결과 화면에서 단지명·평형 힌트를 그대로
+  // 넘겨받아 처음 한 번만 채웁니다. 이후 사용자가 고치면 그 값이 우선합니다.
+  const [form, setForm] = useState<FormState>(() => ({
+    ...EMPTY_FORM,
+    complexName: searchParams.get("complexName") ?? EMPTY_FORM.complexName,
+    notes: searchParams.get("notes") ?? EMPTY_FORM.notes,
+  }));
   const [complexOptions, setComplexOptions] = useState<ComplexOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[] | null>(null);
@@ -324,5 +332,13 @@ export default function SellPage() {
         </form>
       </section>
     </>
+  );
+}
+
+export default function SellPage() {
+  return (
+    <Suspense fallback={null}>
+      <SellForm />
+    </Suspense>
   );
 }

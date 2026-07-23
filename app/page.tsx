@@ -1,5 +1,6 @@
 import Hero from "./components/Hero";
 import FeaturedProperties from "./components/FeaturedProperties";
+import ValuationCta from "./components/ValuationCta";
 import About from "./components/About";
 import ContactCta from "./components/ContactCta";
 
@@ -11,6 +12,7 @@ export default function Home() {
     <>
       <Hero />
       <FeaturedProperties />
+      <ValuationCta />
       <About />
       <ContactCta />
     </>
