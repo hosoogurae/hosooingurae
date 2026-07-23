@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   CartesianGrid,
   Line,
@@ -21,6 +21,25 @@ import {
 
 const GOLD = "#c9a24b";
 const NAVY_900 = "#0b1a33";
+const MOBILE_QUERY = "(max-width: 639px)";
+
+function formatContractDateMonth(dateStr: string) {
+  return dateStr.slice(0, 7).replaceAll("-", ".");
+}
+
+// 뷰포트가 모바일 폭인지 판별합니다. 서버에서는 알 수 없으니 데스크톱 기준으로
+// 먼저 그리고, 마운트된 클라이언트에서 실제 값으로 보정합니다.
+function subscribeToMobileBreakpoint(callback: () => void) {
+  const mql = window.matchMedia(MOBILE_QUERY);
+  mql.addEventListener("change", callback);
+  return () => mql.removeEventListener("change", callback);
+}
+function getIsMobileSnapshot() {
+  return window.matchMedia(MOBILE_QUERY).matches;
+}
+function getIsMobileServerSnapshot() {
+  return false;
+}
 
 function SummaryCard({
   label,
@@ -30,9 +49,9 @@ function SummaryCard({
   transaction: ComplexTransaction | null;
 }) {
   return (
-    <div className="rounded-xl border border-navy-900/10 p-4 sm:p-5">
+    <div className="rounded-xl border border-navy-900/10 p-3 sm:p-5">
       <p className="text-xs font-semibold text-navy-800/50">{label}</p>
-      <p className="mt-2 text-lg font-black text-navy-950 sm:text-xl">
+      <p className="mt-1.5 whitespace-nowrap text-2xl font-black text-navy-950 sm:mt-2 sm:text-xl">
         {transaction ? formatPriceFull(transaction.price) : "-"}
       </p>
       {transaction && (
@@ -79,6 +98,11 @@ export default function TransactionPriceChart({
   // 도착하면 조용히 교체합니다. 실패 시에는 초기 데이터를 그대로 유지합니다.
   const [transactions, setTransactions] = useState(initialTransactions);
   const [source, setSource] = useState<"molit" | "mock" | null>(null);
+  const isMobile = useSyncExternalStore(
+    subscribeToMobileBreakpoint,
+    getIsMobileSnapshot,
+    getIsMobileServerSnapshot,
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -128,6 +152,16 @@ export default function TransactionPriceChart({
   const { latest, highestRecent, lowestRecent, averageRecentPrice } =
     getTransactionSummary(transactions);
 
+  // 모바일 X축은 겹치지 않게 처음/중간/마지막, 최대 3개만 표시합니다.
+  const mobileTicks =
+    transactions.length <= 3
+      ? transactions.map((t) => t.contractDate)
+      : [
+          transactions[0].contractDate,
+          transactions[Math.floor((transactions.length - 1) / 2)].contractDate,
+          transactions[transactions.length - 1].contractDate,
+        ];
+
   return (
     <div>
       {source === "molit" && (
@@ -136,15 +170,15 @@ export default function TransactionPriceChart({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 sm:gap-4">
         <SummaryCard label="최근 거래가" transaction={latest} />
         <SummaryCard label="최근 12개월 최고가" transaction={highestRecent} />
         <SummaryCard label="최근 12개월 최저가" transaction={lowestRecent} />
-        <div className="rounded-xl border border-navy-900/10 p-4 sm:p-5">
+        <div className="rounded-xl border border-navy-900/10 p-3 sm:p-5">
           <p className="text-xs font-semibold text-navy-800/50">
             최근 12개월 평균가
           </p>
-          <p className="mt-2 text-lg font-black text-navy-950 sm:text-xl">
+          <p className="mt-1.5 whitespace-nowrap text-2xl font-black text-navy-950 sm:mt-2 sm:text-xl">
             {averageRecentPrice !== null
               ? formatPriceFull(averageRecentPrice)
               : "-"}
@@ -157,19 +191,28 @@ export default function TransactionPriceChart({
           계약일별 매매 실거래가 추이를 보여주는 선 차트입니다. 총{" "}
           {transactions.length}건의 거래가 등록되어 있습니다.
         </figcaption>
-        <div className="h-72 w-full rounded-xl border border-navy-900/10 p-4 sm:p-6">
+        <div className="h-[280px] w-full rounded-xl border border-navy-900/10 p-4 sm:h-72 sm:p-6">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={transactions}
-              margin={{ top: 8, right: 12, left: 4, bottom: 8 }}
+              margin={{
+                top: 8,
+                right: isMobile ? 16 : 12,
+                left: isMobile ? 8 : 4,
+                bottom: 8,
+              }}
             >
               <CartesianGrid stroke={NAVY_900} strokeOpacity={0.08} />
               <XAxis
                 dataKey="contractDate"
-                tickFormatter={formatContractDate}
+                ticks={isMobile ? mobileTicks : undefined}
+                tickFormatter={
+                  isMobile ? formatContractDateMonth : formatContractDate
+                }
                 tick={{ fill: NAVY_900, fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: NAVY_900, strokeOpacity: 0.15 }}
+                interval={isMobile ? 0 : "preserveStartEnd"}
               />
               <YAxis
                 dataKey="price"
@@ -185,8 +228,13 @@ export default function TransactionPriceChart({
                 dataKey="price"
                 stroke={GOLD}
                 strokeWidth={2.5}
-                dot={{ r: 5, fill: GOLD, stroke: "#ffffff", strokeWidth: 2 }}
-                activeDot={{ r: 7 }}
+                dot={{
+                  r: isMobile ? 3.5 : 5,
+                  fill: GOLD,
+                  stroke: "#ffffff",
+                  strokeWidth: 2,
+                }}
+                activeDot={{ r: isMobile ? 5 : 7 }}
                 isAnimationActive={false}
               />
             </LineChart>
