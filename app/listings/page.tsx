@@ -9,6 +9,7 @@ import {
 } from "../lib/listingFilters";
 import ListingCard from "../components/ListingCard";
 import ListingsFilterBar from "../components/ListingsFilterBar";
+import CompareToggle from "../components/CompareToggle";
 
 export const metadata: Metadata = {
   title: "전체 매물 | 호수공인중개사사무소",
@@ -82,14 +83,16 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
         {listings.length > 0 ? (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                floorPlanImage={getFloorPlanForListing(
-                  listing.complexId,
-                  listing.unitType,
-                )}
-              />
+              <div key={listing.id}>
+                <ListingCard
+                  listing={listing}
+                  floorPlanImage={getFloorPlanForListing(
+                    listing.complexId,
+                    listing.unitType,
+                  )}
+                />
+                <CompareToggle listingId={listing.id} />
+              </div>
             ))}
           </div>
         ) : (

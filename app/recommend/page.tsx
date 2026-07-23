@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import RecommendSearchBox from "../components/RecommendSearchBox";
 import ListingCard from "../components/ListingCard";
+import CompareToggle from "../components/CompareToggle";
 import { getAllListings } from "../lib/listings";
 import { ruleBasedQueryParser } from "../lib/recommend/queryParser";
 import { rankListings } from "../lib/recommend/scoring";
@@ -144,6 +145,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                         </p>
                       </div>
                     )}
+                    <CompareToggle listingId={ranked.listing.id} />
                   </li>
                 ))}
               </ul>

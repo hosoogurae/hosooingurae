@@ -51,6 +51,50 @@ export function buildInquiryMessage(params: {
   return lines.join("\n");
 }
 
+/**
+ * 매물 비교(/compare) 화면에서 "상담받기"에 씁니다. buildInquiryMessage와
+ * 같은 원칙(내부 id 노출 안 함, 확인된 값만 표기)으로 비교 중인 매물 전부를
+ * 나열합니다.
+ */
+export function buildCompareInquiryMessage(params: {
+  listings: Array<{
+    complexName: string;
+    building: string | undefined;
+    floor: number;
+    transactionType: string;
+    priceLabel: string;
+  }>;
+  /** 현재 비교페이지의 절대 URL. 없으면 링크 영역을 생략합니다. */
+  pageUrl?: string;
+}): string {
+  const lines = ["[매물 비교 문의]", ""];
+
+  params.listings.forEach((listing, index) => {
+    const buildingFloorParts: string[] = [];
+    if (listing.building && listing.building.trim() !== "") {
+      buildingFloorParts.push(listing.building);
+    }
+    if (listing.floor !== undefined && listing.floor !== null) {
+      buildingFloorParts.push(`${listing.floor}층`);
+    }
+
+    lines.push(
+      `${index + 1}. ${listing.complexName}${
+        buildingFloorParts.length > 0 ? " " + buildingFloorParts.join(" / ") : ""
+      }`,
+    );
+    lines.push(`   ${listing.transactionType} ${listing.priceLabel}`);
+  });
+
+  lines.push("", "안녕하세요.", "위 매물들을 비교하고 있는데 상담받고 싶습니다.");
+
+  if (params.pageUrl) {
+    lines.push("", "비교 페이지", params.pageUrl);
+  }
+
+  return lines.join("\n");
+}
+
 function isIOS(): boolean {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent);
 }

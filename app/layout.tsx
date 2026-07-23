@@ -11,6 +11,7 @@ import {
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import FloatingCallButton from "./components/FloatingCallButton";
+import CompareBar from "./components/CompareBar";
 
 const notoSansKr = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -59,6 +60,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <Footer />
         <FloatingCallButton />
+        <CompareBar />
       </body>
     </html>
   );
