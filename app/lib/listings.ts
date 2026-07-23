@@ -24,6 +24,7 @@ export interface PublicListing {
   transactionType: string;
   price: number;
   priceLabel: string;
+  building: string;
   supplyArea: number;
   exclusiveArea: number;
   floor: number;
@@ -124,6 +125,7 @@ export function toPublicListing(listing: ListingWithComplex): PublicListing {
     transactionType: listing.transactionType,
     price: listing.price,
     priceLabel: listing.priceLabel,
+    building: listing.building,
     supplyArea: listing.supplyArea,
     exclusiveArea: listing.exclusiveArea,
     floor: listing.floor,

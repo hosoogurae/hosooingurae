@@ -1,4 +1,5 @@
 import Hero from "./components/Hero";
+import RecommendSection from "./components/RecommendSection";
 import FeaturedProperties from "./components/FeaturedProperties";
 import ValuationCta from "./components/ValuationCta";
 import About from "./components/About";
@@ -11,6 +12,7 @@ export default function Home() {
   return (
     <>
       <Hero />
+      <RecommendSection />
       <FeaturedProperties />
       <ValuationCta />
       <About />
