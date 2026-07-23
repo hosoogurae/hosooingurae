@@ -1,6 +1,7 @@
 import type { Complex } from "../data/complexes";
 import { getSupabaseAdminClient, getSupabaseClient } from "./supabase/client";
 import { complexRowToComplex } from "./supabase/mappers";
+import type { ComplexUpdate } from "./supabase/database.types";
 
 export async function getAllComplexes(): Promise<Complex[]> {
   const supabase = getSupabaseClient();
@@ -99,6 +100,45 @@ export async function createComplex(
   if (error || !data) {
     console.error("[complexes] 새 단지 생성 실패", error);
     return { error: "단지 정보를 저장하지 못했습니다." };
+  }
+
+  return { complex: complexRowToComplex(data) };
+}
+
+export interface ComplexUpdateInput {
+  name?: string;
+  address?: string;
+  propertyType?: string;
+}
+
+/** 단지 정보 관리 화면(/admin/complexes)에서 단지명·주소·건축물 용도를 고칠 때 씁니다. */
+export async function updateComplex(
+  id: string,
+  patch: ComplexUpdateInput,
+): Promise<{ complex?: Complex; error?: string }> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return { error: "Supabase가 설정되어 있지 않습니다." };
+  }
+
+  const dbPatch: ComplexUpdate = {};
+  if (patch.name !== undefined) dbPatch.name = patch.name;
+  if (patch.address !== undefined) dbPatch.address = patch.address;
+  if (patch.propertyType !== undefined) dbPatch.property_type = patch.propertyType;
+
+  const { data, error } = await supabase
+    .from("complexes")
+    .update(dbPatch)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[complexes] 단지 정보 수정 실패", error);
+    return { error: "단지 정보를 수정하지 못했습니다." };
+  }
+  if (!data) {
+    return { error: "단지를 찾을 수 없습니다." };
   }
 
   return { complex: complexRowToComplex(data) };

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import type {
   ListingSubmission,
   ListingSubmissionStatus,
@@ -109,26 +108,19 @@ export default function AdminListingSubmissionsPage() {
   }
 
   function handleConvert(submission: ListingSubmission) {
-    // 상태는 실제 매물 저장이 성공한 뒤에만 /admin 쪽에서 바꿉니다(여기서 미리
-    // converted로 바꾸면 저장에 실패해도 등록된 것처럼 보이는 문제가 생깁니다).
-    window.open(`/admin?submissionId=${submission.id}`, "_blank");
+    // 상태는 실제 매물 저장이 성공한 뒤에만 /admin/listings/new 쪽에서
+    // 바꿉니다(여기서 미리 converted로 바꾸면 저장에 실패해도 등록된 것처럼
+    // 보이는 문제가 생깁니다).
+    window.open(`/admin/listings/new?submissionId=${submission.id}`, "_blank");
   }
 
   const newCount = submissions?.filter((s) => s.status === "new").length ?? 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold tracking-wide text-gold-600">
-          ADMIN
-        </p>
-        <Link
-          href="/admin"
-          className="text-sm font-medium text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
-        >
-          ← 매물 등록
-        </Link>
-      </div>
+    <div className="mx-auto max-w-3xl px-6 py-10 sm:py-16">
+      <p className="text-sm font-semibold tracking-wide text-gold-600">
+        ADMIN
+      </p>
       <div className="mt-2 flex items-center justify-between">
         <h1 className="text-2xl font-black text-navy-950 sm:text-3xl">
           매물 접수

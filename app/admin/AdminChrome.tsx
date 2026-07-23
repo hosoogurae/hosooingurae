@@ -1,9 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { AdminLogoutButton } from "./AdminLogoutButton";
+import { AdminNav } from "./AdminNav";
 
-/** 로그인 화면에서는 로그아웃 버튼을 보여줄 필요가 없어 경로로 구분합니다. */
+/** 로그인 화면에서는 공통 네비게이션을 보여줄 필요가 없어 경로로 구분합니다. */
 export function AdminChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/admin/login";
@@ -14,9 +14,7 @@ export function AdminChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="flex justify-end px-6 pt-4">
-        <AdminLogoutButton />
-      </div>
+      <AdminNav />
       {children}
     </>
   );

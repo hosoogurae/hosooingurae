@@ -122,17 +122,9 @@ export default function AdminListingsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-16">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold tracking-wide text-gold-600">
-          ADMIN
-        </p>
-        <Link
-          href="/admin"
-          className="text-sm font-medium text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
-        >
-          ← 매물 등록
-        </Link>
-      </div>
+      <p className="text-sm font-semibold tracking-wide text-gold-600">
+        ADMIN
+      </p>
       <h1 className="mt-2 text-2xl font-black text-navy-950 sm:text-3xl">
         등록된 매물 관리
       </h1>

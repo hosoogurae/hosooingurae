@@ -103,7 +103,7 @@ export async function createListingSubmission(
   return { submission: rowToListingSubmission(data) };
 }
 
-/** "매물로 등록" 화면(/admin?submissionId=...)에서 미리 채울 값을 가져올 때 씁니다. */
+/** "매물로 등록" 화면(/admin/listings/new?submissionId=...)에서 미리 채울 값을 가져올 때 씁니다. */
 export async function getListingSubmissionById(
   id: string,
 ): Promise<ListingSubmission | undefined> {

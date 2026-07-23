@@ -1,369 +1,260 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { Listing } from "../data/listings";
 import type { ListingSubmission } from "../data/listingSubmissions";
-import type { ComplexOption } from "../lib/naverImport";
-import { parseKoreanAmountToManwon } from "../lib/naverTextParser";
-import {
-  ListingFormFields,
-  type ComplexMode,
-  type NewComplexState,
-} from "./ListingFields";
+import type { ListingStats } from "../lib/listings";
 
-function normalizeComplexName(name: string): string {
-  return name.replace(/\s+/g, "").toLowerCase();
-}
-
-/** 접수 건의 자유 입력 단지명을 기존 단지 목록과 매칭합니다(네이버 가져오기와 동일한 방식). */
-function matchComplexId(
-  complexName: string,
-  options: ComplexOption[],
-): string | undefined {
-  const target = normalizeComplexName(complexName);
-  if (!target) return undefined;
-
-  const matched = options.find((option) => {
-    const name = normalizeComplexName(option.name);
-    return name === target || name.includes(target) || target.includes(name);
-  });
-
-  return matched?.id;
-}
-
-const EMPTY_DRAFT: Listing = {
-  id: "",
-  complexId: "",
-  propertyType: "아파트",
-  status: "published",
-  transactionType: "매매",
-  price: 0,
-  priceLabel: "",
-  building: "",
-  floor: 0,
-  totalFloors: 0,
-  supplyArea: 0,
-  exclusiveArea: 0,
-  roomCount: 0,
-  bathroomCount: 0,
-  direction: "",
-  moveInDate: "",
-  maintenanceFee: "",
-  shortDescription: "",
-  features: [],
-  isFeatured: false,
+const STATUS_META: Record<string, { label: string; className: string }> = {
+  new: { label: "신규", className: "bg-navy-900/10 text-navy-800" },
+  confirmed: { label: "확인완료", className: "bg-green-500/10 text-green-700" },
+  converted: { label: "등록됨", className: "bg-gold-500/10 text-gold-600" },
 };
 
-export default function AdminRegisterPage() {
-  const [complexOptions, setComplexOptions] = useState<ComplexOption[]>([]);
-  const [draft, setDraft] = useState<Listing>(EMPTY_DRAFT);
-  const [featuresInput, setFeaturesInput] = useState("");
-  const [complexMode, setComplexMode] = useState<ComplexMode>("existing");
-  const [newComplex, setNewComplex] = useState<NewComplexState>({
-    name: "",
-    address: "",
-  });
+function formatBuildingFloor(submission: ListingSubmission): string | undefined {
+  const parts: string[] = [];
+  if (submission.building) parts.push(submission.building);
+  if (submission.floor !== undefined) parts.push(`${submission.floor}층`);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
 
-  const [submitting, setSubmitting] = useState(false);
-  const [submitErrors, setSubmitErrors] = useState<string[] | null>(null);
-  const [registered, setRegistered] = useState<Listing | null>(null);
-  const [sourceSubmission, setSourceSubmission] =
-    useState<ListingSubmission | null>(null);
-
-  function applyPrefillFromSubmission(
-    submission: ListingSubmission,
-    options: ComplexOption[],
-  ) {
-    const matchedId = matchComplexId(submission.complexName, options);
-    if (matchedId) {
-      setComplexMode("existing");
-    } else {
-      setComplexMode("new");
-      setNewComplex({ name: submission.complexName, address: "" });
-    }
-
-    const featureTags = [
-      submission.occupancyStatus,
-      submission.interiorCondition,
-      submission.viewingAvailability
-        ? `집보기: ${submission.viewingAvailability}`
-        : undefined,
-    ].filter((value): value is string => Boolean(value));
-    setFeaturesInput(featureTags.join(", "));
-
-    setDraft((prev) => ({
-      ...prev,
-      complexId: matchedId ?? "",
-      transactionType: submission.transactionType,
-      price: parseKoreanAmountToManwon(submission.desiredPriceLabel) ?? 0,
-      priceLabel: submission.desiredPriceLabel,
-      building: submission.building ?? "",
-      floor: submission.floor ?? 0,
-      moveInDate: submission.moveOutDate ?? "",
-      shortDescription: submission.notes ?? "",
-    }));
+function formatSubmittedAt(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  if (date.toDateString() === now.toDateString()) {
+    return `오늘 ${hh}:${mm}`;
   }
+  return `${date.getMonth() + 1}.${date.getDate()} ${hh}:${mm}`;
+}
+
+interface DashboardCard {
+  title: string;
+  description: string;
+  href: string;
+  badge?: string;
+  highlight?: boolean;
+  external?: boolean;
+}
+
+export default function AdminDashboardPage() {
+  const [submissions, setSubmissions] = useState<ListingSubmission[] | null>(
+    null,
+  );
+  const [stats, setStats] = useState<ListingStats | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function init() {
-      const submissionId = new URLSearchParams(window.location.search).get(
-        "submissionId",
-      );
+    async function load() {
+      const [submissionsResult, statsResult] = await Promise.allSettled([
+        fetch("/api/admin/listing-submissions").then((response) =>
+          response.ok ? response.json() : Promise.reject(response),
+        ),
+        fetch("/api/admin/listings/stats").then((response) =>
+          response.ok ? response.json() : Promise.reject(response),
+        ),
+      ]);
 
-      let options: ComplexOption[] = [];
-      try {
-        const response = await fetch("/api/complexes");
-        const data = await response.json();
-        if (response.ok) {
-          options = data.complexOptions as ComplexOption[];
-        }
-      } catch {
-        // 목록을 못 가져와도 "새 단지 추가"로 계속 진행할 수 있습니다.
-      }
       if (cancelled) return;
-      setComplexOptions(options);
 
-      if (submissionId) {
-        try {
-          const response = await fetch(
-            `/api/admin/listing-submissions/${submissionId}`,
-          );
-          const data = await response.json();
-          if (!cancelled && response.ok) {
-            const submission = data.submission as ListingSubmission;
-            setSourceSubmission(submission);
-            applyPrefillFromSubmission(submission, options);
-            return;
-          }
-        } catch {
-          // 접수 정보를 못 가져와도 빈 등록 폼으로 계속 진행할 수 있습니다.
-        }
+      if (submissionsResult.status === "fulfilled") {
+        setSubmissions(submissionsResult.value.submissions as ListingSubmission[]);
+      } else {
+        setSubmissions([]);
       }
 
-      if (options.length > 0) {
-        setDraft((prev) => ({ ...prev, complexId: options[0].id }));
-      } else {
-        setComplexMode("new");
+      if (statsResult.status === "fulfilled") {
+        setStats(statsResult.value.stats as ListingStats);
       }
     }
 
-    init();
-
+    load();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  function updateDraft<K extends keyof Listing>(key: K, value: Listing[K]) {
-    setDraft((prev) => ({ ...prev, [key]: value }));
-  }
+  const newCount = submissions?.filter((s) => s.status === "new").length ?? 0;
+  const confirmedCount =
+    submissions?.filter((s) => s.status === "confirmed").length ?? 0;
 
-  function resetForm() {
-    setDraft(EMPTY_DRAFT);
-    setFeaturesInput("");
-    setComplexMode(complexOptions.length > 0 ? "existing" : "new");
-    setNewComplex({ name: "", address: "" });
-    setSubmitErrors(null);
-    setRegistered(null);
-    setSourceSubmission(null);
-  }
+  const recentSubmissions = useMemo(() => {
+    if (!submissions) return [];
+    return [...submissions]
+      .sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+      .slice(0, 3);
+  }, [submissions]);
 
-  async function handleSubmit() {
-    setSubmitting(true);
-    setSubmitErrors(null);
-
-    try {
-      const payload: Record<string, unknown> = {
-        ...draft,
-        id: undefined, // 매물 ID는 서버가 자동으로 만들어줍니다.
-        features: featuresInput
-          .split(",")
-          .map((feature) => feature.trim())
-          .filter(Boolean),
-      };
-
-      // 접수 건에서 넘어온 경우, 접수 때 올린 사진을 그대로 매물 사진으로 승계합니다.
-      if (sourceSubmission && sourceSubmission.photos.length > 0) {
-        payload.images = sourceSubmission.photos;
-      }
-
-      if (complexMode === "new") {
-        delete payload.complexId;
-        payload.newComplex = newComplex;
-      }
-
-      const response = await fetch("/api/listings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        setSubmitErrors(data.errors ?? [data.error ?? "등록에 실패했습니다."]);
-        return;
-      }
-
-      const createdListing = data.listing as Listing;
-      setRegistered(createdListing);
-
-      // 매물 저장이 실제로 성공했을 때만 접수 건을 "등록됨"으로 표시합니다.
-      // 이 요청이 실패해도 매물 자체는 이미 저장됐으니 등록을 되돌리지 않습니다.
-      if (sourceSubmission) {
-        try {
-          const patchResponse = await fetch(
-            `/api/admin/listing-submissions/${sourceSubmission.id}`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                status: "converted",
-                convertedListingId: createdListing.id,
-              }),
-            },
-          );
-          if (!patchResponse.ok) {
-            console.error("[admin] 접수 상태 업데이트 실패", await patchResponse.json());
-          }
-        } catch (patchError) {
-          console.error("[admin] 접수 상태 업데이트 실패", patchError);
-        }
-      }
-    } catch {
-      setSubmitErrors(["네트워크 오류로 등록에 실패했습니다. 다시 시도해주세요."]);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (registered) {
-    return (
-      <div className="mx-auto max-w-3xl px-6 py-16">
-        <div className="rounded-xl border border-navy-900/10 p-6 text-center sm:p-8">
-          <p className="text-sm font-semibold text-gold-600">등록 완료</p>
-          <h1 className="mt-2 text-xl font-black text-navy-950 sm:text-2xl">
-            매물이 저장되었습니다.
-          </h1>
-          <p className="mt-2 text-sm text-navy-800/60">
-            {registered.status === "published"
-              ? "지금 바로 홈페이지에서 확인할 수 있어요."
-              : "임시저장 상태예요. 매물 관리 화면에서 공개로 바꿀 수 있어요."}
-          </p>
-          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            {registered.status === "published" && (
-              <Link
-                href={`/listings/${registered.id}`}
-                target="_blank"
-                className="rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2.5 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30"
-              >
-                등록된 매물 보기
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={resetForm}
-              className="rounded-md border border-navy-900/15 px-6 py-2.5 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
-            >
-              매물 하나 더 등록하기
-            </button>
-            <Link
-              href="/admin/listings"
-              className="rounded-md border border-navy-900/15 px-6 py-2.5 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
-            >
-              전체 매물 관리
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const cards: DashboardCard[] = [
+    {
+      title: "신규 매물 접수",
+      description: "홈페이지로 들어온 매물 접수를 확인하고 연락하세요.",
+      href: "/admin/listing-submissions",
+      badge: submissions === null ? undefined : `신규 ${newCount}건`,
+      highlight: newCount > 0,
+    },
+    {
+      title: "매물 등록",
+      description: "새 매물 정보를 직접 입력해 등록합니다.",
+      href: "/admin/listings/new",
+    },
+    {
+      title: "등록된 매물 관리",
+      description: "등록된 매물을 수정하거나 공개 상태를 바꿉니다.",
+      href: "/admin/listings",
+      badge: stats === null ? undefined : `등록 매물 ${stats.total}건`,
+    },
+    {
+      title: "단지 정보 관리",
+      description: "단지명·주소 등 단지 기본 정보를 관리합니다.",
+      href: "/admin/complexes",
+    },
+    {
+      title: "평면도 관리",
+      description: "단지·타입별 평면도 이미지를 등록/관리합니다.",
+      href: "/admin/floor-plans",
+    },
+    {
+      title: "홈페이지 바로가기",
+      description: "실제 공개 홈페이지를 새 탭에서 확인합니다.",
+      href: "/",
+      external: true,
+    },
+  ];
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold tracking-wide text-gold-600">
-          ADMIN
-        </p>
-        <Link
-          href="/admin/listings"
-          className="text-sm font-medium text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
-        >
-          등록된 매물 관리 →
-        </Link>
-      </div>
+    <div className="mx-auto max-w-5xl px-6 py-10 sm:py-16">
+      <p className="text-sm font-semibold tracking-wide text-gold-600">ADMIN</p>
       <h1 className="mt-2 text-2xl font-black text-navy-950 sm:text-3xl">
-        매물 등록
+        관리자 대시보드
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-navy-800/70">
-        아래 항목을 채우고 맨 아래 &quot;등록하기&quot; 버튼을 누르면 바로
-        저장돼요. 사진 올리기는 아직 준비 중이라, 텍스트 정보만 먼저
-        등록해주세요.
+        오늘 확인해야 할 매물 접수와 매물 현황을 한눈에 볼 수 있어요.
       </p>
 
-      {sourceSubmission && (
-        <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
-          <strong>{sourceSubmission.contactName}</strong>님이 접수한 매물
-          정보로 미리 채워졌습니다({sourceSubmission.contactPhone}). 공급면적
-          · 전용면적 · 방/욕실 수는 접수 내용에 없어 직접 입력해주세요.
-        </div>
-      )}
-
-      <div className="mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8">
-        <ListingFormFields
-          draft={draft}
-          complexOptions={complexOptions}
-          featuresInput={featuresInput}
-          onChangeField={updateDraft}
-          onChangeFeaturesInput={setFeaturesInput}
-          showId={false}
-          allowNewComplex
-          complexMode={complexMode}
-          onChangeComplexMode={setComplexMode}
-          newComplex={newComplex}
-          onChangeNewComplex={setNewComplex}
-        />
-
-        {submitErrors && (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            <ul className="list-disc space-y-0.5 pl-4">
-              {submitErrors.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="mt-6">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="w-full rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-3 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+      {/* 상단 요약 */}
+      <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div
+          className={`rounded-xl border p-5 ${
+            newCount > 0
+              ? "border-gold-500 bg-gold-500/10"
+              : "border-navy-900/10 bg-white"
+          }`}
+        >
+          <p className="text-sm font-semibold text-navy-800/60">신규 접수</p>
+          <p
+            className={`mt-1 text-3xl font-black ${
+              newCount > 0 ? "text-gold-600" : "text-navy-950"
+            }`}
           >
-            {submitting ? "등록 중..." : "등록하기"}
-          </button>
+            {submissions === null ? "-" : `${newCount}건`}
+          </p>
+        </div>
+        <div className="rounded-xl border border-navy-900/10 bg-white p-5">
+          <p className="text-sm font-semibold text-navy-800/60">상담중 접수</p>
+          <p className="mt-1 text-3xl font-black text-navy-950">
+            {submissions === null ? "-" : `${confirmedCount}건`}
+          </p>
+        </div>
+        <div className="rounded-xl border border-navy-900/10 bg-white p-5">
+          <p className="text-sm font-semibold text-navy-800/60">등록된 매물</p>
+          <p className="mt-1 text-3xl font-black text-navy-950">
+            {stats === null ? "-" : `${stats.total}건`}
+          </p>
         </div>
       </div>
 
-      <p className="mt-6 text-center text-xs text-navy-800/40">
-        <Link href="/admin/import-naver" className="underline-offset-4 hover:underline">
-          네이버 매물 가져오기 (테스트 기능) →
-        </Link>
-        {" · "}
-        <Link href="/admin/floor-plans" className="underline-offset-4 hover:underline">
-          단지 평면도 관리 →
-        </Link>
-        {" · "}
-        <Link
-          href="/admin/listing-submissions"
-          className="underline-offset-4 hover:underline"
-        >
-          매물 접수 확인 →
-        </Link>
-      </p>
+      {/* 바로가기 카드 */}
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((card) => (
+          <Link
+            key={card.title}
+            href={card.href}
+            target={card.external ? "_blank" : undefined}
+            className={`flex flex-col justify-between rounded-xl border p-6 transition-colors ${
+              card.highlight
+                ? "border-gold-500 bg-gold-500/5 hover:bg-gold-500/10"
+                : "border-navy-900/10 bg-white hover:border-gold-500"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-lg font-bold text-navy-950">{card.title}</h2>
+                {card.badge && (
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      card.highlight
+                        ? "bg-gold-500 text-navy-950"
+                        : "bg-navy-900/5 text-navy-800"
+                    }`}
+                  >
+                    {card.badge}
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-navy-800/70">
+                {card.description}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* 최근 접수 */}
+      <div className="mt-10">
+        <h2 className="text-lg font-bold text-navy-950">최근 접수</h2>
+
+        {submissions === null ? (
+          <p className="mt-4 text-sm text-navy-800/50">불러오는 중...</p>
+        ) : recentSubmissions.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-navy-900/10 px-6 py-10 text-center text-sm text-navy-800/50">
+            아직 접수된 매물이 없습니다.
+          </p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-3">
+            {recentSubmissions.map((submission) => {
+              const statusMeta = STATUS_META[submission.status];
+              const buildingFloor = formatBuildingFloor(submission);
+              return (
+                <li
+                  key={submission.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-navy-900/10 p-4"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusMeta.className}`}
+                      >
+                        {statusMeta.label}
+                      </span>
+                      <p className="text-sm font-bold text-navy-950">
+                        {submission.complexName}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs text-navy-800/60">
+                      {buildingFloor ? `${buildingFloor} · ` : ""}
+                      {submission.transactionType} · {submission.desiredPriceLabel}
+                    </p>
+                    <p className="mt-0.5 text-xs text-navy-800/40">
+                      {formatSubmittedAt(submission.createdAt)}
+                    </p>
+                  </div>
+                  <Link
+                    href="/admin/listing-submissions"
+                    className="shrink-0 rounded-md border border-navy-900/15 px-4 py-2 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+                  >
+                    접수 확인
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

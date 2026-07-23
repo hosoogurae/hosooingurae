@@ -295,6 +295,7 @@ export interface Database {
 
 export type ComplexRow = Database["public"]["Tables"]["complexes"]["Row"];
 export type ComplexInsert = Database["public"]["Tables"]["complexes"]["Insert"];
+export type ComplexUpdate = Database["public"]["Tables"]["complexes"]["Update"];
 export type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 export type ListingInsert = Database["public"]["Tables"]["listings"]["Insert"];
 export type ListingImageRow =

@@ -216,7 +216,7 @@ export default function AdminImportPage() {
           href="/admin"
           className="text-sm font-medium text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
         >
-          ← 매물 등록
+          ← 대시보드
         </Link>
       </div>
       <h1 className="mt-2 text-2xl font-black text-navy-950 sm:text-3xl">
