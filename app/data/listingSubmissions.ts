@@ -17,6 +17,8 @@ export interface ListingSubmission {
   status: ListingSubmissionStatus;
   convertedListingId?: string;
   createdAt: string;
+  /** 접수자가 /sell/photos에서 올린 사진들(있는 순서대로). */
+  photos: string[];
 }
 
 /** 공개 폼(app/sell)이 보내는 생성 입력값. id/status/시각은 서버가 채웁니다. */

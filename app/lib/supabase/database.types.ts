@@ -259,6 +259,34 @@ export interface Database {
           },
         ];
       };
+      listing_submission_images: {
+        Row: {
+          id: string;
+          submission_id: string;
+          url: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          submission_id: string;
+          url: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["listing_submission_images"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "listing_submission_images_submission_id_fkey";
+            columns: ["submission_id"];
+            isOneToOne: false;
+            referencedRelation: "listing_submissions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -281,3 +309,7 @@ export type ListingSubmissionRow =
   Database["public"]["Tables"]["listing_submissions"]["Row"];
 export type ListingSubmissionInsert =
   Database["public"]["Tables"]["listing_submissions"]["Insert"];
+export type ListingSubmissionImageRow =
+  Database["public"]["Tables"]["listing_submission_images"]["Row"];
+export type ListingSubmissionImageInsert =
+  Database["public"]["Tables"]["listing_submission_images"]["Insert"];

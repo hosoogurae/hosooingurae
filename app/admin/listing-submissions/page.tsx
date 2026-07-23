@@ -208,6 +208,27 @@ export default function AdminListingSubmissionsPage() {
                   </p>
                 )}
 
+                {submission.photos.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {submission.photos.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block h-16 w-16 overflow-hidden rounded-md border border-navy-900/10"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt="접수 사진"
+                          className="h-full w-full object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                )}
+
                 <p className="mt-3 text-xs text-navy-800/50">
                   접수자 {submission.contactName} · {submission.contactPhone}
                 </p>

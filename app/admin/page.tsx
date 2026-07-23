@@ -185,6 +185,11 @@ export default function AdminRegisterPage() {
           .filter(Boolean),
       };
 
+      // 접수 건에서 넘어온 경우, 접수 때 올린 사진을 그대로 매물 사진으로 승계합니다.
+      if (sourceSubmission && sourceSubmission.photos.length > 0) {
+        payload.images = sourceSubmission.photos;
+      }
+
       if (complexMode === "new") {
         delete payload.complexId;
         payload.newComplex = newComplex;

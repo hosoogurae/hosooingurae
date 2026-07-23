@@ -43,7 +43,7 @@ export default function SellPage() {
   const [complexOptions, setComplexOptions] = useState<ComplexOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[] | null>(null);
-  const [done, setDone] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,7 +91,7 @@ export default function SellPage() {
         return;
       }
 
-      setDone(true);
+      setSubmittedId((data.submission as { id: string }).id);
     } catch {
       setErrors(["네트워크 오류로 접수에 실패했습니다. 다시 시도해주세요."]);
     } finally {
@@ -99,7 +99,7 @@ export default function SellPage() {
     }
   }
 
-  if (done) {
+  if (submittedId) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-24 text-center">
         <p className="text-sm font-semibold text-gold-600">접수 완료</p>
@@ -109,12 +109,30 @@ export default function SellPage() {
         <p className="mt-3 text-sm leading-relaxed text-navy-800/70">
           담당자가 확인 후 빠르게 연락드리겠습니다.
         </p>
-        <Link
-          href="/"
-          className="mt-8 inline-block rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2.5 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30"
-        >
-          홈으로 돌아가기
-        </Link>
+
+        <div className="mt-10 rounded-xl border border-navy-900/10 p-6 sm:p-8">
+          <h2 className="text-lg font-bold text-navy-950">
+            사진을 추가하시겠어요?
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-navy-800/70">
+            집 사진이 있으면 매물을 더 빠르고 정확하게 소개하는 데 도움이
+            됩니다. 사진 등록은 선택사항입니다.
+          </p>
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Link
+              href={`/sell/photos/${submittedId}`}
+              className="rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2.5 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30"
+            >
+              사진 추가하기
+            </Link>
+            <Link
+              href="/"
+              className="rounded-md border border-navy-900/15 px-6 py-2.5 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+            >
+              나중에 하기
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
