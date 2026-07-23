@@ -3,12 +3,34 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Listing } from "../data/listings";
+import type { ListingSubmission } from "../data/listingSubmissions";
 import type { ComplexOption } from "../lib/naverImport";
+import { parseKoreanAmountToManwon } from "../lib/naverTextParser";
 import {
   ListingFormFields,
   type ComplexMode,
   type NewComplexState,
 } from "./ListingFields";
+
+function normalizeComplexName(name: string): string {
+  return name.replace(/\s+/g, "").toLowerCase();
+}
+
+/** 접수 건의 자유 입력 단지명을 기존 단지 목록과 매칭합니다(네이버 가져오기와 동일한 방식). */
+function matchComplexId(
+  complexName: string,
+  options: ComplexOption[],
+): string | undefined {
+  const target = normalizeComplexName(complexName);
+  if (!target) return undefined;
+
+  const matched = options.find((option) => {
+    const name = normalizeComplexName(option.name);
+    return name === target || name.includes(target) || target.includes(name);
+  });
+
+  return matched?.id;
+}
 
 const EMPTY_DRAFT: Listing = {
   id: "",
@@ -46,29 +68,89 @@ export default function AdminRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitErrors, setSubmitErrors] = useState<string[] | null>(null);
   const [registered, setRegistered] = useState<Listing | null>(null);
+  const [sourceSubmission, setSourceSubmission] =
+    useState<ListingSubmission | null>(null);
+
+  function applyPrefillFromSubmission(
+    submission: ListingSubmission,
+    options: ComplexOption[],
+  ) {
+    const matchedId = matchComplexId(submission.complexName, options);
+    if (matchedId) {
+      setComplexMode("existing");
+    } else {
+      setComplexMode("new");
+      setNewComplex({ name: submission.complexName, address: "" });
+    }
+
+    const featureTags = [
+      submission.occupancyStatus,
+      submission.interiorCondition,
+      submission.viewingAvailability
+        ? `집보기: ${submission.viewingAvailability}`
+        : undefined,
+    ].filter((value): value is string => Boolean(value));
+    setFeaturesInput(featureTags.join(", "));
+
+    setDraft((prev) => ({
+      ...prev,
+      complexId: matchedId ?? "",
+      transactionType: submission.transactionType,
+      price: parseKoreanAmountToManwon(submission.desiredPriceLabel) ?? 0,
+      priceLabel: submission.desiredPriceLabel,
+      building: submission.building ?? "",
+      floor: submission.floor ?? 0,
+      moveInDate: submission.moveOutDate ?? "",
+      shortDescription: submission.notes ?? "",
+    }));
+  }
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadComplexOptions() {
+    async function init() {
+      const submissionId = new URLSearchParams(window.location.search).get(
+        "submissionId",
+      );
+
+      let options: ComplexOption[] = [];
       try {
         const response = await fetch("/api/complexes");
         const data = await response.json();
-        if (!cancelled && response.ok) {
-          const options = data.complexOptions as ComplexOption[];
-          setComplexOptions(options);
-          if (options.length > 0) {
-            setDraft((prev) => ({ ...prev, complexId: options[0].id }));
-          } else {
-            setComplexMode("new");
-          }
+        if (response.ok) {
+          options = data.complexOptions as ComplexOption[];
         }
       } catch {
         // 목록을 못 가져와도 "새 단지 추가"로 계속 진행할 수 있습니다.
       }
+      if (cancelled) return;
+      setComplexOptions(options);
+
+      if (submissionId) {
+        try {
+          const response = await fetch(
+            `/api/admin/listing-submissions/${submissionId}`,
+          );
+          const data = await response.json();
+          if (!cancelled && response.ok) {
+            const submission = data.submission as ListingSubmission;
+            setSourceSubmission(submission);
+            applyPrefillFromSubmission(submission, options);
+            return;
+          }
+        } catch {
+          // 접수 정보를 못 가져와도 빈 등록 폼으로 계속 진행할 수 있습니다.
+        }
+      }
+
+      if (options.length > 0) {
+        setDraft((prev) => ({ ...prev, complexId: options[0].id }));
+      } else {
+        setComplexMode("new");
+      }
     }
 
-    loadComplexOptions();
+    init();
 
     return () => {
       cancelled = true;
@@ -86,6 +168,7 @@ export default function AdminRegisterPage() {
     setNewComplex({ name: "", address: "" });
     setSubmitErrors(null);
     setRegistered(null);
+    setSourceSubmission(null);
   }
 
   async function handleSubmit() {
@@ -119,7 +202,31 @@ export default function AdminRegisterPage() {
         return;
       }
 
-      setRegistered(data.listing as Listing);
+      const createdListing = data.listing as Listing;
+      setRegistered(createdListing);
+
+      // 매물 저장이 실제로 성공했을 때만 접수 건을 "등록됨"으로 표시합니다.
+      // 이 요청이 실패해도 매물 자체는 이미 저장됐으니 등록을 되돌리지 않습니다.
+      if (sourceSubmission) {
+        try {
+          const patchResponse = await fetch(
+            `/api/admin/listing-submissions/${sourceSubmission.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "converted",
+                convertedListingId: createdListing.id,
+              }),
+            },
+          );
+          if (!patchResponse.ok) {
+            console.error("[admin] 접수 상태 업데이트 실패", await patchResponse.json());
+          }
+        } catch (patchError) {
+          console.error("[admin] 접수 상태 업데이트 실패", patchError);
+        }
+      }
     } catch {
       setSubmitErrors(["네트워크 오류로 등록에 실패했습니다. 다시 시도해주세요."]);
     } finally {
@@ -190,6 +297,14 @@ export default function AdminRegisterPage() {
         저장돼요. 사진 올리기는 아직 준비 중이라, 텍스트 정보만 먼저
         등록해주세요.
       </p>
+
+      {sourceSubmission && (
+        <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
+          <strong>{sourceSubmission.contactName}</strong>님이 접수한 매물
+          정보로 미리 채워졌습니다({sourceSubmission.contactPhone}). 공급면적
+          · 전용면적 · 방/욕실 수는 접수 내용에 없어 직접 입력해주세요.
+        </div>
+      )}
 
       <div className="mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8">
         <ListingFormFields

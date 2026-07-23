@@ -72,7 +72,7 @@ const FIELD_LABELS: Partial<Record<keyof ParsedNaverListing, string>> = {
  * "4억 2,000", "4억2,000", "9,500만원", "9500" 같은 한국식 금액 표기를
  * 만원 단위 숫자로 변환합니다. 인식할 수 없으면 null.
  */
-function parseKoreanAmountToManwon(raw: string): number | null {
+export function parseKoreanAmountToManwon(raw: string): number | null {
   const cleaned = raw.replace(/,/g, "").trim();
   if (!cleaned) return null;
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   deleteListingSubmission,
+  getListingSubmissionById,
   updateListingSubmissionStatus,
 } from "../../../../lib/listingSubmissions";
 
@@ -10,7 +11,25 @@ interface RouteContext {
 
 const STATUSES = ["new", "confirmed", "converted"];
 
-/** 확인완료/매물로 등록 버튼에서 상태를 바꿀 때 사용합니다. */
+/** "매물로 등록" 화면에서 접수 건 값을 미리 채울 때 조회합니다. */
+export async function GET(_request: NextRequest, { params }: RouteContext) {
+  const { id } = await params;
+
+  const submission = await getListingSubmissionById(id);
+  if (!submission) {
+    return NextResponse.json(
+      { error: "접수 건을 찾을 수 없습니다." },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ submission });
+}
+
+/**
+ * 확인완료 버튼, 그리고 매물 저장이 실제로 성공한 뒤에만 호출되는 "매물로
+ * 등록" 완료 처리(convertedListingId 포함)에 사용합니다.
+ */
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const { id } = await params;
 
@@ -24,10 +43,17 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     );
   }
 
-  const { status } = (body as { status?: unknown }) ?? {};
+  const { status, convertedListingId } =
+    (body as { status?: unknown; convertedListingId?: unknown }) ?? {};
   if (typeof status !== "string" || !STATUSES.includes(status)) {
     return NextResponse.json(
       { errors: ["상태 값이 올바르지 않습니다."] },
+      { status: 400 },
+    );
+  }
+  if (convertedListingId !== undefined && typeof convertedListingId !== "string") {
+    return NextResponse.json(
+      { errors: ["convertedListingId 값이 올바르지 않습니다."] },
       { status: 400 },
     );
   }
@@ -35,6 +61,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const { submission, error } = await updateListingSubmissionStatus(
     id,
     status as "new" | "confirmed" | "converted",
+    convertedListingId,
   );
 
   if (!submission) {

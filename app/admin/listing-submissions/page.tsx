@@ -109,8 +109,9 @@ export default function AdminListingSubmissionsPage() {
   }
 
   function handleConvert(submission: ListingSubmission) {
-    updateStatus(submission.id, "converted");
-    window.open("/admin", "_blank");
+    // 상태는 실제 매물 저장이 성공한 뒤에만 /admin 쪽에서 바꿉니다(여기서 미리
+    // converted로 바꾸면 저장에 실패해도 등록된 것처럼 보이는 문제가 생깁니다).
+    window.open(`/admin?submissionId=${submission.id}`, "_blank");
   }
 
   const newCount = submissions?.filter((s) => s.status === "new").length ?? 0;

@@ -69,6 +69,28 @@ export async function createListingSubmission(
   return { submission: rowToListingSubmission(data) };
 }
 
+/** "매물로 등록" 화면(/admin?submissionId=...)에서 미리 채울 값을 가져올 때 씁니다. */
+export async function getListingSubmissionById(
+  id: string,
+): Promise<ListingSubmission | undefined> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return undefined;
+
+  const { data, error } = await supabase
+    .from("listing_submissions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[listingSubmissions] 단건 조회 실패", error);
+    return undefined;
+  }
+  if (!data) return undefined;
+
+  return rowToListingSubmission(data);
+}
+
 /** 관리자 화면(/admin/listing-submissions) 전용. 신규 건이 먼저 보이도록 정렬합니다. */
 export async function getAllListingSubmissions(): Promise<ListingSubmission[]> {
   const supabase = getSupabaseAdminClient();
@@ -100,15 +122,23 @@ export async function getAllListingSubmissions(): Promise<ListingSubmission[]> {
 export async function updateListingSubmissionStatus(
   id: string,
   status: ListingSubmissionStatus,
+  convertedListingId?: string,
 ): Promise<{ submission?: ListingSubmission; error?: string }> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return { error: "Supabase가 설정되어 있지 않습니다." };
   }
 
+  const patch: { status: ListingSubmissionStatus; converted_listing_id?: string } = {
+    status,
+  };
+  if (convertedListingId) {
+    patch.converted_listing_id = convertedListingId;
+  }
+
   const { data, error } = await supabase
     .from("listing_submissions")
-    .update({ status })
+    .update(patch)
     .eq("id", id)
     .select("*")
     .maybeSingle();
