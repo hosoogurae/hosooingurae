@@ -1,15 +1,6 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
 import { NAVER_MAP_URL, PHONE_HREF } from "../data/contact";
-import {
-  PRICE_RANGE_OPTIONS,
-  PROPERTY_TYPE_OPTIONS,
-  TRANSACTION_TYPE_OPTIONS,
-  buildListingSearchQuery,
-} from "../lib/listingFilters";
-import { ArrowIcon, ChevronDownIcon, LocationIcon, SearchIcon } from "./icons";
+import { ArrowIcon, ChevronDownIcon, LocationIcon } from "./icons";
+import RecommendSearchBox from "./RecommendSearchBox";
 
 const STATS = [
   { value: "15년+", label: "구래동 중개 경력" },
@@ -99,21 +90,6 @@ function HeroBackground() {
 }
 
 export default function Hero() {
-  const router = useRouter();
-  const [propertyType, setPropertyType] = useState("");
-  const [transactionType, setTransactionType] = useState("");
-  const [priceRange, setPriceRange] = useState("");
-
-  function handleSearch(event: FormEvent) {
-    event.preventDefault();
-    const query = buildListingSearchQuery({
-      propertyType,
-      transactionType,
-      priceRange,
-    });
-    router.push(query ? `/listings?${query}` : "/listings");
-  }
-
   return (
     <section
       id="home"
@@ -144,72 +120,15 @@ export default function Hero() {
           정확하고 신속하게 안내합니다.
         </p>
 
-        <form
-          onSubmit={handleSearch}
-          className="animate-fade-in-up mt-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-white/95 p-4 text-left shadow-2xl shadow-black/40 backdrop-blur sm:p-5"
+        <div
+          className="animate-fade-in-up mt-10 w-full max-w-2xl"
           style={{ animationDelay: "300ms" }}
         >
-          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-navy-800/60">
-                매물종류
-              </span>
-              <select
-                value={propertyType}
-                onChange={(event) => setPropertyType(event.target.value)}
-                className="rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500"
-              >
-                {PROPERTY_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-navy-800/60">
-                거래유형
-              </span>
-              <select
-                value={transactionType}
-                onChange={(event) => setTransactionType(event.target.value)}
-                className="rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500"
-              >
-                {TRANSACTION_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-navy-800/60">
-                가격
-              </span>
-              <select
-                value={priceRange}
-                onChange={(event) => setPriceRange(event.target.value)}
-                className="rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500"
-              >
-                {PRICE_RANGE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button
-              type="submit"
-              className="flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.03] hover:shadow-lg hover:shadow-gold-500/40 sm:mt-5"
-            >
-              <SearchIcon className="h-4 w-4" />
-              검색
-            </button>
-          </div>
-        </form>
+          <p className="mb-4 text-lg font-bold text-white sm:text-xl">
+            원하는 집을 말해보세요
+          </p>
+          <RecommendSearchBox size="large" variant="dark" submitLabel="찾아보기" />
+        </div>
 
         <dl
           className="animate-fade-in-up mt-10 grid w-full max-w-2xl grid-cols-3 gap-4 border-y border-white/10 py-6"

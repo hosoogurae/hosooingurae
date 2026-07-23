@@ -4,14 +4,19 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { SearchIcon } from "./icons";
 
-const EXAMPLE_QUERIES = ["4억 이하 아파트", "바로 입주", "고층", "월세 오피스텔"];
+const EXAMPLE_QUERIES = ["4억 이하 아파트", "바로 입주", "고층", "월세"];
 
 export default function RecommendSearchBox({
   initialQuery = "",
   size = "large",
+  variant = "light",
+  submitLabel = "검색",
 }: {
   initialQuery?: string;
   size?: "large" | "compact";
+  /** "dark"는 Hero의 네이비 배경 위에서도 예시 버튼이 잘 보이도록 톤을 맞춥니다. */
+  variant?: "light" | "dark";
+  submitLabel?: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
@@ -33,6 +38,7 @@ export default function RecommendSearchBox({
   }
 
   const isLarge = size === "large";
+  const isDark = variant === "dark";
 
   return (
     <div className={isLarge ? "mx-auto max-w-2xl" : "w-full"}>
@@ -54,7 +60,7 @@ export default function RecommendSearchBox({
             isLarge ? "px-8 py-4 text-base" : "px-6 py-3 text-sm"
           }`}
         >
-          검색
+          {submitLabel}
         </button>
       </form>
 
@@ -64,7 +70,11 @@ export default function RecommendSearchBox({
             key={example}
             type="button"
             onClick={() => handleExampleClick(example)}
-            className="rounded-full border border-navy-900/15 px-4 py-2 text-xs font-semibold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600 sm:text-sm"
+            className={
+              isDark
+                ? "rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 backdrop-blur transition-colors hover:border-gold-400 hover:text-gold-400 sm:text-sm"
+                : "rounded-full border border-navy-900/15 px-4 py-2 text-xs font-semibold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600 sm:text-sm"
+            }
           >
             {example}
           </button>
