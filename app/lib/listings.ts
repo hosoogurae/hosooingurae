@@ -231,6 +231,9 @@ export async function getAllListings(
   if (filters?.featured) {
     query = query.eq("is_featured", true);
   }
+  if (filters?.complexId) {
+    query = query.eq("complex_id", filters.complexId);
+  }
   if (filters?.minPrice !== undefined) {
     query = query.gte("price", filters.minPrice);
   }
@@ -262,6 +265,40 @@ export async function getAllListings(
 export async function getFeaturedListings(): Promise<ListingWithComplex[]> {
   const all = await getAllListings();
   return all.filter((listing) => listing.isFeatured);
+}
+
+export interface ApartmentComplexOption {
+  complexId: string;
+  complexName: string;
+  /** 현재 공개(published) 아파트 매물 건수. 0건인 단지는 애초에 이 목록에 없습니다. */
+  count: number;
+}
+
+/**
+ * Header의 "아파트" 드롭다운 전용. 하드코딩 없이, 지금 공개된 아파트 매물을
+ * 실제로 세어서 단지별 건수를 만듭니다. 매물이 하나도 없는 단지는 자연히
+ * 빠집니다(집계 대상 자체가 없으므로).
+ */
+export async function getApartmentComplexOptions(): Promise<ApartmentComplexOption[]> {
+  const listings = await getAllListings({ filters: { propertyType: "아파트" } });
+
+  const counts = new Map<string, ApartmentComplexOption>();
+  for (const listing of listings) {
+    const existing = counts.get(listing.complexId);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      counts.set(listing.complexId, {
+        complexId: listing.complexId,
+        complexName: listing.complex.name,
+        count: 1,
+      });
+    }
+  }
+
+  return Array.from(counts.values()).sort(
+    (a, b) => b.count - a.count || a.complexName.localeCompare(b.complexName),
+  );
 }
 
 export async function getListingById(

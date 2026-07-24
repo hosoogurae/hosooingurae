@@ -17,10 +17,13 @@ export default function ListingsFilterBar({
   initialPropertyType,
   initialTransactionType,
   initialPriceRange,
+  initialComplexId,
 }: {
   initialPropertyType: string;
   initialTransactionType: string;
   initialPriceRange: string;
+  /** Header "아파트" 드롭다운에서 특정 단지를 선택했을 때 붙는 값(?complexId=...). */
+  initialComplexId?: string;
 }) {
   const router = useRouter();
   const [propertyType, setPropertyType] = useState(initialPropertyType);
@@ -29,10 +32,16 @@ export default function ListingsFilterBar({
 
   function handleSearch(event: FormEvent) {
     event.preventDefault();
+    // 단지 필터는 "아파트"를 볼 때만 의미가 있으므로, 다른 매물종류로 바꾸면
+    // 함께 지워서 엉뚱한 단지 조건이 남지 않게 합니다. 이 필터 바 자체에는
+    // 단지를 바꾸는 UI가 없으므로(Header 드롭다운에서만 선택), 처음 넘어온
+    // 값을 그대로 유지만 합니다.
+    const nextComplexId = propertyType === "apartment" ? (initialComplexId ?? "") : "";
     const query = buildListingSearchQuery({
       propertyType,
       transactionType,
       priceRange,
+      complexId: nextComplexId,
     });
     router.push(query ? `/listings?${query}` : "/listings");
   }

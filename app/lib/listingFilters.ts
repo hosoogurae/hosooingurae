@@ -55,6 +55,8 @@ export interface ListingSearchFilters {
   maxPrice?: number;
   /** 상단 메뉴 "추천매물"에서만 붙는 조건(?featured=true). 검색창 필터와는 별개입니다. */
   featured?: boolean;
+  /** Header의 "아파트" 드롭다운에서 특정 단지를 선택했을 때만 붙는 조건(?complexId=...). */
+  complexId?: string;
 }
 
 /** page.tsx의 searchParams와 동일한 형태. */
@@ -93,6 +95,11 @@ export function parseListingSearchParams(
     filters.featured = true;
   }
 
+  const complexId = firstValue(searchParams.complexId);
+  if (complexId && complexId.trim() !== "") {
+    filters.complexId = complexId.trim();
+  }
+
   return filters;
 }
 
@@ -105,10 +112,13 @@ export function buildListingSearchQuery(selection: {
   propertyType: string;
   transactionType: string;
   priceRange: string;
+  /** Header 드롭다운에서 넘어온 단지 필터. 필터 폼을 다시 제출해도 유지합니다. */
+  complexId?: string;
 }): string {
   const params = new URLSearchParams();
   if (selection.propertyType) params.set("propertyType", selection.propertyType);
   if (selection.transactionType) params.set("transactionType", selection.transactionType);
   if (selection.priceRange) params.set("priceRange", selection.priceRange);
+  if (selection.complexId) params.set("complexId", selection.complexId);
   return params.toString();
 }

@@ -1,20 +1,163 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import type { ApartmentComplexOption } from "../lib/listings";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
-import { PhoneIcon } from "./icons";
+import { ChevronDownIcon, PhoneIcon } from "./icons";
 
-const NAV_ITEMS = [
-  { label: "홈", href: "/" },
-  { label: "아파트", href: "/listings?propertyType=apartment" },
+const SIMPLE_NAV_ITEMS = [
   { label: "오피스텔", href: "/listings?propertyType=officetel" },
   { label: "상가", href: "/listings?propertyType=commercial" },
   { label: "우리 집 시세", href: "/valuation" },
   { label: "매물 내놓기", href: "/sell" },
 ];
 
-export default function Header() {
+const APARTMENT_ALL_HREF = "/listings?propertyType=apartment";
+
+function complexHref(complexId: string): string {
+  return `/listings?propertyType=apartment&complexId=${encodeURIComponent(complexId)}`;
+}
+
+/** PC 전용: 클릭 또는 hover로 열리는 단지별 아파트 드롭다운. */
+function ApartmentDropdown({
+  complexes,
+}: {
+  complexes: ApartmentComplexOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center gap-1 text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        아파트
+        <ChevronDownIcon
+          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-3 w-64 overflow-hidden rounded-xl border border-navy-900/10 bg-white py-2 shadow-lg">
+          <Link
+            href={APARTMENT_ALL_HREF}
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:bg-gold-500/10 hover:text-gold-600"
+          >
+            아파트 전체보기
+          </Link>
+          {complexes.length > 0 && (
+            <>
+              <div className="my-1 border-t border-navy-900/10" />
+              {complexes.map((complex) => (
+                <Link
+                  key={complex.complexId}
+                  href={complexHref(complex.complexId)}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-navy-800 transition-colors hover:bg-gold-500/10 hover:text-gold-600"
+                >
+                  <span className="truncate">{complex.complexName}</span>
+                  <span className="shrink-0 text-xs text-navy-800/40">
+                    ({complex.count})
+                  </span>
+                </Link>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 모바일 전용: 탭하면 펼쳐지는 아코디언. hover는 쓰지 않습니다. */
+function ApartmentAccordion({
+  complexes,
+  onNavigate,
+}: {
+  complexes: ApartmentComplexOption[];
+  onNavigate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between rounded-md px-2 py-3 text-sm font-medium text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
+        aria-expanded={open}
+      >
+        아파트
+        <ChevronDownIcon
+          className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="ml-2 flex flex-col gap-0.5 border-l border-navy-900/10 pl-3">
+          <Link
+            href={APARTMENT_ALL_HREF}
+            onClick={onNavigate}
+            className="rounded-md px-2 py-3 text-sm font-bold text-navy-900 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
+          >
+            아파트 전체보기
+          </Link>
+          {complexes.map((complex) => (
+            <Link
+              key={complex.complexId}
+              href={complexHref(complex.complexId)}
+              onClick={onNavigate}
+              className="flex items-center justify-between gap-3 rounded-md px-2 py-3 text-sm text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
+            >
+              <span className="truncate">{complex.complexName}</span>
+              <span className="shrink-0 text-xs text-navy-800/40">
+                ({complex.count})
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Header({
+  apartmentComplexes,
+}: {
+  apartmentComplexes: ApartmentComplexOption[];
+}) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
@@ -28,7 +171,14 @@ export default function Header() {
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
-          {NAV_ITEMS.map((item) => (
+          <Link
+            href="/"
+            className="text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
+          >
+            홈
+          </Link>
+          <ApartmentDropdown complexes={apartmentComplexes} />
+          {SIMPLE_NAV_ITEMS.map((item) => (
             <a
               key={item.label}
               href={item.href}
@@ -85,12 +235,23 @@ export default function Header() {
 
       {isMenuOpen && (
         <nav className="flex flex-col gap-1 border-t border-navy-900/10 bg-white px-6 py-4 md:hidden">
-          {NAV_ITEMS.map((item) => (
+          <Link
+            href="/"
+            onClick={() => setIsMenuOpen(false)}
+            className="rounded-md px-2 py-3 text-sm font-medium text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
+          >
+            홈
+          </Link>
+          <ApartmentAccordion
+            complexes={apartmentComplexes}
+            onNavigate={() => setIsMenuOpen(false)}
+          />
+          {SIMPLE_NAV_ITEMS.map((item) => (
             <a
               key={item.label}
               href={item.href}
               onClick={() => setIsMenuOpen(false)}
-              className="rounded-md px-2 py-2 text-sm font-medium text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
+              className="rounded-md px-2 py-3 text-sm font-medium text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
             >
               {item.label}
             </a>

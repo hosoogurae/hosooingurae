@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import type { FloorPlanImage } from "../data/floorPlans";
+import { getComplexById } from "../lib/complexes";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getAllListings } from "../lib/listings";
 import {
@@ -32,7 +34,10 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
   const filters = parseListingSearchParams(resolvedSearchParams);
   const filtersActive = hasActiveFilters(filters);
 
-  const listings = await getAllListings({ filters });
+  const [listings, filteredComplex] = await Promise.all([
+    getAllListings({ filters }),
+    filters.complexId ? getComplexById(filters.complexId) : Promise.resolve(undefined),
+  ]);
 
   // 매물마다 평면도를 따로 조회하면 카드 개수만큼 쿼리가 나가므로(N+1),
   // 목록에 나온 단지 id별로 한 번씩만 조회해 매물의 unitType으로 찾아 씁니다.
@@ -76,7 +81,22 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
           initialPropertyType={firstValue(resolvedSearchParams.propertyType)}
           initialTransactionType={firstValue(resolvedSearchParams.transactionType)}
           initialPriceRange={firstValue(resolvedSearchParams.priceRange)}
+          initialComplexId={firstValue(resolvedSearchParams.complexId)}
         />
+
+        {filteredComplex && (
+          <div className="mx-auto mt-4 flex max-w-4xl items-center justify-center gap-2 text-sm">
+            <span className="text-navy-800/60">
+              선택한 단지: <strong className="text-navy-900">{filteredComplex.name}</strong>
+            </span>
+            <Link
+              href={`/listings?propertyType=${firstValue(resolvedSearchParams.propertyType) || "apartment"}`}
+              className="rounded-full border border-navy-900/15 px-2.5 py-0.5 text-xs font-semibold text-navy-800/60 transition-colors hover:border-gold-500 hover:text-gold-600"
+            >
+              해제 ✕
+            </Link>
+          </div>
+        )}
       </div>
 
       <section className="mx-auto max-w-6xl px-6 py-16">

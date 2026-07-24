@@ -12,6 +12,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import FloatingCallButton from "./components/FloatingCallButton";
 import CompareBar from "./components/CompareBar";
+import { getApartmentComplexOptions } from "./lib/listings";
 
 const notoSansKr = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -23,6 +24,10 @@ export const metadata: Metadata = {
   title: "호수공인중개사사무소 | 김포 구래동 부동산",
   description: "김포 구래동 아파트·오피스텔·상가 전문. 호수공인중개사사무소.",
 };
+
+// Header의 "아파트" 드롭다운이 매 요청마다 현재 공개 매물 건수를 반영해야 하므로
+// (다른 매물 관련 페이지들과 동일하게) 정적 캐싱을 끕니다.
+export const dynamic = "force-dynamic";
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -44,11 +49,13 @@ const structuredData = {
   identifier: BUSINESS_REG_NUMBER,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const apartmentComplexes = await getApartmentComplexOptions();
+
   return (
     <html lang="ko" className={`${notoSansKr.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-white">
@@ -56,7 +63,7 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-        <Header />
+        <Header apartmentComplexes={apartmentComplexes} />
         <main className="flex-1">{children}</main>
         <Footer />
         <FloatingCallButton />
