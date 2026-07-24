@@ -40,7 +40,7 @@ export default function ListingCard({
       href={`/listings/${listing.id}`}
       className="group flex flex-1 flex-col overflow-hidden rounded-xl border border-navy-900/10 bg-white shadow-sm transition-shadow hover:shadow-lg"
     >
-      <div className="relative aspect-[4/3]">
+      <div className="relative h-52 shrink-0 sm:h-56 lg:h-60">
         {heroImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -49,12 +49,12 @@ export default function ListingCard({
             className="h-full w-full object-cover"
           />
         ) : floorPlanThumbnail ? (
-          <div className="h-full w-full bg-white p-1.5 sm:p-2">
+          <div className="flex h-full w-full items-center justify-center bg-white p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={floorPlanThumbnail}
               alt={`${listing.unitType} 평면도`}
-              className="h-full w-full object-contain"
+              className="max-h-full max-w-full object-contain"
             />
             <span className="absolute right-2 top-2 rounded-full bg-navy-950/70 px-2 py-0.5 text-[10px] font-bold text-gold-400 backdrop-blur">
               {listing.unitType} 평면도
