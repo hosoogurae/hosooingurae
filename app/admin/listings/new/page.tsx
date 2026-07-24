@@ -70,6 +70,10 @@ export default function AdminRegisterPage() {
   const [registered, setRegistered] = useState<Listing | null>(null);
   const [sourceSubmission, setSourceSubmission] =
     useState<ListingSubmission | null>(null);
+  const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
+  const [photoUploadWarnings, setPhotoUploadWarnings] = useState<string[] | null>(
+    null,
+  );
 
   function applyPrefillFromSubmission(
     submission: ListingSubmission,
@@ -169,6 +173,36 @@ export default function AdminRegisterPage() {
     setSubmitErrors(null);
     setRegistered(null);
     setSourceSubmission(null);
+    setPendingPhotoFiles([]);
+    setPhotoUploadWarnings(null);
+  }
+
+  /**
+   * 신규 등록 화면은 저장 전이라 매물 ID가 없어서, 사진은 매물 생성이 성공한
+   * 뒤 그 ID로 하나씩 순서대로 업로드합니다(선택한 순서가 그대로 sort_order가
+   * 되어 첫 번째 사진이 대표사진이 됩니다). 일부가 실패해도 매물 자체는 이미
+   * 저장됐으니 등록을 되돌리지 않고, 실패한 파일만 경고로 보여줍니다.
+   */
+  async function uploadPendingPhotos(listingId: string, files: File[]) {
+    if (files.length === 0) return;
+    const failed: string[] = [];
+    for (const file of files) {
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const response = await fetch(`/api/admin/listings/${listingId}/photos`, {
+          method: "POST",
+          body: form,
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          failed.push(`${file.name}: ${data.errors?.[0] ?? "업로드 실패"}`);
+        }
+      } catch {
+        failed.push(`${file.name}: 네트워크 오류`);
+      }
+    }
+    if (failed.length > 0) setPhotoUploadWarnings(failed);
   }
 
   async function handleSubmit() {
@@ -209,6 +243,10 @@ export default function AdminRegisterPage() {
 
       const createdListing = data.listing as Listing;
       setRegistered(createdListing);
+
+      if (pendingPhotoFiles.length > 0) {
+        await uploadPendingPhotos(createdListing.id, pendingPhotoFiles);
+      }
 
       // 매물 저장이 실제로 성공했을 때만 접수 건을 "등록됨"으로 표시합니다.
       // 이 요청이 실패해도 매물 자체는 이미 저장됐으니 등록을 되돌리지 않습니다.
@@ -252,6 +290,25 @@ export default function AdminRegisterPage() {
               ? "지금 바로 홈페이지에서 확인할 수 있어요."
               : "임시저장 상태예요. 매물 관리 화면에서 공개로 바꿀 수 있어요."}
           </p>
+
+          {photoUploadWarnings && (
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-left text-sm text-red-600">
+              <p className="font-semibold">
+                매물은 저장됐지만 일부 사진 업로드에 실패했어요:
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {photoUploadWarnings.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+              <Link
+                href={`/admin/listings/${registered.id}/edit`}
+                className="mt-2 inline-block font-semibold underline-offset-4 hover:underline"
+              >
+                수정 화면에서 사진 다시 올리기 →
+              </Link>
+            </div>
+          )}
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             {registered.status === "published" && (
               <Link
@@ -289,8 +346,7 @@ export default function AdminRegisterPage() {
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-navy-800/70">
         아래 항목을 채우고 맨 아래 &quot;등록하기&quot; 버튼을 누르면 바로
-        저장돼요. 사진 올리기는 아직 준비 중이라, 텍스트 정보만 먼저
-        등록해주세요.
+        저장돼요. 사진을 골라두면 등록과 동시에 함께 올라갑니다.
       </p>
 
       {sourceSubmission && (
@@ -314,6 +370,7 @@ export default function AdminRegisterPage() {
           onChangeComplexMode={setComplexMode}
           newComplex={newComplex}
           onChangeNewComplex={setNewComplex}
+          onPendingPhotoFilesChange={setPendingPhotoFiles}
         />
 
         {submitErrors && (

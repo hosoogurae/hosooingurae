@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Listing } from "../../../../data/listings";
 import type { ComplexOption } from "../../../../lib/naverImport";
 import { ListingFormFields } from "../../../ListingFields";
+import type { ListingPhoto } from "../../../ListingPhotoManager";
 
 export default function EditListingPage({
   params,
@@ -52,6 +53,14 @@ export default function EditListingPage({
 
   function updateDraft<K extends keyof Listing>(key: K, value: Listing[K]) {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  // 사진은 저장 버튼과 별개로 즉시 반영되지만(ListingPhotoManager가 직접
+  // 업로드/삭제/순서변경 API를 호출), draft.images를 여기서 계속 최신 상태로
+  // 맞춰둬야 "저장하기"를 눌렀을 때 PATCH가 방금 바뀐 사진 목록을 그대로
+  // 다시 저장하지, 페이지 로딩 시점의 오래된 목록으로 덮어쓰지 않습니다.
+  function handlePhotosChange(photos: ListingPhoto[]) {
+    updateDraft("images", photos.map((photo) => photo.url));
   }
 
   async function handleSave() {
@@ -129,6 +138,7 @@ export default function EditListingPage({
             onChangeField={updateDraft}
             onChangeFeaturesInput={setFeaturesInput}
             idEditable={false}
+            onPhotosChange={handlePhotosChange}
           />
 
           {draft.rawSourceText && (

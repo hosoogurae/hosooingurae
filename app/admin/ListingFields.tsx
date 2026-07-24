@@ -7,6 +7,7 @@ import type {
 } from "../data/listings";
 import type { FloorPlanImage } from "../data/floorPlans";
 import type { ComplexOption } from "../lib/naverImport";
+import ListingPhotoManager, { type ListingPhoto } from "./ListingPhotoManager";
 
 export const inputClass =
   "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-gold-500";
@@ -67,6 +68,8 @@ export function ListingFormFields({
   onChangeComplexMode,
   newComplex,
   onChangeNewComplex,
+  onPhotosChange,
+  onPendingPhotoFilesChange,
 }: {
   draft: Listing;
   complexOptions: ComplexOption[];
@@ -83,6 +86,10 @@ export function ListingFormFields({
   onChangeComplexMode?: (mode: ComplexMode) => void;
   newComplex?: NewComplexState;
   onChangeNewComplex?: (state: NewComplexState) => void;
+  /** 이미 저장된 매물(draft.id가 실제 ID)일 때, 사진이 바뀔 때마다 현재 URL 목록을 알려줍니다. */
+  onPhotosChange?: (photos: ListingPhoto[]) => void;
+  /** 아직 저장 전(신규 등록)일 때, 선택된 파일 목록이 바뀔 때마다 알려줍니다. */
+  onPendingPhotoFilesChange?: (files: File[]) => void;
 }) {
   const selectedComplex = complexOptions.find(
     (option) => option.id === draft.complexId,
@@ -475,11 +482,13 @@ export function ListingFormFields({
 
       <div className="mt-4">
         <p className="text-xs font-semibold text-navy-800/60">사진</p>
-        <p className="mt-1 text-sm text-navy-800/50">
-          {draft.images && draft.images.length > 0
-            ? `${draft.images.length}장`
-            : "사진 업로드는 아직 준비 중입니다. 상세페이지에는 임시 이미지가 표시됩니다."}
-        </p>
+        <div className="mt-2">
+          <ListingPhotoManager
+            listingId={draft.id || undefined}
+            onPhotosChange={onPhotosChange}
+            onPendingFilesChange={onPendingPhotoFilesChange}
+          />
+        </div>
       </div>
     </>
   );
