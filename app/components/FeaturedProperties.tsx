@@ -1,10 +1,35 @@
 import Link from "next/link";
+import type { FloorPlanImage } from "../data/floorPlans";
+import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getFeaturedListings } from "../lib/listings";
 import ListingCard from "./ListingCard";
 import { ArrowIcon } from "./icons";
 
 export default async function FeaturedProperties() {
   const featuredListings = await getFeaturedListings();
+
+  // 매물마다 평면도를 따로 조회하면 카드 개수만큼 쿼리가 나가므로(N+1),
+  // 목록에 나온 단지 id별로 한 번씩만 조회해 매물의 unitType으로 찾아 씁니다.
+  // (app/listings/page.tsx와 동일한 패턴)
+  const distinctComplexIds = [...new Set(featuredListings.map((l) => l.complexId))];
+  const floorPlansByComplex = new Map<string, FloorPlanImage[]>(
+    await Promise.all(
+      distinctComplexIds.map(
+        async (complexId) =>
+          [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
+      ),
+    ),
+  );
+
+  function getFloorPlanForListing(
+    complexId: string,
+    unitType: string | undefined,
+  ): FloorPlanImage | undefined {
+    if (!unitType) return undefined;
+    return floorPlansByComplex
+      .get(complexId)
+      ?.find((image) => image.unitType === unitType);
+  }
 
   return (
     <section id="properties" className="mx-auto max-w-6xl px-6 py-24">
@@ -23,7 +48,14 @@ export default async function FeaturedProperties() {
 
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {featuredListings.map((listing) => (
-          <ListingCard key={listing.id} listing={listing} />
+          <ListingCard
+            key={listing.id}
+            listing={listing}
+            floorPlanImage={getFloorPlanForListing(
+              listing.complexId,
+              listing.unitType,
+            )}
+          />
         ))}
       </div>
 
