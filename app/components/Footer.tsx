@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   ADDRESS_LINES,
   BUSINESS_HOURS,
@@ -74,6 +75,15 @@ export default function Footer() {
             reserved.
           </p>
         </div>
+      </div>
+
+      <div className="mx-auto mt-6 max-w-6xl text-right">
+        <Link
+          href="/admin"
+          className="inline-block px-2 py-3 text-[11px] text-navy-800/30 transition-colors hover:text-navy-800/50"
+        >
+          관리자
+        </Link>
       </div>
     </footer>
   );
