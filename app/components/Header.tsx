@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import type { ApartmentComplexOption } from "../lib/listings";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
@@ -19,45 +19,32 @@ function complexHref(complexId: string): string {
   return `/listings?propertyType=apartment&complexId=${encodeURIComponent(complexId)}`;
 }
 
-/** PC 전용: 클릭 또는 hover로 열리는 단지별 아파트 드롭다운. */
+/**
+ * PC 전용: "아파트" 텍스트 클릭 = 전체 목록으로 이동, hover = 단지 드롭다운 표시.
+ *
+ * 트리거와 패널 사이에 시각적 여백(패널 안쪽 pt-3)은 두되, 그 여백을
+ * "relative" 컨테이너의 자식(margin이 아니라 padding)으로 만들어서 hover
+ * 판정에 끊기는 지점(dead zone)이 생기지 않게 합니다. margin으로 간격을
+ * 두면 그 여백 구간은 컨테이너의 렌더링 박스 밖이라 마우스가 지나가는 순간
+ * mouseleave가 먼저 발생해 버립니다 — 그래서 여백을 패널 wrapper의
+ * padding-top으로 옮기고 top-full(간격 0)로 붙여, 커서가 트리거→여백→패널로
+ * 이동하는 내내 항상 이 컨테이너의 자손 위에 있도록 만든 것이 핵심입니다.
+ */
 function ApartmentDropdown({
   complexes,
 }: {
   complexes: ApartmentComplexOption[];
 }) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function handleClickOutside(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [open]);
 
   return (
     <div
-      ref={containerRef}
       className="relative"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
+      <Link
+        href={APARTMENT_ALL_HREF}
         className="flex items-center gap-1 text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
         aria-expanded={open}
         aria-haspopup="true"
@@ -66,42 +53,47 @@ function ApartmentDropdown({
         <ChevronDownIcon
           className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
         />
-      </button>
+      </Link>
 
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-3 w-64 overflow-hidden rounded-xl border border-navy-900/10 bg-white py-2 shadow-lg">
-          <Link
-            href={APARTMENT_ALL_HREF}
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:bg-gold-500/10 hover:text-gold-600"
-          >
-            아파트 전체보기
-          </Link>
-          {complexes.length > 0 && (
-            <>
-              <div className="my-1 border-t border-navy-900/10" />
-              {complexes.map((complex) => (
-                <Link
-                  key={complex.complexId}
-                  href={complexHref(complex.complexId)}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-navy-800 transition-colors hover:bg-gold-500/10 hover:text-gold-600"
-                >
-                  <span className="truncate">{complex.complexName}</span>
-                  <span className="shrink-0 text-xs text-navy-800/40">
-                    ({complex.count})
-                  </span>
-                </Link>
-              ))}
-            </>
-          )}
+        <div className="absolute left-0 top-full z-20 pt-3">
+          <div className="w-64 overflow-hidden rounded-xl border border-navy-900/10 bg-white py-2 shadow-lg">
+            <Link
+              href={APARTMENT_ALL_HREF}
+              className="block px-4 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:bg-gold-500/10 hover:text-gold-600"
+            >
+              아파트 전체보기
+            </Link>
+            {complexes.length > 0 && (
+              <>
+                <div className="my-1 border-t border-navy-900/10" />
+                {complexes.map((complex) => (
+                  <Link
+                    key={complex.complexId}
+                    href={complexHref(complex.complexId)}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-navy-800 transition-colors hover:bg-gold-500/10 hover:text-gold-600"
+                  >
+                    <span className="truncate">{complex.complexName}</span>
+                    <span className="shrink-0 text-xs text-navy-800/40">
+                      ({complex.count})
+                    </span>
+                  </Link>
+                ))}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-/** 모바일 전용: 탭하면 펼쳐지는 아코디언. hover는 쓰지 않습니다. */
+/**
+ * 모바일 전용: hover 없이, "아파트" 텍스트는 전체 목록으로 바로 이동하고
+ * 옆의 화살표 버튼을 눌러야 단지 목록이 펼쳐지는 아코디언입니다(PC의
+ * "텍스트=이동, hover=펼침" 구조를 터치 환경에 맞게 "텍스트=이동,
+ * 버튼=펼침"으로 옮긴 것).
+ */
 function ApartmentAccordion({
   complexes,
   onNavigate,
@@ -113,17 +105,26 @@ function ApartmentAccordion({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-md px-2 py-3 text-sm font-medium text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
-        aria-expanded={open}
-      >
-        아파트
-        <ChevronDownIcon
-          className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
+      <div className="flex items-center gap-1">
+        <Link
+          href={APARTMENT_ALL_HREF}
+          onClick={onNavigate}
+          className="flex-1 rounded-md px-2 py-3 text-sm font-medium text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
+        >
+          아파트
+        </Link>
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-expanded={open}
+          aria-label="아파트 단지 목록 펼치기"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-navy-800 transition-colors hover:bg-navy-900/5 hover:text-gold-600"
+        >
+          <ChevronDownIcon
+            className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </div>
 
       {open && (
         <div className="ml-2 flex flex-col gap-0.5 border-l border-navy-900/10 pl-3">
