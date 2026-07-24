@@ -38,7 +38,7 @@ export default function ListingCard({
   return (
     <Link
       href={`/listings/${listing.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-navy-900/10 bg-white shadow-sm transition-shadow hover:shadow-lg"
+      className="group flex flex-1 flex-col overflow-hidden rounded-xl border border-navy-900/10 bg-white shadow-sm transition-shadow hover:shadow-lg"
     >
       <div className="relative aspect-[4/3]">
         {heroImage ? (

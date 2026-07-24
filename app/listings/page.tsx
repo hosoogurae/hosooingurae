@@ -83,7 +83,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
         {listings.length > 0 ? (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((listing) => (
-              <div key={listing.id}>
+              <div key={listing.id} className="flex h-full flex-col">
                 <ListingCard
                   listing={listing}
                   floorPlanImage={getFloorPlanForListing(
