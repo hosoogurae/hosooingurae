@@ -1,12 +1,6 @@
-import { NAVER_MAP_URL, PHONE_HREF } from "../data/contact";
-import { ArrowIcon, ChevronDownIcon, LocationIcon } from "./icons";
+import { ChevronDownIcon } from "./icons";
 import RecommendSearchBox from "./RecommendSearchBox";
-
-const STATS = [
-  { value: "15년+", label: "구래동 중개 경력" },
-  { value: "1,200건+", label: "누적 거래 성사" },
-  { value: "4.9 / 5", label: "고객 상담 만족도" },
-];
+import TrustStats from "./TrustStats";
 
 function HeroBackground() {
   return (
@@ -97,97 +91,50 @@ export default function Hero() {
     >
       <HeroBackground />
 
-      <div className="relative mx-auto flex max-w-3xl flex-col items-center">
+      <div className="relative mx-auto flex max-w-2xl flex-col items-center">
         <span
-          className="animate-fade-in-up mb-6 rounded-full border border-gold-500/40 px-4 py-1 text-xs font-medium tracking-wide text-gold-400"
-          style={{ animationDelay: "0ms" }}
+          className="animate-fade-in-up mb-6 rounded-full border border-gold-500/40 bg-gold-500/10 px-4 py-1 text-xs font-bold tracking-wide text-gold-400"
+          style={{ animationDelay: "100ms" }}
         >
-          김포시 구래동 공인중개사사무소
+          호수공인중개사 AI 매물찾기
         </span>
 
         <h1
-          className="animate-fade-in-up text-3xl font-black leading-tight tracking-tight text-white sm:text-5xl"
-          style={{ animationDelay: "100ms" }}
+          className="animate-fade-in-up text-4xl font-black leading-tight tracking-tight text-white sm:text-6xl"
+          style={{ animationDelay: "0ms" }}
         >
           김포 구래동 부동산의 기준
         </h1>
 
-        <p
-          className="animate-fade-in-up mt-6 max-w-xl text-base leading-relaxed text-white/70 sm:text-lg"
-          style={{ animationDelay: "200ms" }}
-        >
-          호수공인중개사사무소가 구래동 아파트, 오피스텔, 상가 매물을
-          정확하고 신속하게 안내합니다.
-        </p>
-
         <div
-          className="animate-fade-in-up mt-10 w-full max-w-2xl"
-          style={{ animationDelay: "300ms" }}
+          className="animate-fade-in-up mt-7 flex flex-col items-center"
+          style={{ animationDelay: "100ms" }}
         >
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-500/40 bg-gold-500/10 px-4 py-1 text-xs font-bold tracking-wide text-gold-400">
-            ✦ 호수 AI 매물찾기
-          </span>
-          <p className="mt-3 text-xl font-black text-white sm:text-2xl">
-            AI에게 원하는 집을 말해보세요.
+          <p className="max-w-sm text-sm leading-relaxed text-white/60">
+            호수공인중개사가 보유한 실제 매물에서
+            <br />
+            AI가 원하는 조건에 가까운 집을 찾아드립니다.
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-white/70 sm:text-base">
-            호수공인중개사가 보유한 실제 매물 중 조건에 가장 가까운 집을
-            찾아드립니다.
-          </p>
-          <div className="mt-5">
-            <RecommendSearchBox
-              size="large"
-              variant="dark"
-              submitLabel="AI로 찾아보기"
-              placeholder="예: 구래역 가까운 4억대 아파트, 바로 입주 가능한 집"
-              exampleQueries={["구래역 가까운 집", "4억 이하 아파트", "바로 입주"]}
-            />
-          </div>
         </div>
 
-        <dl
-          className="animate-fade-in-up mt-10 grid w-full max-w-2xl grid-cols-3 gap-4 border-y border-white/10 py-6"
-          style={{ animationDelay: "400ms" }}
+        <div
+          className="animate-fade-in-up mt-8 w-full"
+          style={{ animationDelay: "200ms" }}
         >
-          {STATS.map((stat) => (
-            <div key={stat.label} className="flex flex-col items-center">
-              <dt className="sr-only">{stat.label}</dt>
-              <dd className="text-lg font-black text-gold-400 sm:text-xl">
-                {stat.value}
-              </dd>
-              <p className="mt-1 text-center text-xs text-white/60 sm:text-sm">
-                {stat.label}
-              </p>
-            </div>
-          ))}
-        </dl>
+          <RecommendSearchBox
+            size="medium"
+            variant="dark"
+            submitLabel="AI로 찾아보기"
+            placeholder="예: 구래역 가까운 4억대 아파트"
+            exampleQueries={["구래역 가까운 집", "4억 이하 아파트", "바로 입주"]}
+          />
+        </div>
 
         <div
-          className="animate-fade-in-up mt-10 flex flex-col flex-wrap items-center justify-center gap-4 sm:flex-row"
-          style={{ animationDelay: "500ms" }}
+          className="animate-fade-in-up mt-10 w-full"
+          style={{ animationDelay: "300ms" }}
         >
-          <a
-            href="#properties"
-            className="group flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-8 py-3 text-sm font-bold text-navy-950 shadow-lg shadow-gold-500/30 transition-all hover:scale-[1.04] hover:shadow-xl hover:shadow-gold-500/40"
-          >
-            추천매물 보기
-            <ArrowIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </a>
-          <a
-            href={PHONE_HREF}
-            className="flex items-center justify-center rounded-full border border-white/30 bg-white/5 px-8 py-3 text-sm font-bold text-white backdrop-blur transition-all hover:scale-[1.04] hover:border-gold-400 hover:bg-white/10 hover:text-gold-400"
-          >
-            문의하기
-          </a>
-          <a
-            href={NAVER_MAP_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/5 px-8 py-3 text-sm font-bold text-white backdrop-blur transition-all hover:scale-[1.04] hover:border-gold-400 hover:bg-white/10 hover:text-gold-400"
-          >
-            <LocationIcon className="h-4 w-4" />
-            오시는 길
-          </a>
+          <TrustStats />
         </div>
       </div>
 
