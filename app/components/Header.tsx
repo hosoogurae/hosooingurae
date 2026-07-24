@@ -7,13 +7,11 @@ import { PhoneIcon } from "./icons";
 
 const NAV_ITEMS = [
   { label: "홈", href: "/" },
-  { label: "추천매물", href: "/listings?featured=true" },
   { label: "아파트", href: "/listings?propertyType=apartment" },
   { label: "오피스텔", href: "/listings?propertyType=officetel" },
   { label: "상가", href: "/listings?propertyType=commercial" },
   { label: "우리 집 시세", href: "/valuation" },
   { label: "매물 내놓기", href: "/sell" },
-  { label: "문의하기", href: "/#contact" },
 ];
 
 export default function Header() {
