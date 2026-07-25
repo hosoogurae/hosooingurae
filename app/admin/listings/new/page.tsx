@@ -7,10 +7,18 @@ import type { ListingSubmission } from "../../../data/listingSubmissions";
 import type { ComplexOption } from "../../../lib/naverImport";
 import { parseKoreanAmountToManwon } from "../../../lib/naverTextParser";
 import {
+  Field,
   ListingFormFields,
+  inputClass,
   type ComplexMode,
   type NewComplexState,
 } from "../../ListingFields";
+
+interface NaverDuplicateInfo {
+  listingId: string;
+  priceLabel: string;
+  editUrl: string;
+}
 
 function normalizeComplexName(name: string): string {
   return name.replace(/\s+/g, "").toLowerCase();
@@ -74,6 +82,88 @@ export default function AdminRegisterPage() {
   const [photoUploadWarnings, setPhotoUploadWarnings] = useState<string[] | null>(
     null,
   );
+
+  const [naverUrl, setNaverUrl] = useState("");
+  const [naverPastedText, setNaverPastedText] = useState("");
+  const [naverAnalyzing, setNaverAnalyzing] = useState(false);
+  const [naverError, setNaverError] = useState<string | null>(null);
+  const [naverDuplicate, setNaverDuplicate] = useState<NaverDuplicateInfo | null>(
+    null,
+  );
+  const [naverUncertainFields, setNaverUncertainFields] = useState<
+    string[] | null
+  >(null);
+  const [naverUnitTypeCandidates, setNaverUnitTypeCandidates] = useState<
+    string[] | null
+  >(null);
+
+  /** /api/import-naver가 돌려준 draft는 이미 Listing 형태 그대로라 통째로 교체합니다. */
+  function applyPrefillFromNaverDraft(
+    naverDraft: Listing,
+    options: ComplexOption[],
+    unitTypeCandidates: string[],
+    uncertainFields: string[],
+    suggestedComplexName: string | undefined,
+  ) {
+    setComplexOptions(options);
+    setDraft(naverDraft);
+    setFeaturesInput(naverDraft.features.join(", "));
+
+    if (naverDraft.complexId) {
+      setComplexMode("existing");
+    } else {
+      setComplexMode("new");
+      setNewComplex({ name: suggestedComplexName ?? "", address: "" });
+    }
+
+    setNaverUncertainFields(uncertainFields.length > 0 ? uncertainFields : null);
+    setNaverUnitTypeCandidates(
+      unitTypeCandidates.length > 1 ? unitTypeCandidates : null,
+    );
+  }
+
+  async function handleAnalyzeNaver() {
+    if (!naverPastedText.trim()) {
+      setNaverError("네이버에서 복사한 매물 텍스트를 붙여넣어주세요.");
+      return;
+    }
+
+    setNaverAnalyzing(true);
+    setNaverError(null);
+    setNaverDuplicate(null);
+    setNaverUncertainFields(null);
+    setNaverUnitTypeCandidates(null);
+
+    try {
+      const response = await fetch("/api/import-naver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: naverUrl, pastedText: naverPastedText }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409 && data.duplicate) {
+          setNaverDuplicate(data.duplicate as NaverDuplicateInfo);
+        } else {
+          setNaverError(data.error ?? "분석에 실패했습니다.");
+        }
+        return;
+      }
+
+      applyPrefillFromNaverDraft(
+        data.draft as Listing,
+        (data.complexOptions as ComplexOption[] | undefined) ?? complexOptions,
+        (data.unitTypeCandidates as string[] | undefined) ?? [],
+        (data.uncertainFields as string[] | undefined) ?? [],
+        data.suggestedComplexName as string | undefined,
+      );
+    } catch {
+      setNaverError("네트워크 오류로 분석에 실패했습니다.");
+    } finally {
+      setNaverAnalyzing(false);
+    }
+  }
 
   function applyPrefillFromSubmission(
     submission: ListingSubmission,
@@ -175,6 +265,12 @@ export default function AdminRegisterPage() {
     setSourceSubmission(null);
     setPendingPhotoFiles([]);
     setPhotoUploadWarnings(null);
+    setNaverUrl("");
+    setNaverPastedText("");
+    setNaverError(null);
+    setNaverDuplicate(null);
+    setNaverUncertainFields(null);
+    setNaverUnitTypeCandidates(null);
   }
 
   /**
@@ -358,6 +454,79 @@ export default function AdminRegisterPage() {
       )}
 
       <div className="mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8">
+        <h2 className="text-sm font-bold text-navy-950">네이버 매물 자동 입력</h2>
+        <p className="mt-1 text-xs leading-relaxed text-navy-800/60">
+          네이버 부동산 매물 URL과 상세 화면에서 복사한 텍스트를 붙여넣고
+          분석하면 아래 등록 폼이 자동으로 채워집니다. 분석만으로는 저장되지
+          않으며, 내용을 확인·수정한 뒤 맨 아래 &quot;등록하기&quot;를 눌러야
+          실제로 등록됩니다.
+        </p>
+
+        <div className="mt-4 flex flex-col gap-3">
+          <Field label="네이버 매물 URL (선택)">
+            <input
+              type="text"
+              value={naverUrl}
+              onChange={(event) => setNaverUrl(event.target.value)}
+              placeholder="https://new.land.naver.com/complexes/..."
+              className={inputClass}
+            />
+          </Field>
+          <Field label="네이버에서 복사한 매물 정보 텍스트">
+            <textarea
+              value={naverPastedText}
+              onChange={(event) => setNaverPastedText(event.target.value)}
+              rows={8}
+              placeholder="네이버 부동산 매물 상세 화면에서 복사한 텍스트 전체를 붙여넣어주세요."
+              className={`${inputClass} resize-y`}
+            />
+          </Field>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleAnalyzeNaver}
+          disabled={naverAnalyzing || !naverPastedText.trim()}
+          className="mt-3 rounded-md border border-gold-500 px-5 py-2 text-sm font-bold text-gold-600 transition-colors hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {naverAnalyzing ? "분석 중..." : "자동 분석하기"}
+        </button>
+
+        {naverError && (
+          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            {naverError}
+          </p>
+        )}
+
+        {naverDuplicate && (
+          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            이미 등록된 매물입니다
+            {naverDuplicate.priceLabel ? ` (${naverDuplicate.priceLabel})` : ""}.{" "}
+            <Link
+              href={naverDuplicate.editUrl}
+              className="font-semibold underline underline-offset-4"
+            >
+              수정 화면으로 이동 →
+            </Link>
+          </p>
+        )}
+
+        {naverUncertainFields && (
+          <p className="mt-3 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
+            자동으로 확인하지 못한 항목: {naverUncertainFields.join(", ")} — 아래
+            폼에서 직접 입력해주세요.
+          </p>
+        )}
+
+        {naverUnitTypeCandidates && (
+          <p className="mt-3 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
+            평형 타입 후보가 여러 개예요({naverUnitTypeCandidates.join(", ")}) —
+            아래 &quot;평형 타입&quot;에서 직접 선택해주세요.
+          </p>
+        )}
+
+        <hr className="my-6 border-navy-900/10" />
+
         <ListingFormFields
           draft={draft}
           complexOptions={complexOptions}
