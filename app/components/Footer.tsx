@@ -77,10 +77,10 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="mx-auto mt-6 max-w-6xl text-right">
+      <div className="mx-auto mt-6 max-w-6xl text-center md:text-right">
         <Link
           href="/admin"
-          className="inline-block px-2 py-3 text-[11px] text-navy-800/30 transition-colors hover:text-navy-800/50"
+          className="inline-flex min-h-[44px] items-center justify-center px-4 text-[11px] text-navy-800/30 transition-colors hover:text-navy-800/50 md:inline-block md:min-h-0 md:px-2 md:py-3"
         >
           관리자
         </Link>
