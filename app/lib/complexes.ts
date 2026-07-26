@@ -1,7 +1,9 @@
 import type { Complex } from "../data/complexes";
+import type { ComplexFieldsInput } from "./complexValidation";
+import { getFloorPlanCountsByComplex } from "./floorPlans";
 import { getSupabaseAdminClient, getSupabaseClient } from "./supabase/client";
 import { complexRowToComplex } from "./supabase/mappers";
-import type { ComplexUpdate } from "./supabase/database.types";
+import type { ComplexInsert, ComplexUpdate } from "./supabase/database.types";
 
 export async function getAllComplexes(): Promise<Complex[]> {
   const supabase = getSupabaseClient();
@@ -105,31 +107,107 @@ export async function createComplex(
   return { complex: complexRowToComplex(data) };
 }
 
-export interface ComplexUpdateInput {
-  name?: string;
-  address?: string;
-  propertyType?: string;
-  /** null을 넘기면 값을 지웁니다(모름으로 되돌림). undefined면 건드리지 않습니다. */
-  subwayWalkMinutes?: number | null;
+/**
+ * ComplexFieldsInput(camelCase, 부분 입력)을 DB patch(snake_case)로 변환합니다.
+ * undefined인 키는 건드리지 않고, null인 키는 명시적으로 지웁니다.
+ * create/update 양쪽에서 공유합니다.
+ */
+function toDbPatch(input: ComplexFieldsInput): ComplexUpdate {
+  const patch: ComplexUpdate = {};
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.address !== undefined) patch.address = input.address;
+  if (input.propertyType !== undefined) patch.property_type = input.propertyType;
+  if (input.approvalDate !== undefined) patch.approval_date = input.approvalDate;
+  if (input.totalHouseholds !== undefined) patch.total_households = input.totalHouseholds;
+  if (input.buildings !== undefined) patch.buildings = input.buildings;
+  if (input.parkingCount !== undefined) patch.parking_count = input.parkingCount;
+  if (input.parkingPerHousehold !== undefined) {
+    patch.parking_per_household = input.parkingPerHousehold;
+  }
+  if (input.heating !== undefined) patch.heating = input.heating;
+  if (input.hallwayType !== undefined) patch.hallway_type = input.hallwayType;
+  if (input.builder !== undefined) patch.builder = input.builder;
+  if (input.maxFloor !== undefined) patch.max_floor = input.maxFloor;
+  if (input.floorAreaRatio !== undefined) patch.floor_area_ratio = input.floorAreaRatio;
+  if (input.buildingCoverageRatio !== undefined) {
+    patch.building_coverage_ratio = input.buildingCoverageRatio;
+  }
+  if (input.nearbySchools !== undefined) patch.nearby_schools = input.nearbySchools;
+  if (input.subway !== undefined) patch.subway = input.subway;
+  if (input.subwayDistance !== undefined) patch.subway_distance = input.subwayDistance;
+  if (input.subwayWalkMinutes !== undefined) {
+    patch.subway_walk_minutes = input.subwayWalkMinutes;
+  }
+  if (input.buses !== undefined) patch.buses = input.buses;
+  if (input.features !== undefined) patch.features = input.features;
+  if (input.molitLawdCode !== undefined) patch.molit_lawd_code = input.molitLawdCode;
+  if (input.molitAptSeq !== undefined) patch.molit_apt_seq = input.molitAptSeq;
+  return patch;
 }
 
-/** 단지 정보 관리 화면(/admin/complexes)에서 단지명·주소·건축물 용도·지하철 도보 시간을 고칠 때 씁니다. */
+/**
+ * /admin/complexes 신규 등록 화면 전용. 단지명만 있으면 생성할 수 있고, 나머지는
+ * 전부 나중에(수정 화면에서) 채울 수 있습니다 — 4개 영역을 전부 채워야만 저장
+ * 가능한 구조로 만들지 않기 위함입니다. 기존 createComplex(매물 등록 화면의
+ * "새 단지 추가" 인라인 플로우 전용)는 그대로 두고 이 함수를 별도로 둡니다.
+ */
+export async function createComplexFull(
+  input: ComplexFieldsInput & { name: string },
+): Promise<{ complex?: Complex; error?: string }> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return {
+      error:
+        "Supabase가 설정되어 있지 않습니다. SUPABASE_SECRET_KEY를 확인해주세요.",
+    };
+  }
+
+  const id = generateComplexId(input.name);
+  const patch = toDbPatch(input);
+
+  const row: ComplexInsert = {
+    id,
+    name: input.name,
+    address: "",
+    // property_type은 DB에서 not null이라(0002 마이그레이션도 이 컬럼은 완화하지
+    // 않았습니다), 값이 없으면 기존 createComplex/새 단지 추가 플로우와 동일하게
+    // "아파트"를 기본값으로 둡니다.
+    property_type: "아파트",
+    nearby_schools: [],
+    buses: [],
+    features: [],
+    ...patch,
+  };
+
+  const { data, error } = await supabase
+    .from("complexes")
+    .insert(row)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    console.error("[complexes] 새 단지 생성 실패(전체 필드)", error);
+    return { error: "단지 정보를 저장하지 못했습니다." };
+  }
+
+  return { complex: complexRowToComplex(data) };
+}
+
+/**
+ * /admin/complexes 수정 화면에서 단지의 어느 필드든(기본정보/AI 검색용
+ * 정보/MOLIT 연동) 부분 수정할 때 씁니다. 전달된 필드만 갱신하고 나머지는
+ * 그대로 둡니다.
+ */
 export async function updateComplex(
   id: string,
-  patch: ComplexUpdateInput,
+  patch: ComplexFieldsInput,
 ): Promise<{ complex?: Complex; error?: string }> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return { error: "Supabase가 설정되어 있지 않습니다." };
   }
 
-  const dbPatch: ComplexUpdate = {};
-  if (patch.name !== undefined) dbPatch.name = patch.name;
-  if (patch.address !== undefined) dbPatch.address = patch.address;
-  if (patch.propertyType !== undefined) dbPatch.property_type = patch.propertyType;
-  if (patch.subwayWalkMinutes !== undefined) {
-    dbPatch.subway_walk_minutes = patch.subwayWalkMinutes;
-  }
+  const dbPatch = toDbPatch(patch);
 
   const { data, error } = await supabase
     .from("complexes")
@@ -147,4 +225,72 @@ export async function updateComplex(
   }
 
   return { complex: complexRowToComplex(data) };
+}
+
+export type CompletionLevel = "complete" | "partial" | "empty";
+
+export interface ComplexCompletion {
+  basic: CompletionLevel;
+  ai: CompletionLevel;
+  molitConnected: boolean;
+  floorPlanCount: number;
+}
+
+/** 기본정보로 취급하는 필드. scoring.ts와 무관하게 매물 상세페이지 노출용 정보들. */
+const BASIC_INFO_FIELDS = (complex: Complex): unknown[] => [
+  complex.address || undefined,
+  complex.approvalDate,
+  complex.totalHouseholds,
+  complex.buildings,
+  complex.builder,
+  complex.heating,
+  complex.hallwayType,
+  complex.maxFloor,
+  complex.floorAreaRatio,
+  complex.buildingCoverageRatio,
+  complex.parkingCount,
+  complex.parkingPerHousehold,
+];
+
+/** app/lib/recommend/scoring.ts가 실제로 점수 계산에 쓰는 필드만. */
+const AI_INFO_FIELDS = (complex: Complex): unknown[] => [
+  complex.transportation.subway,
+  complex.transportation.subwayWalkMinutes,
+  complex.nearbySchools.length > 0 ? complex.nearbySchools : undefined,
+  complex.totalHouseholds,
+  complex.parkingPerHousehold,
+];
+
+function levelFromFields(fields: unknown[]): CompletionLevel {
+  const filled = fields.filter((value) => value !== undefined && value !== null).length;
+  if (filled === 0) return "empty";
+  if (filled === fields.length) return "complete";
+  return "partial";
+}
+
+export function computeComplexCompletion(
+  complex: Complex,
+  floorPlanCount: number,
+): ComplexCompletion {
+  return {
+    basic: levelFromFields(BASIC_INFO_FIELDS(complex)),
+    ai: levelFromFields(AI_INFO_FIELDS(complex)),
+    molitConnected: Boolean(complex.molit?.lawdCode && complex.molit?.aptSeq),
+    floorPlanCount,
+  };
+}
+
+/** /admin/complexes 목록 화면 전용: 단지 목록 + 영역별 완성도를 함께 내려줍니다. */
+export async function getComplexesWithCompletion(): Promise<
+  (Complex & { completion: ComplexCompletion })[]
+> {
+  const [complexes, floorPlanCounts] = await Promise.all([
+    getAllComplexes(),
+    getFloorPlanCountsByComplex(),
+  ]);
+
+  return complexes.map((complex) => ({
+    ...complex,
+    completion: computeComplexCompletion(complex, floorPlanCounts[complex.id] ?? 0),
+  }));
 }

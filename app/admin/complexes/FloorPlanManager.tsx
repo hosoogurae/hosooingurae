@@ -1,0 +1,568 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import type { FloorPlanImage } from "../../data/floorPlans";
+
+const inputClass =
+  "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-gold-500";
+
+interface PendingFile {
+  key: string;
+  file: File;
+  unitType: string;
+  /** 문자열로 들고 있다가 업로드 시점에 숫자로 변환합니다(빈 값 허용). */
+  supplyArea: string;
+  exclusiveArea: string;
+  previewUrl: string;
+}
+
+function stripExtension(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  return dot > 0 ? fileName.slice(0, dot) : fileName;
+}
+
+interface ApiErrorDetail {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+/** 서버가 보내준 Supabase 원본 에러(code/message/details/hint)를 그대로 붙여 보여줍니다. */
+function formatErrorDetail(detail: ApiErrorDetail | undefined): string {
+  if (!detail) return "";
+  const parts = [
+    detail.code && `code: ${detail.code}`,
+    detail.message && `message: ${detail.message}`,
+    detail.details && `details: ${detail.details}`,
+    detail.hint && `hint: ${detail.hint}`,
+  ].filter(Boolean);
+  return parts.length > 0 ? ` [${parts.join(" / ")}]` : "";
+}
+
+/**
+ * 단지 하나의 평면 타입/평면도 이미지를 관리하는 UI. 원래 /admin/floor-plans
+ * 페이지 전체였던 것을 complexId를 프롭으로 받는 컴포넌트로 추출했습니다 —
+ * /admin/floor-plans(자체 단지 선택 select 유지)와 /admin/complexes/[id]/edit
+ * (단지가 이미 고정된 화면) 양쪽에서 같은 코드를 그대로 재사용합니다.
+ */
+export default function FloorPlanManager({ complexId }: { complexId: string }) {
+  const [images, setImages] = useState<FloorPlanImage[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<string[] | null>(null);
+
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+
+  const [editingAreaType, setEditingAreaType] = useState<string | null>(null);
+  const [supplyAreaValue, setSupplyAreaValue] = useState("");
+  const [exclusiveAreaValue, setExclusiveAreaValue] = useState("");
+  const [areaSaving, setAreaSaving] = useState(false);
+  const [areaError, setAreaError] = useState<string | null>(null);
+
+  async function loadImages(targetComplexId: string) {
+    if (!targetComplexId) {
+      setImages([]);
+      return;
+    }
+    setLoadError(null);
+    try {
+      const response = await fetch(
+        `/api/admin/floor-plans?complexId=${encodeURIComponent(targetComplexId)}`,
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.errors?.[0] ?? "평면도 목록을 불러오지 못했습니다.");
+      }
+      setImages(data.images as FloorPlanImage[]);
+    } catch (err) {
+      setLoadError(
+        err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.",
+      );
+      setImages([]);
+    }
+  }
+
+  useEffect(() => {
+    async function run() {
+      if (complexId) {
+        await loadImages(complexId);
+      } else {
+        setImages([]);
+      }
+    }
+    run();
+  }, [complexId]);
+
+  const groupedImages = useMemo(() => {
+    const groups = new Map<string, FloorPlanImage[]>();
+    for (const image of images ?? []) {
+      const list = groups.get(image.unitType) ?? [];
+      list.push(image);
+      groups.set(image.unitType, list);
+    }
+    return Array.from(groups.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+  }, [images]);
+
+  function handleFilesSelected(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    const next: PendingFile[] = Array.from(fileList).map((file) => ({
+      key: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+      file,
+      unitType: stripExtension(file.name),
+      supplyArea: "",
+      exclusiveArea: "",
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setPendingFiles((prev) => [...prev, ...next]);
+  }
+
+  function updatePendingUnitType(key: string, value: string) {
+    setPendingFiles((prev) =>
+      prev.map((item) => (item.key === key ? { ...item, unitType: value } : item)),
+    );
+  }
+
+  function updatePendingSupplyArea(key: string, value: string) {
+    setPendingFiles((prev) =>
+      prev.map((item) => (item.key === key ? { ...item, supplyArea: value } : item)),
+    );
+  }
+
+  function updatePendingExclusiveArea(key: string, value: string) {
+    setPendingFiles((prev) =>
+      prev.map((item) =>
+        item.key === key ? { ...item, exclusiveArea: value } : item,
+      ),
+    );
+  }
+
+  function removePendingFile(key: string) {
+    setPendingFiles((prev) => {
+      const target = prev.find((item) => item.key === key);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((item) => item.key !== key);
+    });
+  }
+
+  async function handleUploadAll() {
+    if (!complexId) {
+      setUploadErrors(["단지를 먼저 선택해주세요."]);
+      return;
+    }
+    const missingType = pendingFiles.find((item) => item.unitType.trim() === "");
+    if (missingType) {
+      setUploadErrors(["모든 파일에 타입명을 입력해주세요."]);
+      return;
+    }
+
+    setUploading(true);
+    setUploadErrors(null);
+    const failed: string[] = [];
+
+    for (const item of pendingFiles) {
+      const form = new FormData();
+      form.append("complexId", complexId);
+      form.append("unitType", item.unitType.trim());
+      if (item.supplyArea.trim() !== "") {
+        form.append("supplyArea", item.supplyArea.trim());
+      }
+      if (item.exclusiveArea.trim() !== "") {
+        form.append("exclusiveArea", item.exclusiveArea.trim());
+      }
+      form.append("file", item.file);
+
+      try {
+        const response = await fetch("/api/admin/floor-plans", {
+          method: "POST",
+          body: form,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          const message = data.errors?.[0] ?? "업로드 실패";
+          const detail = formatErrorDetail(data.errorDetail);
+          failed.push(`${item.file.name}: ${message}${detail}`);
+        }
+      } catch {
+        failed.push(`${item.file.name}: 네트워크 오류`);
+      }
+    }
+
+    for (const item of pendingFiles) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
+    setPendingFiles([]);
+    setUploading(false);
+    if (failed.length > 0) {
+      setUploadErrors(failed);
+    }
+    await loadImages(complexId);
+  }
+
+  async function handleRename(id: string) {
+    if (renameValue.trim() === "") return;
+    setRowErrors((prev) => ({ ...prev, [id]: "" }));
+    try {
+      const response = await fetch(`/api/admin/floor-plans/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unitType: renameValue.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setRowErrors((prev) => ({
+          ...prev,
+          [id]: data.errors?.[0] ?? "수정에 실패했습니다.",
+        }));
+        return;
+      }
+      setRenamingId(null);
+      await loadImages(complexId);
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [id]: "네트워크 오류가 발생했습니다." }));
+    }
+  }
+
+  /**
+   * 면적은 이미지 1장이 아니라 "타입" 단위 개념이라, 그룹에 속한 이미지 전체에
+   * 같은 값을 적용합니다(기존에 올려둔 평면도에 나중에 채워 넣는 용도 포함).
+   */
+  function parseAreaInput(
+    value: string,
+    label: string,
+  ): { value?: number | null; error?: string } {
+    const trimmed = value.trim();
+    if (trimmed === "") return { value: null };
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return { error: `${label}은 0보다 큰 숫자로 입력해주세요.` };
+    }
+    return { value: parsed };
+  }
+
+  async function handleSaveGroupArea(unitType: string, group: FloorPlanImage[]) {
+    const supplyResult = parseAreaInput(supplyAreaValue, "공급면적");
+    if (supplyResult.error) {
+      setAreaError(supplyResult.error);
+      return;
+    }
+    const exclusiveResult = parseAreaInput(exclusiveAreaValue, "전용면적");
+    if (exclusiveResult.error) {
+      setAreaError(exclusiveResult.error);
+      return;
+    }
+
+    setAreaSaving(true);
+    setAreaError(null);
+    try {
+      for (const image of group) {
+        const response = await fetch(`/api/admin/floor-plans/${image.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            supplyArea: supplyResult.value,
+            exclusiveArea: exclusiveResult.value,
+          }),
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          const message = data.errors?.[0] ?? "면적 저장에 실패했습니다.";
+          setAreaError(`${message}${formatErrorDetail(data.errorDetail)}`);
+          return;
+        }
+      }
+      setEditingAreaType(null);
+      await loadImages(complexId);
+    } catch {
+      setAreaError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setAreaSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("이 평면도 이미지를 삭제할까요? 되돌릴 수 없습니다.")) return;
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/admin/floor-plans/${id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setRowErrors((prev) => ({
+          ...prev,
+          [id]: data.errors?.[0] ?? "삭제에 실패했습니다.",
+        }));
+        return;
+      }
+      await loadImages(complexId);
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [id]: "네트워크 오류가 발생했습니다." }));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div>
+      {loadError && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          {loadError}
+        </p>
+      )}
+
+      <div className="rounded-xl border border-navy-900/10 p-6 sm:p-8">
+        <p className="text-sm font-semibold text-navy-900">새 평면도 업로드</p>
+        <p className="mt-1 text-xs text-navy-800/50">
+          여러 파일을 한 번에 선택할 수 있습니다. 파일명이 타입명으로 자동으로
+          채워지니, 필요하면 아래에서 직접 고쳐주세요(예: 84a → 84A).
+        </p>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(event) => handleFilesSelected(event.target.files)}
+          className="mt-3 text-sm"
+        />
+
+        {pendingFiles.length > 0 && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {pendingFiles.map((item) => (
+              <div
+                key={item.key}
+                className="flex items-center gap-3 rounded-md border border-navy-900/10 p-3"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.previewUrl}
+                  alt=""
+                  className="h-16 w-16 shrink-0 rounded-md object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs text-navy-800/50">
+                    {item.file.name}
+                  </p>
+                  <input
+                    value={item.unitType}
+                    onChange={(event) =>
+                      updatePendingUnitType(item.key, event.target.value)
+                    }
+                    placeholder="타입명 (예: 108B)"
+                    className={`${inputClass} mt-1 w-full`}
+                  />
+                  <div className="mt-1 flex gap-1">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={item.supplyArea}
+                      onChange={(event) =>
+                        updatePendingSupplyArea(item.key, event.target.value)
+                      }
+                      placeholder="공급면적 ㎡ (선택)"
+                      className={`${inputClass} w-full`}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={item.exclusiveArea}
+                      onChange={(event) =>
+                        updatePendingExclusiveArea(item.key, event.target.value)
+                      }
+                      placeholder="전용면적 ㎡ (선택)"
+                      className={`${inputClass} w-full`}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removePendingFile(item.key)}
+                  className="shrink-0 text-xs font-semibold text-red-600 hover:underline"
+                >
+                  제외
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {uploadErrors && (
+          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <ul className="list-disc space-y-0.5 pl-4">
+              {uploadErrors.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {pendingFiles.length > 0 && (
+          <button
+            type="button"
+            onClick={handleUploadAll}
+            disabled={uploading}
+            className="mt-4 rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2.5 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {uploading
+              ? "업로드 중..."
+              : `${pendingFiles.length}개 파일 일괄 업로드`}
+          </button>
+        )}
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-lg font-bold text-navy-950">등록된 평면도</h2>
+
+        {images === null && (
+          <p className="mt-4 text-sm text-navy-800/50">불러오는 중...</p>
+        )}
+        {images !== null && groupedImages.length === 0 && (
+          <p className="mt-4 rounded-xl border border-navy-900/10 px-6 py-12 text-center text-sm text-navy-800/50">
+            등록된 평면도가 없습니다.
+          </p>
+        )}
+
+        <div className="mt-4 flex flex-col gap-6">
+          {groupedImages.map(([unitType, group]) => {
+            const groupSupplyArea = group.find(
+              (img) => img.supplyArea !== undefined,
+            )?.supplyArea;
+            const groupExclusiveArea = group.find(
+              (img) => img.exclusiveArea !== undefined,
+            )?.exclusiveArea;
+            return (
+              <div
+                key={unitType}
+                className="rounded-xl border border-navy-900/10 p-5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-bold text-navy-950">{unitType}</p>
+
+                  {editingAreaType === unitType ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={supplyAreaValue}
+                        onChange={(event) => setSupplyAreaValue(event.target.value)}
+                        placeholder="공급면적 ㎡"
+                        className={`${inputClass} w-28 px-2 py-1 text-xs`}
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={exclusiveAreaValue}
+                        onChange={(event) => setExclusiveAreaValue(event.target.value)}
+                        placeholder="전용면적 ㎡"
+                        className={`${inputClass} w-28 px-2 py-1 text-xs`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveGroupArea(unitType, group)}
+                        disabled={areaSaving}
+                        className="text-xs font-semibold text-gold-600 disabled:opacity-50"
+                      >
+                        {areaSaving ? "저장 중..." : "저장"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingAreaType(null)}
+                        className="text-xs font-medium text-navy-800/50 hover:underline"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingAreaType(unitType);
+                        setSupplyAreaValue(
+                          groupSupplyArea !== undefined ? String(groupSupplyArea) : "",
+                        );
+                        setExclusiveAreaValue(
+                          groupExclusiveArea !== undefined
+                            ? String(groupExclusiveArea)
+                            : "",
+                        );
+                        setAreaError(null);
+                      }}
+                      className="text-xs font-medium text-navy-800/60 hover:text-gold-600 hover:underline"
+                    >
+                      {groupSupplyArea !== undefined || groupExclusiveArea !== undefined
+                        ? `공급 ${groupSupplyArea ?? "-"}㎡ / 전용 ${groupExclusiveArea ?? "-"}㎡`
+                        : "면적 미입력 (입력하기)"}
+                    </button>
+                  )}
+                </div>
+                {editingAreaType === unitType && areaError && (
+                  <p className="mt-1 text-xs text-red-600">{areaError}</p>
+                )}
+                <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+                  {group.map((image) => (
+                    <div key={image.id} className="flex flex-col gap-1.5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={image.url}
+                        alt={unitType}
+                        className="aspect-square w-full rounded-md border border-navy-900/10 object-cover"
+                      />
+                      {renamingId === image.id ? (
+                        <div className="flex gap-1">
+                          <input
+                            value={renameValue}
+                            onChange={(event) => setRenameValue(event.target.value)}
+                            className={`${inputClass} w-full px-2 py-1 text-xs`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRename(image.id)}
+                            className="shrink-0 text-xs font-semibold text-gold-600"
+                          >
+                            저장
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between gap-1 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRenamingId(image.id);
+                              setRenameValue(image.unitType);
+                            }}
+                            className="font-medium text-navy-800/60 hover:text-gold-600 hover:underline"
+                          >
+                            타입명 수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(image.id)}
+                            disabled={deletingId === image.id}
+                            className="font-medium text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            {deletingId === image.id ? "삭제 중..." : "삭제"}
+                          </button>
+                        </div>
+                      )}
+                      {rowErrors[image.id] && (
+                        <p className="text-[10px] text-red-600">
+                          {rowErrors[image.id]}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

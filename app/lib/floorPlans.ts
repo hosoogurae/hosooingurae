@@ -64,6 +64,25 @@ export async function getFloorPlanImages(
   return data.map(rowToFloorPlanImage);
 }
 
+/** /admin/complexes 목록의 완성도 배지("평면도 N개") 전용: 단지별 평면도 이미지 개수. */
+export async function getFloorPlanCountsByComplex(): Promise<Record<string, number>> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return {};
+
+  const { data, error } = await supabase.from("floor_plan_images").select("complex_id");
+
+  if (error || !data) {
+    console.error("[floorPlans] 단지별 평면도 개수 조회 실패", error);
+    return {};
+  }
+
+  const counts: Record<string, number> = {};
+  for (const row of data) {
+    counts[row.complex_id] = (counts[row.complex_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 /** 관리자용: 단지의 모든 평면도를 타입 구분 없이 전부 가져옵니다(관리 화면 목록용). */
 export async function getFloorPlanImagesByComplex(
   complexId: string,

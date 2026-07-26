@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateComplex } from "../../../../lib/complexes";
+import { getComplexById, updateComplex } from "../../../../lib/complexes";
+import { parseComplexFieldsInput } from "../../../../lib/complexValidation";
 
+/** /admin/complexes/[id]/edit 초기 로딩 전용. */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const complex = await getComplexById(id);
+
+  if (!complex) {
+    return NextResponse.json({ errors: ["단지를 찾을 수 없습니다."] }, { status: 404 });
+  }
+
+  return NextResponse.json({ complex });
+}
+
+/**
+ * 기본정보/AI 검색용 정보/MOLIT 연동 중 어느 영역이든 부분 수정할 수 있습니다.
+ * 전달되지 않은 필드는 건드리지 않고, 명시적으로 null을 보낸 필드만 지웁니다.
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -17,60 +37,12 @@ export async function PATCH(
     );
   }
 
-  const { name, address, propertyType, subwayWalkMinutes } =
-    (body as {
-      name?: unknown;
-      address?: unknown;
-      propertyType?: unknown;
-      subwayWalkMinutes?: unknown;
-    } | null) ?? {};
-
-  if (name !== undefined && typeof name !== "string") {
-    return NextResponse.json(
-      { errors: ["단지명 값이 올바르지 않습니다."] },
-      { status: 400 },
-    );
-  }
-  if (address !== undefined && typeof address !== "string") {
-    return NextResponse.json(
-      { errors: ["주소 값이 올바르지 않습니다."] },
-      { status: 400 },
-    );
-  }
-  if (propertyType !== undefined && typeof propertyType !== "string") {
-    return NextResponse.json(
-      { errors: ["건축물 용도 값이 올바르지 않습니다."] },
-      { status: 400 },
-    );
-  }
-  if (
-    subwayWalkMinutes !== undefined &&
-    subwayWalkMinutes !== null &&
-    !(typeof subwayWalkMinutes === "number" && Number.isInteger(subwayWalkMinutes) && subwayWalkMinutes >= 0)
-  ) {
-    return NextResponse.json(
-      { errors: ["지하철 도보 시간은 0 이상의 정수(분)로 입력해주세요."] },
-      { status: 400 },
-    );
+  const { input, errors } = parseComplexFieldsInput(body, { requireName: false });
+  if (!input) {
+    return NextResponse.json({ errors }, { status: 400 });
   }
 
-  const trimmedName = typeof name === "string" ? name.trim() : undefined;
-  if (trimmedName === "") {
-    return NextResponse.json(
-      { errors: ["단지명을 입력해주세요."] },
-      { status: 400 },
-    );
-  }
-
-  const { complex, error } = await updateComplex(id, {
-    name: trimmedName,
-    address: typeof address === "string" ? address.trim() : undefined,
-    propertyType: typeof propertyType === "string" ? propertyType.trim() : undefined,
-    subwayWalkMinutes:
-      subwayWalkMinutes === undefined
-        ? undefined
-        : (subwayWalkMinutes as number | null),
-  });
+  const { complex, error } = await updateComplex(id, input);
 
   if (!complex) {
     return NextResponse.json(
