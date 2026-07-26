@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { ComplexImage } from "../data/complexImages";
 import type { FloorPlanImage } from "../data/floorPlans";
+import type { UnitTypeImage } from "../data/unitTypeImages";
 import { getComplexById } from "../lib/complexes";
+import { getComplexImages } from "../lib/complexImages";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
+import { resolveListingGallery } from "../lib/listingGalleryImages";
 import { getAllListings } from "../lib/listings";
 import {
   hasActiveFilters,
   parseListingSearchParams,
   type RawSearchParams,
 } from "../lib/listingFilters";
+import { getUnitTypeImagesByComplex } from "../lib/unitTypeImages";
 import ListingCard from "../components/ListingCard";
 import ListingsFilterBar from "../components/ListingsFilterBar";
 import CompareToggle from "../components/CompareToggle";
@@ -39,17 +44,30 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
     filters.complexId ? getComplexById(filters.complexId) : Promise.resolve(undefined),
   ]);
 
-  // 매물마다 평면도를 따로 조회하면 카드 개수만큼 쿼리가 나가므로(N+1),
-  // 목록에 나온 단지 id별로 한 번씩만 조회해 매물의 unitType으로 찾아 씁니다.
+  // 매물마다 평면도/단지·타입 공통 사진을 따로 조회하면 카드 개수만큼
+  // 쿼리가 나가므로(N+1), 목록에 나온 단지 id별로 한 번씩만 조회해 매물의
+  // unitType으로 찾아 씁니다.
   const distinctComplexIds = [...new Set(listings.map((l) => l.complexId))];
-  const floorPlansByComplex = new Map<string, FloorPlanImage[]>(
-    await Promise.all(
-      distinctComplexIds.map(
-        async (complexId) =>
-          [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
-      ),
-    ),
-  );
+  const [floorPlansByComplex, unitTypeImagesByComplex, complexImagesByComplex] =
+    await Promise.all([
+      Promise.all(
+        distinctComplexIds.map(
+          async (complexId) =>
+            [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
+        ),
+      ).then((entries) => new Map<string, FloorPlanImage[]>(entries)),
+      Promise.all(
+        distinctComplexIds.map(
+          async (complexId) =>
+            [complexId, await getUnitTypeImagesByComplex(complexId)] as const,
+        ),
+      ).then((entries) => new Map<string, UnitTypeImage[]>(entries)),
+      Promise.all(
+        distinctComplexIds.map(
+          async (complexId) => [complexId, await getComplexImages(complexId)] as const,
+        ),
+      ).then((entries) => new Map<string, ComplexImage[]>(entries)),
+    ]);
 
   function getFloorPlanForListing(
     complexId: string,
@@ -59,6 +77,25 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
     return floorPlansByComplex
       .get(complexId)
       ?.find((image) => image.unitType === unitType);
+  }
+
+  function getGalleryForListing(
+    complexId: string,
+    unitType: string | undefined,
+    listingImages: string[] | undefined,
+  ): string[] {
+    const unitImages = unitType
+      ? (unitTypeImagesByComplex.get(complexId) ?? []).filter(
+          (image) => image.unitType === unitType,
+        )
+      : [];
+    return resolveListingGallery({
+      listingImages,
+      unitTypeImages: unitImages.map((image) => image.url),
+      complexImages: (complexImagesByComplex.get(complexId) ?? []).map(
+        (image) => image.url,
+      ),
+    });
   }
 
   return (
@@ -109,6 +146,11 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
                   floorPlanImage={getFloorPlanForListing(
                     listing.complexId,
                     listing.unitType,
+                  )}
+                  galleryImages={getGalleryForListing(
+                    listing.complexId,
+                    listing.unitType,
+                    listing.images,
                   )}
                 />
                 <CompareToggle listingId={listing.id} />

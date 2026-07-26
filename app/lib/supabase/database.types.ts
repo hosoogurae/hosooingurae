@@ -209,6 +209,66 @@ export interface Database {
           },
         ];
       };
+      complex_images: {
+        Row: {
+          id: string;
+          complex_id: string;
+          category: string;
+          url: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex_id: string;
+          category: string;
+          url: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["complex_images"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "complex_images_complex_id_fkey";
+            columns: ["complex_id"];
+            isOneToOne: false;
+            referencedRelation: "complexes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      unit_type_images: {
+        Row: {
+          id: string;
+          complex_id: string;
+          unit_type: string;
+          url: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex_id: string;
+          unit_type: string;
+          url: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["unit_type_images"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "unit_type_images_complex_id_fkey";
+            columns: ["complex_id"];
+            isOneToOne: false;
+            referencedRelation: "complexes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       listing_submissions: {
         Row: {
           id: string;
@@ -308,6 +368,14 @@ export type FloorPlanImageRow =
   Database["public"]["Tables"]["floor_plan_images"]["Row"];
 export type FloorPlanImageInsert =
   Database["public"]["Tables"]["floor_plan_images"]["Insert"];
+export type ComplexImageRow =
+  Database["public"]["Tables"]["complex_images"]["Row"];
+export type ComplexImageInsert =
+  Database["public"]["Tables"]["complex_images"]["Insert"];
+export type UnitTypeImageRow =
+  Database["public"]["Tables"]["unit_type_images"]["Row"];
+export type UnitTypeImageInsert =
+  Database["public"]["Tables"]["unit_type_images"]["Insert"];
 export type ListingSubmissionRow =
   Database["public"]["Tables"]["listing_submissions"]["Row"];
 export type ListingSubmissionInsert =

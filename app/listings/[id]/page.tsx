@@ -27,8 +27,11 @@ import {
 import { PHONE_HREF, PHONE_NUMBER } from "../../data/contact";
 import FloorPlanImage from "../../components/FloorPlanImage";
 import InquirySmsButton from "../../components/InquirySmsButton";
+import { getComplexImages } from "../../lib/complexImages";
 import { getFloorPlanImages } from "../../lib/floorPlans";
+import { resolveListingGallery } from "../../lib/listingGalleryImages";
 import { getListingById } from "../../lib/listings";
+import { getUnitTypeImages } from "../../lib/unitTypeImages";
 import {
   BUILDING_UNKNOWN_LABEL,
   buildInquiryMessage,
@@ -123,11 +126,22 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
     complex.floorAreaRatio !== undefined ||
     complex.buildingCoverageRatio !== undefined ||
     complex.features.length > 0;
-  const heroImage = listing.images?.[0] ?? listing.image;
   const transactions = getTransactionsByComplexId(complex.id);
-  const floorPlanImages = listing.unitType
-    ? await getFloorPlanImages(complex.id, listing.unitType)
-    : [];
+  const [floorPlanImages, unitTypeImages, complexImages] = await Promise.all([
+    listing.unitType ? getFloorPlanImages(complex.id, listing.unitType) : [],
+    listing.unitType ? getUnitTypeImages(complex.id, listing.unitType) : [],
+    getComplexImages(complex.id),
+  ]);
+  // 매물 개별 사진 → 타입 공통 사진 → 단지 공통 사진 순서로 구성합니다.
+  // listing_images에 아무것도 복제 저장하지 않고, 읽는 시점에만 합칩니다.
+  const galleryImages = resolveListingGallery({
+    listingImages: listing.images ?? (listing.image ? [listing.image] : []),
+    unitTypeImages: unitTypeImages.map((image) => image.url),
+    complexImages: complexImages.map((image) => image.url),
+  });
+  // 갤러리에 사진이 하나도 없을 때만(=단지/타입 공통 사진도 없을 때만)
+  // 평면도 도면으로 대체합니다 — 기존 동작과 동일한 최종 폴백입니다.
+  const heroImage = galleryImages[0];
 
   const requestHeaders = await headers();
   const host = requestHeaders.get("host");
@@ -258,7 +272,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
         >
           <h2 className="text-lg font-bold text-navy-950">사진</h2>
           <div className="mt-6">
-            <ListingGallery images={listing.images} />
+            <ListingGallery images={galleryImages} />
           </div>
         </div>
 

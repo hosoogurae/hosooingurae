@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { ComplexImage } from "../data/complexImages";
+import type { FloorPlanImage } from "../data/floorPlans";
+import type { UnitTypeImage } from "../data/unitTypeImages";
 import RecommendSearchBox from "../components/RecommendSearchBox";
 import ListingCard from "../components/ListingCard";
 import CompareToggle from "../components/CompareToggle";
+import { getComplexImages } from "../lib/complexImages";
+import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
+import { resolveListingGallery } from "../lib/listingGalleryImages";
 import { getAllListings } from "../lib/listings";
+import { getUnitTypeImagesByComplex } from "../lib/unitTypeImages";
 import { ruleBasedQueryParser } from "../lib/recommend/queryParser";
 import { rankListings } from "../lib/recommend/scoring";
 
@@ -33,6 +40,61 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
     ? ruleBasedQueryParser.parse(query, { knownComplexNames })
     : null;
   const recommendation = parsedQuery ? rankListings(listings, parsedQuery) : null;
+
+  // 매물마다 평면도/단지·타입 공통 사진을 따로 조회하면 카드 개수만큼
+  // 쿼리가 나가므로(N+1), 결과에 나온 단지 id별로 한 번씩만 조회합니다.
+  const distinctComplexIds = [
+    ...new Set((recommendation?.results ?? []).map((r) => r.listing.complexId)),
+  ];
+  const [floorPlansByComplex, unitTypeImagesByComplex, complexImagesByComplex] =
+    await Promise.all([
+      Promise.all(
+        distinctComplexIds.map(
+          async (complexId) =>
+            [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
+        ),
+      ).then((entries) => new Map<string, FloorPlanImage[]>(entries)),
+      Promise.all(
+        distinctComplexIds.map(
+          async (complexId) =>
+            [complexId, await getUnitTypeImagesByComplex(complexId)] as const,
+        ),
+      ).then((entries) => new Map<string, UnitTypeImage[]>(entries)),
+      Promise.all(
+        distinctComplexIds.map(
+          async (complexId) => [complexId, await getComplexImages(complexId)] as const,
+        ),
+      ).then((entries) => new Map<string, ComplexImage[]>(entries)),
+    ]);
+
+  function getFloorPlanForListing(
+    complexId: string,
+    unitType: string | undefined,
+  ): FloorPlanImage | undefined {
+    if (!unitType) return undefined;
+    return floorPlansByComplex
+      .get(complexId)
+      ?.find((image) => image.unitType === unitType);
+  }
+
+  function getGalleryForListing(
+    complexId: string,
+    unitType: string | undefined,
+    listingImages: string[] | undefined,
+  ): string[] {
+    const unitImages = unitType
+      ? (unitTypeImagesByComplex.get(complexId) ?? []).filter(
+          (image) => image.unitType === unitType,
+        )
+      : [];
+    return resolveListingGallery({
+      listingImages,
+      unitTypeImages: unitImages.map((image) => image.url),
+      complexImages: (complexImagesByComplex.get(complexId) ?? []).map(
+        (image) => image.url,
+      ),
+    });
+  }
 
   const interpretedLines: string[] = [];
   if (parsedQuery?.transactionType) {
@@ -156,7 +218,18 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                     <span className="absolute right-3 top-3 z-10 rounded-full bg-navy-950/90 px-3 py-1 text-xs font-bold text-gold-400">
                       {index + 1}위 · {ranked.score}% 일치
                     </span>
-                    <ListingCard listing={ranked.listing} />
+                    <ListingCard
+                      listing={ranked.listing}
+                      floorPlanImage={getFloorPlanForListing(
+                        ranked.listing.complexId,
+                        ranked.listing.unitType,
+                      )}
+                      galleryImages={getGalleryForListing(
+                        ranked.listing.complexId,
+                        ranked.listing.unitType,
+                        ranked.listing.images,
+                      )}
+                    />
                     {ranked.reasons.length > 0 && (
                       <div className="mt-3 rounded-lg bg-navy-900/[0.03] p-3">
                         <p className="text-xs font-semibold text-gold-600">
