@@ -40,8 +40,13 @@ export async function POST(request: Request) {
 
   recordLoginSuccess(ip);
 
-  const response = NextResponse.json({ success: true });
-  response.cookies.set(ADMIN_SESSION_COOKIE, createSessionToken(username), {
+  // 웹은 아래 httpOnly 쿠키만 쓰고 이 필드는 그냥 무시합니다(로그인 화면
+  // 코드가 response.ok만 확인). token은 모바일 앱이 Authorization: Bearer
+  // 헤더로 쓰기 위한 값 — 같은 서명 토큰을 쿠키와 바디 양쪽에 동일하게
+  // 실어 보낼 뿐, 별도로 발급하는 게 아닙니다.
+  const token = createSessionToken(username);
+  const response = NextResponse.json({ success: true, token });
+  response.cookies.set(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

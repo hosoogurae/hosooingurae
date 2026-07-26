@@ -27,6 +27,23 @@ function isMixedPublicWritePath(pathname: string): boolean {
 }
 
 /**
+ * 세션 토큰은 웹에서는 쿠키로, 모바일 앱에서는 Authorization: Bearer 헤더로
+ * 온다 — 둘 다 app/lib/adminAuth.ts의 같은 verifySessionToken으로 검증되는
+ * 동일한 토큰 형식이라, 어느 쪽으로 오든 여기서 하나로 합쳐 꺼내기만 하면
+ * 된다(쿠키 우선, 없으면 헤더).
+ */
+function extractToken(request: NextRequest): string | undefined {
+  const cookieToken = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+  if (cookieToken) return cookieToken;
+
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice("Bearer ".length).trim();
+  }
+  return undefined;
+}
+
+/**
  * CSRF 점검: 로그인 쿠키가 SameSite=Lax라 크로스사이트 POST/PATCH/DELETE에는
  * 애초에 실려 오지 않지만, Origin 헤더가 있는데 이 요청의 호스트와 다르면
  * 한 번 더 명시적으로 차단합니다(방어 계층 추가). Origin이 없는 요청은
@@ -68,7 +85,7 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+  const token = extractToken(request);
   if (verifySessionToken(token)) {
     return NextResponse.next();
   }
