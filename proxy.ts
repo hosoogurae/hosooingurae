@@ -9,11 +9,63 @@ const PUBLIC_ADMIN_PATHS = new Set([
   "/api/admin/logout",
 ]);
 
+/** 읽기 전용 메서드 — 공개 조회는 이 경로들에서도 인증 없이 그대로 열어둡니다. */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * /api/listings, /api/listings/[id], /api/import-naver는 "공개 조회 GET"과
+ * "관리자 전용 쓰기(POST/PATCH/DELETE)"가 같은 경로를 씁니다. 그래서
+ * /api/admin/:path*처럼 경로 전체를 막을 수 없고, 매처로 일단 붙잡은 뒤
+ * 아래에서 쓰기 메서드일 때만 인증을 요구합니다.
+ */
+function isMixedPublicWritePath(pathname: string): boolean {
+  return (
+    pathname === "/api/listings" ||
+    /^\/api\/listings\/[^/]+$/.test(pathname) ||
+    pathname === "/api/import-naver"
+  );
+}
+
+/**
+ * CSRF 점검: 로그인 쿠키가 SameSite=Lax라 크로스사이트 POST/PATCH/DELETE에는
+ * 애초에 실려 오지 않지만, Origin 헤더가 있는데 이 요청의 호스트와 다르면
+ * 한 번 더 명시적으로 차단합니다(방어 계층 추가). Origin이 없는 요청은
+ * 굳이 막지 않습니다 — SameSite=Lax가 이미 1차 방어선입니다.
+ */
+function hasMismatchedOrigin(request: NextRequest): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).host !== request.nextUrl.host;
+  } catch {
+    return true;
+  }
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_ADMIN_PATHS.has(pathname)) {
     return NextResponse.next();
+  }
+
+  const isAdminOnlyPath =
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname.startsWith("/api/admin/");
+  const needsAuth =
+    isAdminOnlyPath ||
+    (isMixedPublicWritePath(pathname) && !SAFE_METHODS.has(request.method));
+
+  if (!needsAuth) {
+    return NextResponse.next();
+  }
+
+  if (hasMismatchedOrigin(request)) {
+    return NextResponse.json(
+      { error: "요청 출처가 올바르지 않습니다." },
+      { status: 403 },
+    );
   }
 
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
@@ -29,5 +81,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/api/admin/:path*"],
+  matcher: [
+    "/admin",
+    "/admin/:path*",
+    "/api/admin/:path*",
+    "/api/listings",
+    "/api/listings/:path*",
+    "/api/import-naver",
+  ],
 };
