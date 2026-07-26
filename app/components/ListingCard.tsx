@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { FloorPlanImage } from "../data/floorPlans";
+import { resolveListingHeroImage } from "../lib/listingGalleryImages";
 import type { ListingWithComplex } from "../lib/listings";
 import ListingImagePlaceholder from "./ListingImagePlaceholder";
 
@@ -26,14 +27,11 @@ function formatBuildingFloor(listing: ListingWithComplex): string | undefined {
 export default function ListingCard({
   listing,
   floorPlanImage,
-  galleryImages,
 }: {
   listing: ListingWithComplex;
   floorPlanImage?: FloorPlanImage;
-  /** 매물 개별 → 타입 공통 → 단지 공통 순으로 합쳐진 사진 목록(있으면 [0]을 대표 이미지로 씁니다). */
-  galleryImages?: string[];
 }) {
-  const heroImage = galleryImages?.[0] ?? listing.images?.[0] ?? listing.image;
+  const heroImage = resolveListingHeroImage(listing);
   const floorPlanThumbnail =
     floorPlanImage && (floorPlanImage.previewUrl || floorPlanImage.url);
   const buildingFloorLine = formatBuildingFloor(listing);
