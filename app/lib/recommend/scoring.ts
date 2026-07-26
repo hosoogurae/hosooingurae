@@ -40,6 +40,7 @@ const WEIGHTS = {
   school: 10,
   parking: 10,
   largeComplex: 10,
+  priceLow: 15,
 } as const;
 
 /** 역 도보 시간 기준: 10분 이하 완전만족, 11~15분 부분만족, 16분 이상 불만족. */
@@ -143,10 +144,37 @@ function schoolCriterion(
   if (level === "학교") {
     return { score: 1, matchedSchool: nearbySchools[0], unknown: false };
   }
-  const matched = nearbySchools.find((name) => name.includes(level));
+  // "초등학교"는 정식 명칭 외에 "OO초"처럼 줄여 등록됐을 수도 있어 "초"도
+  // 근거로 인정합니다(요청하신 규칙). 실제로 있는 학교 이름만 근거로 쓰고,
+  // 추측으로 "학군이 좋다" 같은 판단은 만들지 않습니다.
+  const matched = nearbySchools.find(
+    (name) => name.includes(level) || (level === "초등학교" && name.includes("초")),
+  );
   return matched
     ? { score: 1, matchedSchool: matched, unknown: false }
     : { score: 0, unknown: false };
+}
+
+/** 후보 매물 전체의 실거래가 범위. 전부 같은 가격이면(비교 무의미) null. */
+function computePriceRange(listings: ListingWithComplex[]): { min: number; max: number } | null {
+  if (listings.length === 0) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const listing of listings) {
+    if (listing.price < min) min = listing.price;
+    if (listing.price > max) max = listing.price;
+  }
+  return max > min ? { min, max } : null;
+}
+
+/**
+ * 가격이 낮을수록 1에 가깝게(후보군 내 상대적 위치). 구체적 금액을 지어내지
+ * 않고 실제 값끼리만 비교합니다. range 밖의 값(예: 비교 범위와 다른
+ * 거래유형이 섞여 들어온 경우)이 들어와도 0~1을 벗어나지 않게 clamp합니다.
+ */
+function lowerPriceScore(price: number, range: { min: number; max: number }): number {
+  const raw = 1 - (price - range.min) / (range.max - range.min);
+  return Math.max(0, Math.min(1, raw));
 }
 
 function parkingCriterion(
@@ -188,6 +216,7 @@ function largeComplexCriterion(
 function scoreOne(
   listing: ListingWithComplex,
   query: ParsedQuery,
+  priceRange: { min: number; max: number } | null,
 ): { score: number; reasons: string[]; notes: string[]; unknownCount: number } {
   const criteria: CriterionScore[] = [];
   let unknownCount = 0;
@@ -318,6 +347,33 @@ function scoreOne(
     });
   }
 
+  // "저렴한/싼/가성비" — 구체적 금액 조건(query.price)이 이미 있으면 그게
+  // 우선이라 이 기준은 건너뜁니다(모호한 선호로 명확한 조건을 덮어쓰지 않음).
+  // 임의의 가격 기준을 만들지 않고, 이번에 점수 매기는 후보 매물들의 실제
+  // 가격끼리만 비교합니다.
+  // 매매가/전세보증금/월세보증금은 성격이 달라(월세는 보증금 외에 월세도
+  // 따로 냄) priceRange가 특정 거래유형 기준으로 좁혀졌다면, 그 유형이 아닌
+  // 매물에는 이 기준을 아예 적용하지 않습니다 — 다른 잣대로 잰 값을 억지로
+  // 끼워 맞추면 순위가 왜곡됩니다(clamp만으로는 "가장 저렴함"으로 잘못
+  // 뽑히는 문제까지는 못 막음).
+  const priceComparisonApplies =
+    !query.transactionType || listing.transactionType === query.transactionType;
+  if (query.wantsLowerPrice && !query.price && priceComparisonApplies) {
+    if (priceRange) {
+      const s = lowerPriceScore(listing.price, priceRange);
+      criteria.push({
+        weight: WEIGHTS.priceLow,
+        score: s,
+        reason:
+          s >= 0.7
+            ? `비교한 매물들 중 가격이 낮은 편입니다(실거래가 ${listing.priceLabel}).`
+            : undefined,
+      });
+    }
+    // priceRange가 null(후보가 1개뿐이거나 전부 같은 가격)이면 비교 자체가
+    // 의미 없으니 조건을 추가하지 않습니다(모름 처리도 하지 않음).
+  }
+
   if (criteria.length === 0) {
     return { score: 0, reasons: [], notes: [], unknownCount: 0 };
   }
@@ -356,14 +412,22 @@ export function rankListings(
     query.wantsStationProximity === true ||
     query.schoolLevel !== undefined ||
     query.wantsAmpleParking === true ||
-    query.wantsLargeComplex === true;
+    query.wantsLargeComplex === true ||
+    query.wantsLowerPrice === true;
 
   if (!hasCriteria) {
     return { results: [], noCriteriaRecognized: true, hasExactMatch: false };
   }
 
+  // 매매가/전세보증금/월세보증금은 성격이 달라(특히 월세 보증금은 매매·전세
+  // 가격대와 단위 자체가 다름) 그대로 섞어 비교하면 "저렴한 편"이 왜곡됩니다.
+  // 거래유형을 지정했으면 같은 유형끼리만, 안 정했으면(모호함은 사용자 몫) 전체끼리 비교합니다.
+  const priceComparisonPool = query.transactionType
+    ? listings.filter((listing) => listing.transactionType === query.transactionType)
+    : listings;
+  const priceRange = computePriceRange(priceComparisonPool);
   const scored = listings.map((listing) => {
-    const { score, reasons, notes, unknownCount } = scoreOne(listing, query);
+    const { score, reasons, notes, unknownCount } = scoreOne(listing, query, priceRange);
     return { listing, score, reasons, notes, unknownCount };
   });
 

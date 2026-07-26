@@ -1,6 +1,7 @@
 import type { PropertyType, TransactionType } from "../../data/listings";
 import { parseKoreanAmountToManwon } from "../naverTextParser";
 import { formatPriceFull } from "../transactions";
+import { normalizeIntent, type MatchedSynonymGroup } from "./intentNormalizer";
 
 export type FloorTier = "high" | "low";
 export type SchoolLevel = "초등학교" | "중학교" | "고등학교" | "학교";
@@ -33,6 +34,14 @@ export interface ParsedQuery {
   schoolLevel?: SchoolLevel;
   wantsAmpleParking?: boolean;
   wantsLargeComplex?: boolean;
+  /**
+   * "저렴한/싼/가성비" 같은, 구체적인 금액이 없는 가격 선호. 임의의 금액을
+   * 지어내지 않고, 후보 매물들의 실제 가격끼리 상대 비교하는 데만 씁니다
+   * (scoring.ts 참고). price(구체적 금액 조건)가 이미 있으면 무시됩니다.
+   */
+  wantsLowerPrice?: boolean;
+  /** intent/synonym 정규화 단계에서 어떤 동의어가 어떤 조건으로 이해됐는지(화면/리포트 표시용). */
+  normalizedIntents: MatchedSynonymGroup[];
   /** 인식하지 못하고 남은 표현(사용자에게 "반영하지 못한 조건"으로 보여줄 용도). */
   unrecognizedPhrases: string[];
 }
@@ -105,15 +114,78 @@ const STOPWORDS = new Set([
   "인근",
   "주변",
   "인접",
+  "살기",
+  "살기좋은",
+  "좋은",
+  "좋다",
+  "좋아",
+  "좋고",
+  "좋겠어",
+  "좋겠다",
+  "좋겠네요",
+  "괜찮은",
+  "괜찮다",
+  "괜찮아",
+  "괜찮고",
+  "싶은",
+  "싶어",
 ]);
+
+/**
+ * 흔한 조사 접미사를 떼어냅니다(형태소 분석기가 없어 간단한 접미사 제거만 —
+ * "초등학생이", "주차가", "학교가"처럼 내용어에 조사가 붙어 STOPWORDS 비교나
+ * "반영하지 못한 조건" 표시가 부정확해지는 걸 줄이기 위함). 짧은 단어가
+ * 통째로 사라지지 않도록 접미사를 뗀 나머지가 1글자 이상 남을 때만 적용합니다.
+ */
+const TRAILING_PARTICLES = [
+  "에서",
+  "으로",
+  "이며",
+  "이고",
+  "까지",
+  "부터",
+  "에게",
+  "한테",
+  "이라",
+  "라서",
+  "은",
+  "는",
+  "이",
+  "가",
+  "을",
+  "를",
+  "도",
+  "만",
+  "로",
+  "의",
+];
+
+function stripTrailingParticle(word: string): string {
+  for (const particle of TRAILING_PARTICLES) {
+    if (word.length > particle.length && word.endsWith(particle)) {
+      const stripped = word.slice(0, -particle.length);
+      if (stripped.length >= 1) return stripped;
+    }
+  }
+  return word;
+}
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** 매칭된 부분을 공백으로 치환해, 남은 텍스트에서 인식 못한 조건을 찾을 수 있게 합니다. */
+/**
+ * 매치된 부분을 전부(첫 번째만이 아니라) 공백으로 치환합니다 — 같은 표현이
+ * 두 번 나오면(예: 동의어 정규화로 표준 키워드가 주입돼 원문의 표현과 겹치는
+ * 경우) 하나만 지우고 나머지를 "반영하지 못한 조건"으로 잘못 남기지 않기
+ * 위함입니다.
+ */
 function consume(text: string, pattern: RegExp): string {
-  return text.replace(pattern, " ");
+  const globalPattern = pattern.global
+    ? pattern
+    : new RegExp(pattern.source, `${pattern.flags}g`);
+  return text.replace(globalPattern, " ");
 }
 
 function parsePropertyType(text: string): PropertyType | undefined {
@@ -318,6 +390,8 @@ function extractUnrecognizedPhrases(remainingText: string): string[] {
     .map((phrase) =>
       phrase
         .split(/\s+/)
+        .filter((word) => word.length > 0)
+        .map((word) => (STOPWORDS.has(word) ? word : stripTrailingParticle(word)))
         .filter((word) => word.length > 0 && !STOPWORDS.has(word))
         .join(" ")
         .trim(),
@@ -326,7 +400,14 @@ function extractUnrecognizedPhrases(remainingText: string): string[] {
 }
 
 function ruleBasedParse(query: string, context: QueryParserContext): ParsedQuery {
-  let remaining = query;
+  // 1단계: intent/synonym 정규화 — "초등학생"/"아이 키우기"/"출퇴근 편한" 같은
+  // 동의어를 기존 parser가 아는 표준 키워드로 치환합니다. 아래의 모든 인식
+  // 로직은 원문(query)이 아니라 이 정규화된 텍스트(remaining)를 봅니다 —
+  // 단, 반환하는 ParsedQuery.raw는 항상 원문 그대로입니다.
+  const { normalizedText, matchedGroups } = normalizeIntent(query);
+  let remaining = normalizedText;
+
+  const wantsLowerPrice = matchedGroups.some((g) => g.tag === "priceLow");
 
   const propertyType = parsePropertyType(remaining);
   if (propertyType) remaining = consume(remaining, new RegExp(escapeRegExp(propertyType)));
@@ -352,21 +433,28 @@ function ruleBasedParse(query: string, context: QueryParserContext): ParsedQuery
     stationName = stationMatch.name;
     wantsStationProximity = true;
     remaining = consume(remaining, new RegExp(escapeRegExp(stationMatch.matched)));
-  } else {
-    const genericStation = parseGenericStationProximity(remaining);
-    if (genericStation) {
-      wantsStationProximity = true;
-      remaining = consume(remaining, new RegExp(escapeRegExp(genericStation)));
-    }
+  }
+  // 특정 역 이름과 "역세권" 같은 일반 표현이 한 문장에 같이 있을 수 있어(동의어
+  // 정규화로 주입된 경우 포함) else가 아니라 항상 확인·소거합니다 — 그래야
+  // 남은 "역세권"이 "반영하지 못한 조건"으로 잘못 뜨지 않습니다.
+  const genericStation = parseGenericStationProximity(remaining);
+  if (genericStation) {
+    wantsStationProximity = true;
+    remaining = consume(remaining, new RegExp(escapeRegExp(genericStation)));
   }
 
   const schoolMatch = parseSchoolLevel(remaining);
   const schoolLevel = schoolMatch?.level;
   if (schoolMatch) remaining = consume(remaining, new RegExp(escapeRegExp(schoolMatch.matched)));
 
+  // 매치된 조각(match[0])만 재구성하면 원본 정규식의 [^\s]* 같은 뒷부분까지
+  // 다시 포착하지 못할 수 있어(예: "주차 넉넉" 뒤에 붙는 "했으면" 같은 어미),
+  // 소거는 탐지에 쓴 정규식 자체를 그대로 재사용합니다.
   const parkingMatch = parseAmpleParking(remaining);
   const wantsAmpleParking = parkingMatch !== undefined;
-  if (parkingMatch) remaining = consume(remaining, new RegExp(escapeRegExp(parkingMatch)));
+  if (parkingMatch) {
+    remaining = consume(remaining, /주차\s*(?:가|이)?\s*(?:넉넉|충분|여유)[^\s]*/);
+  }
 
   const largeComplexMatch = parseLargeComplex(remaining);
   const wantsLargeComplex = largeComplexMatch !== undefined;
@@ -402,6 +490,8 @@ function ruleBasedParse(query: string, context: QueryParserContext): ParsedQuery
     schoolLevel,
     wantsAmpleParking: wantsAmpleParking || undefined,
     wantsLargeComplex: wantsLargeComplex || undefined,
+    wantsLowerPrice: wantsLowerPrice || undefined,
+    normalizedIntents: matchedGroups,
     unrecognizedPhrases,
   };
 }

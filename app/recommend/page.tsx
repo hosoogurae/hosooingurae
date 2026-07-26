@@ -108,6 +108,15 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
   if (parsedQuery?.wantsLargeComplex) {
     interpretedLines.push("단지 규모: 1,000세대 이상(700~999세대는 부분 반영)을 대단지 기준으로 검색했습니다.");
   }
+  if (parsedQuery?.wantsLowerPrice) {
+    interpretedLines.push(
+      "가격: 구체적인 금액이 없어 임의로 정하지 않고, 검색된 매물들 중 상대적으로 저렴한 쪽을 우대했습니다.",
+    );
+  }
+  // 어떤 표현을 어떤 조건으로 이해했는지(동의어 정규화 근거)를 그대로 보여줍니다.
+  for (const intent of parsedQuery?.normalizedIntents ?? []) {
+    interpretedLines.push(`동의어 인식: "${intent.trigger}" → ${intent.label}(으)로 이해했습니다.`);
+  }
 
   return (
     <>
