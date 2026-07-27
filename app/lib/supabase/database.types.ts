@@ -349,6 +349,26 @@ export interface Database {
           },
         ];
       };
+      admin_sms_templates: {
+        Row: {
+          id: string;
+          name: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["admin_sms_templates"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -384,3 +404,7 @@ export type ListingSubmissionImageRow =
   Database["public"]["Tables"]["listing_submission_images"]["Row"];
 export type ListingSubmissionImageInsert =
   Database["public"]["Tables"]["listing_submission_images"]["Insert"];
+export type AdminSmsTemplateRow =
+  Database["public"]["Tables"]["admin_sms_templates"]["Row"];
+export type AdminSmsTemplateInsert =
+  Database["public"]["Tables"]["admin_sms_templates"]["Insert"];
