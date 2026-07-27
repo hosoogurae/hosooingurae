@@ -23,8 +23,8 @@ export default function CompareToggle({ listingId }: { listingId: string }) {
         onClick={handleClick}
         className={`w-full rounded-md border px-3 py-2 text-sm font-bold transition-colors ${
           selected
-            ? "border-gold-500 bg-gold-500/10 text-gold-600"
-            : "border-navy-900/15 text-navy-800 hover:border-gold-500 hover:text-gold-600"
+            ? "border-gold-600 bg-gold-500 text-navy-950 hover:bg-gold-600"
+            : "border-beige-300 bg-beige-200 text-navy-900 hover:bg-beige-300"
         }`}
       >
         {selected ? "비교 중 ✓ (탭해서 해제)" : "비교하기"}

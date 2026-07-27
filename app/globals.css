@@ -13,6 +13,10 @@
   --color-gold-400: #e0c17a;
   --color-gold-500: #c9a24b;
   --color-gold-600: #a9822f;
+
+  --color-beige-100: #faf6ec;
+  --color-beige-200: #f0e3c4;
+  --color-beige-300: #e2cd9c;
 }
 
 @theme inline {
@@ -26,6 +30,9 @@
   --color-gold-400: var(--color-gold-400);
   --color-gold-500: var(--color-gold-500);
   --color-gold-600: var(--color-gold-600);
+  --color-beige-100: var(--color-beige-100);
+  --color-beige-200: var(--color-beige-200);
+  --color-beige-300: var(--color-beige-300);
   --font-sans: var(--font-noto-sans-kr);
 }
 
