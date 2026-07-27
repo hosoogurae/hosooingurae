@@ -41,6 +41,12 @@ export interface PublicListing {
   naverUrl?: string;
   verifiedDate?: string;
   isFeatured: boolean;
+  /**
+   * 계약 진행중 여부(고객 오해 방지용 안전 표시값). 내부 관리 값인
+   * dealStatus 원본은 공개 API에 절대 노출하지 않고, 이 boolean으로만
+   * 변환해서 내려줍니다.
+   */
+  isNegotiating: boolean;
 }
 
 export interface ListingStats {
@@ -48,6 +54,8 @@ export interface ListingStats {
   published: number;
   featured: number;
   byPropertyType: Record<"아파트" | "오피스텔" | "상가", number>;
+  /** deal_status가 advertising/negotiating이면서 확인이 필요한(8일 이상/미확인) 매물 수. */
+  needsVerification: number;
 }
 
 /**
@@ -62,10 +70,15 @@ export async function getListingStats(): Promise<ListingStats> {
       published: 0,
       featured: 0,
       byPropertyType: { 아파트: 0, 오피스텔: 0, 상가: 0 },
+      needsVerification: 0,
     };
   }
 
-  const [total, published, featured, apartment, officetel, retail] =
+  const fourteenDaysAgo = new Date(
+    Date.now() - 14 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const [total, published, featured, apartment, officetel, retail, needsVerification] =
     await Promise.all([
       supabase.from("listings").select("*", { count: "exact", head: true }),
       supabase
@@ -88,6 +101,11 @@ export async function getListingStats(): Promise<ListingStats> {
         .from("listings")
         .select("*", { count: "exact", head: true })
         .eq("property_type", "상가"),
+      supabase
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .in("deal_status", ["advertising", "negotiating"])
+        .or(`last_verified_at.is.null,last_verified_at.lte.${fourteenDaysAgo}`),
     ]);
 
   for (const [label, result] of [
@@ -97,6 +115,7 @@ export async function getListingStats(): Promise<ListingStats> {
     ["아파트", apartment],
     ["오피스텔", officetel],
     ["상가", retail],
+    ["확인 필요", needsVerification],
   ] as const) {
     if (result.error) {
       console.error(`[listings] ${label} 통계 조회 실패`, result.error);
@@ -112,6 +131,7 @@ export async function getListingStats(): Promise<ListingStats> {
       오피스텔: officetel.count ?? 0,
       상가: retail.count ?? 0,
     },
+    needsVerification: needsVerification.count ?? 0,
   };
 }
 
@@ -142,6 +162,7 @@ export function toPublicListing(listing: ListingWithComplex): PublicListing {
     naverUrl: listing.naverUrl,
     verifiedDate: listing.verifiedDate,
     isFeatured: listing.isFeatured,
+    isNegotiating: listing.dealStatus === "negotiating",
   };
 }
 
@@ -218,7 +239,13 @@ export async function getAllListings(
     .order("created_at", { ascending: false });
 
   if (!options.includeDrafts) {
-    query = query.eq("status", "published");
+    // completed/hold는 status(공개 여부)와 무관하게 항상 공개 조회에서 제외 —
+    // 관리자가 status를 따로 안 바꿔도 계약완료/보류 매물이 계속 광고되는
+    // 사고를 막기 위함(app/data/listings.ts의 DealStatus 주석 참고).
+    query = query.eq("status", "published").in("deal_status", [
+      "advertising",
+      "negotiating",
+    ]);
   }
 
   const filters = options.filters;
@@ -312,7 +339,10 @@ export async function getListingById(
 
   let query = supabase.from("listings").select("*").eq("id", id);
   if (!options.includeDrafts) {
-    query = query.eq("status", "published");
+    query = query.eq("status", "published").in("deal_status", [
+      "advertising",
+      "negotiating",
+    ]);
   }
 
   const { data: row, error } = await query.maybeSingle();

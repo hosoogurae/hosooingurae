@@ -69,6 +69,11 @@ export default function ListingCard({
             확인매물 {formatVerifiedDate(listing.verifiedDate)}
           </span>
         )}
+        {listing.dealStatus === "negotiating" && (
+          <span className="absolute right-3 top-3 rounded-full bg-blue-600/90 px-3 py-1 text-xs font-semibold text-white">
+            계약 진행중
+          </span>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-6">

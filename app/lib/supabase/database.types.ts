@@ -75,6 +75,8 @@ export interface Database {
           complex_id: string;
           property_type: "아파트" | "오피스텔" | "상가" | "단독주택" | "기타";
           status: "draft" | "published";
+          deal_status: "advertising" | "negotiating" | "completed" | "hold";
+          last_verified_at: string | null;
           transaction_type: "매매" | "전세" | "월세";
           price: number;
           price_label: string;
@@ -106,6 +108,8 @@ export interface Database {
           complex_id: string;
           property_type?: "아파트" | "오피스텔" | "상가" | "단독주택" | "기타";
           status?: "draft" | "published";
+          deal_status?: "advertising" | "negotiating" | "completed" | "hold";
+          last_verified_at?: string | null;
           transaction_type: "매매" | "전세" | "월세";
           price: number;
           price_label: string;

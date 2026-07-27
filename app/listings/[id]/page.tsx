@@ -201,6 +201,12 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 </span>
               )}
 
+              {listing.dealStatus === "negotiating" && (
+                <span className="mt-4 ml-2 inline-block rounded-full bg-blue-600/90 px-3 py-1 text-xs font-semibold text-white">
+                  계약 진행중
+                </span>
+              )}
+
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 {inquiryMobileNumber ? (
                   <InquirySmsButton

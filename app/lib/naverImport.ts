@@ -126,6 +126,7 @@ export async function transformToDraftListing(
     complexId,
     propertyType: parsed.propertyType ?? "아파트",
     status: "draft",
+    dealStatus: "advertising",
     transactionType: parsed.transactionType ?? "매매",
     price: parsed.price ?? 0,
     priceLabel: parsed.priceLabel ?? "",

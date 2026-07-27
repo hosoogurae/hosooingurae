@@ -1,5 +1,6 @@
 import type { Complex } from "../../data/complexes";
 import type {
+  DealStatus,
   Listing,
   ListingStatus,
   PropertyType,
@@ -92,6 +93,8 @@ export function listingRowToListing(
     complexId: row.complex_id,
     propertyType: row.property_type as PropertyType,
     status: row.status as ListingStatus,
+    dealStatus: row.deal_status as DealStatus,
+    lastVerifiedAt: row.last_verified_at ?? undefined,
     transactionType: row.transaction_type as TransactionType,
     price: row.price,
     priceLabel: row.price_label,
@@ -129,6 +132,8 @@ export function listingToInsert(listing: Listing): ListingInsert {
     complex_id: listing.complexId,
     property_type: listing.propertyType,
     status: listing.status,
+    deal_status: listing.dealStatus,
+    last_verified_at: listing.lastVerifiedAt ?? null,
     transaction_type: listing.transactionType,
     price: listing.price,
     price_label: listing.priceLabel,

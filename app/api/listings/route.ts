@@ -118,6 +118,13 @@ export async function POST(request: NextRequest) {
     data.status = "published";
   }
 
+  // 4) 마지막 확인일이 없으면 "지금"으로 채웁니다 — 막 등록한 매물이 첫날부터
+  //    "확인 필요" 경고를 받지 않도록 생성 시점에만 적용합니다(PATCH는 이
+  //    기본값 로직을 타지 않으므로 기존 값이 그대로 유지됩니다).
+  if (typeof data.lastVerifiedAt !== "string" || data.lastVerifiedAt.trim() === "") {
+    data.lastVerifiedAt = new Date().toISOString();
+  }
+
   const { listing, errors } = parseListingPayload(data);
 
   if (!listing) {

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type {
+  DealStatus,
   Listing,
   ListingStatus,
   PropertyType,
@@ -19,6 +20,21 @@ const PROPERTY_TYPES: PropertyType[] = [
   "단독주택",
   "기타",
 ];
+
+export const DEAL_STATUS_LABELS: Record<DealStatus, string> = {
+  advertising: "광고중",
+  negotiating: "계약진행",
+  completed: "계약완료",
+  hold: "보류",
+};
+
+function formatLastVerifiedAt(iso: string | undefined): string {
+  if (!iso) return "확인 기록 없음";
+  const date = new Date(iso);
+  return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()} ${String(
+    date.getHours(),
+  ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")} 확인`;
+}
 
 export function Field({
   label,
@@ -451,6 +467,31 @@ export function ListingFormFields({
             />
             지금 바로 홈페이지에 공개하기 (해제 시 임시저장)
           </label>
+        </Field>
+
+        <Field
+          label="거래 진행 상태"
+          hint="계약완료/보류는 공개 상태와 무관하게 홈페이지에서 자동으로 숨겨집니다."
+        >
+          <select
+            value={draft.dealStatus}
+            onChange={(event) =>
+              onChangeField("dealStatus", event.target.value as DealStatus)
+            }
+            className={inputClass}
+          >
+            {(Object.keys(DEAL_STATUS_LABELS) as DealStatus[]).map((value) => (
+              <option key={value} value={value}>
+                {DEAL_STATUS_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="마지막 확인일" hint="목록 화면의 '오늘 확인' 버튼으로 갱신됩니다.">
+          <p className={`${inputClass} bg-navy-900/5 text-navy-800/60`}>
+            {formatLastVerifiedAt(draft.lastVerifiedAt)}
+          </p>
         </Field>
       </div>
 

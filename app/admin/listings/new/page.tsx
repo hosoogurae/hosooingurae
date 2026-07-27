@@ -45,6 +45,7 @@ const EMPTY_DRAFT: Listing = {
   complexId: "",
   propertyType: "아파트",
   status: "published",
+  dealStatus: "advertising",
   transactionType: "매매",
   price: 0,
   priceLabel: "",

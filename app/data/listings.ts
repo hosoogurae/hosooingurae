@@ -6,11 +6,28 @@ export type PropertyType = "아파트" | "오피스텔" | "상가" | "단독주�
 /** draft(임시저장, 비공개) / published(공개, 홈페이지·목록에 즉시 노출) */
 export type ListingStatus = "draft" | "published";
 
+/**
+ * 매물의 실제 거래 진행 상태. 기존 status(공개 여부)와는 별개 개념이라
+ * 이름이 겹치지 않게 합니다 — status는 "관리자가 공개하기로 했는가",
+ * dealStatus는 "이 매물이 실제로 거래 가능한가"입니다.
+ * completed/hold는 status와 무관하게 공개 조회에서 항상 제외됩니다
+ * (app/lib/listings.ts의 getAllListings/getListingById 참고).
+ */
+export type DealStatus = "advertising" | "negotiating" | "completed" | "hold";
+
 export interface Listing {
   id: string;
   complexId: string;
   propertyType: PropertyType;
   status: ListingStatus;
+  dealStatus: DealStatus;
+  /**
+   * 관리자가 "오늘 확인" 버튼으로 갱신하는 마지막 확인 시각(ISO 문자열).
+   * 네이버 가져오기 시점에 자동으로 채워지는 verifiedDate(날짜만, 공개
+   * 노출용 신뢰 배지)와는 다른, 운영 관리 전용 값입니다 — 공개 API에는
+   * 노출하지 않습니다.
+   */
+  lastVerifiedAt?: string;
   transactionType: TransactionType;
   /** 만원 단위 가격 (정렬·필터링용). 매매가/보증금 기준. */
   price: number;
@@ -52,6 +69,7 @@ export const listings: Listing[] = [
     complexId: "hosumaeul-epyeonhansesang-2",
     propertyType: "아파트",
     status: "published",
+    dealStatus: "advertising",
     transactionType: "매매",
     price: 42000,
     priceLabel: "4억 2,000만원",

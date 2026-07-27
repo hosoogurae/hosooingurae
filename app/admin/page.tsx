@@ -109,6 +109,14 @@ export default function AdminDashboardPage() {
       badge: stats === null ? undefined : `등록 매물 ${stats.total}건`,
     },
     {
+      title: "확인 필요한 매물",
+      description: "14일 이상(또는 미확인) 매물을 모아 한 번에 재확인하세요.",
+      href: "/admin/listings?urgent=1",
+      badge:
+        stats === null ? undefined : `확인 필요 ${stats.needsVerification}건`,
+      highlight: (stats?.needsVerification ?? 0) > 0,
+    },
+    {
       title: "단지 정보 관리",
       description: "단지명·주소 등 단지 기본 정보를 관리합니다.",
       href: "/admin/complexes",

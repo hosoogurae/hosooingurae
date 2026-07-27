@@ -1,4 +1,5 @@
 import type {
+  DealStatus,
   Listing,
   ListingStatus,
   PropertyType,
@@ -14,6 +15,12 @@ const PROPERTY_TYPES: PropertyType[] = [
   "기타",
 ];
 const LISTING_STATUSES: ListingStatus[] = ["draft", "published"];
+const DEAL_STATUSES: DealStatus[] = [
+  "advertising",
+  "negotiating",
+  "completed",
+  "hold",
+];
 
 const REQUIRED_STRING_FIELDS = ["id", "complexId"] as const;
 
@@ -108,6 +115,21 @@ export function parseListingPayload(input: unknown): {
     errors.push("공개 상태 값이 올바르지 않습니다.");
   }
 
+  // dealStatus는 없으면 "광고중"으로 기본값 처리하므로(신규 등록 시 자연스러운
+  // 기본값), 값이 아예 없는 건 에러가 아닙니다 — 있는데 4개 값이 아닐 때만
+  // 막습니다.
+  if (
+    data.dealStatus !== undefined &&
+    (typeof data.dealStatus !== "string" ||
+      !DEAL_STATUSES.includes(data.dealStatus as DealStatus))
+  ) {
+    errors.push("거래 진행 상태 값이 올바르지 않습니다.");
+  }
+
+  if (data.lastVerifiedAt !== undefined && typeof data.lastVerifiedAt !== "string") {
+    errors.push("마지막 확인일 값이 올바르지 않습니다.");
+  }
+
   if (errors.length > 0) {
     return { errors };
   }
@@ -117,6 +139,12 @@ export function parseListingPayload(input: unknown): {
     complexId: data.complexId as string,
     propertyType: data.propertyType as PropertyType,
     status: data.status as ListingStatus,
+    // 없으면 "광고중" 기본값 — 신규 등록 시 자연스러운 기본값이고, 기존
+    // 매물을 수정할 때는 편집 화면이 항상 현재 값을 그대로 다시 보내므로
+    // 실제로 이 기본값이 쓰이는 건 최초 생성 시점뿐입니다.
+    dealStatus: (data.dealStatus as DealStatus | undefined) ?? "advertising",
+    lastVerifiedAt:
+      typeof data.lastVerifiedAt === "string" ? data.lastVerifiedAt : undefined,
     transactionType: data.transactionType as TransactionType,
     price: data.price as number,
     priceLabel: data.priceLabel as string,
