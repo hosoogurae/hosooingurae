@@ -7,6 +7,7 @@ import {
 } from "../naverTextParser";
 import { NAVER_OLD_SAMPLE } from "./naverOldSample.fixture";
 import { NAVER_NEW_SAMPLE } from "./naverNewSample.fixture";
+import { NAVER_NEW_SAMPLE_NO_COMMA } from "./naverNewSampleNoComma.fixture";
 
 describe("parseNaverListingText — 구형 샘플(반드시 계속 통과해야 함)", () => {
   const parsed = parseNaverListingText(NAVER_OLD_SAMPLE);
@@ -122,6 +123,50 @@ describe("parseNaverListingText — 신형 샘플(이번에 새로 지원)", () 
   });
 });
 
+describe("parseNaverListingText — 신형 샘플(쉼표 없는 공백형 특징, 이번에 새로 지원)", () => {
+  const parsed = parseNaverListingText(NAVER_NEW_SAMPLE_NO_COMMA);
+
+  it("동을 인식한다(공백형 샘플도 동일하게 동작)", () => {
+    expect(parsed.building).toBe("303동");
+  });
+
+  it("가격/면적/층/방향 등 다른 필드는 그대로 인식된다", () => {
+    expect(parsed.transactionType).toBe("매매");
+    expect(parsed.price).toBe(41000);
+    expect(parsed.supplyArea).toBe(110.03);
+    expect(parsed.exclusiveArea).toBe(84.71);
+    expect(parsed.floor).toBe(3);
+    expect(parsed.totalFloors).toBe(29);
+    expect(parsed.direction).toBe("남서향");
+  });
+
+  it("쉼표 없이 공백으로만 나열된 특징 문장을 태그 배열로 인식한다", () => {
+    expect(parsed.features).toEqual([
+      "주인거주",
+      "관리굿",
+      "중문등",
+      "상태굿",
+      "가마지천뷰",
+      "이사협의",
+    ]);
+  });
+
+  it("매물설명은 재조합 없이 원문 문장을 그대로 쓴다", () => {
+    expect(parsed.shortDescription).toBe(
+      "주인거주 관리굿 중문등 상태굿 가마지천뷰 이사협의",
+    );
+  });
+
+  it("'면적 단위 변경평' 같은 UI 문구를 특징으로 잘못 인식하지 않는다", () => {
+    expect(parsed.features).not.toContain("면적");
+    expect(parsed.shortDescription).not.toContain("면적 단위 변경평");
+  });
+
+  it("인식 실패 필드가 없다(모두 채워짐)", () => {
+    expect(getUncertainFieldLabels(parsed)).toEqual([]);
+  });
+});
+
 describe("경계·예외 상황", () => {
   it("빈 텍스트는 모든 필드가 비어있고 인식 실패로 표시된다", () => {
     const parsed = parseNaverListingText("");
@@ -184,6 +229,49 @@ describe("경계·예외 상황", () => {
     expect(parsed.shortDescription).toBe(
       "채광이 좋고 관리 상태가 우수한 매물입니다. 즉시 입주 가능합니다.",
     );
+  });
+
+  it("공백형 특징 후보는 토큰이 3개 미만이면 인정하지 않는다", () => {
+    const text = [
+      "테스트단지 202동",
+      "매매 3억",
+      "아파트 남향",
+      "짧은문장",
+      "집주인확인매물 2026. 07. 28.",
+      "기본 정보",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.features).toBeUndefined();
+    expect(parsed.shortDescription).toBeUndefined();
+  });
+
+  it("공백형 특징 후보는 숫자·㎡·원·괄호가 섞인 토큰이 있으면 인정하지 않는다", () => {
+    const text = [
+      "테스트단지 202동",
+      "매매 3억",
+      "아파트 남향",
+      "채광좋음 84.5㎡ 즉시입주",
+      "집주인확인매물 2026. 07. 28.",
+      "기본 정보",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.features).toBeUndefined();
+    expect(parsed.shortDescription).toBeUndefined();
+  });
+
+  it("여러 공백형 후보가 있으면 경계에 가장 가까운(마지막) 줄을 선택한다", () => {
+    const text = [
+      "테스트단지 202동",
+      "매매 3억",
+      "아파트 남향",
+      "먼저 나오는 후보 문장",
+      "면적 단위 변경평",
+      "실제로 선택돼야 하는 마지막 문장",
+      "집주인확인매물 2026. 07. 28.",
+      "기본 정보",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.shortDescription).toBe("실제로 선택돼야 하는 마지막 문장");
   });
 });
 

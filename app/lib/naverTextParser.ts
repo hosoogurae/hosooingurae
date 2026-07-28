@@ -271,17 +271,42 @@ const FEATURES_UI_NOISE = /상세보기|도움말/g;
 const SECTION_BOUNDARY_PATTERN = /기본\s*정보|집주인확인매물|^확인매물$|^VR매물$/m;
 
 /**
- * 신형 화면 대응: "매물특징" 라벨 자체가 사라지고 값(쉼표로 구분된 짧은 태그
- * 목록)만 남은 경우, 상세 정보 표가 시작되기 전 구간에서 후보 줄을 찾습니다.
- * 쉼표 개수만으로 단정하지 않고:
- * 1) 가격/면적/층/방수·욕실수 등 다른 필드로 이미 해석 가능한 줄은 제외하고
- *    (그건 특징이 아니라 다른 데이터라는 뜻),
- * 2) 세그먼트가 전부 짧고(12자 이하) 숫자·㎡·원·개·층·만원 같은 단위로만
- *    이뤄진 세그먼트가 없어야 하며(가격/면적이 쉼표로 쪼개진 걸 걸러냄),
- * 3) 여러 후보가 남으면 상세 정보 표 경계에 가장 가까운(마지막) 줄을 씁니다
- *    (고정된 줄 번호가 아니라 경계와의 상대적 위치).
+ * 신형 화면에서 값 옆에 항상 따라붙는 UI 컨트롤 문구(면적 단위 전환 버튼 등).
+ * 실제 매물 정보가 아니므로 특징 후보에서 명시적으로 제외합니다.
  */
-function findFeatureLineCandidate(text: string): string | undefined {
+const KNOWN_NON_CONTENT_LINES = new Set(["면적 단위 변경평", "면적 단위 변경"]);
+
+/** 특징 후보 줄이 가격/면적/층/방수·욕실수 등 다른 필드와 겹치는지 확인합니다. */
+function isLikelyOtherFieldLine(line: string): boolean {
+  if (KNOWN_NON_CONTENT_LINES.has(line)) return true;
+  if (parsePriceSection(line).transactionType) return true;
+  const areas = parseAreas(line);
+  if (areas.supplyArea !== undefined || areas.exclusiveArea !== undefined) return true;
+  if (parseFloors(line).floor !== undefined) return true;
+  if (parseRoomsBathrooms(line).roomCount !== undefined) return true;
+  return false;
+}
+
+interface FeatureLineCandidate {
+  /** 화면 태그 목록으로 쓸 배열. */
+  tags: string[];
+  /** 공백형(자연어 문장)일 때만 채워짐 — 매물설명은 이 원문을 그대로 씁니다. */
+  naturalSentence?: string;
+}
+
+/**
+ * 신형 화면 대응: "매물특징" 라벨 자체가 사라지고 값만 남은 경우, 상세 정보
+ * 표가 시작되기 전 구간에서 후보 줄을 찾습니다. 두 가지 형태를 순서대로
+ * 시도합니다 — 1) 쉼표로 구분된 짧은 태그 목록(기존), 2) 쉼표 없이 공백으로만
+ * 나열된 자연어 문장(신규). 둘 다 쉼표/공백 개수만으로 단정하지 않고:
+ * - 가격/면적/층/방수·욕실수 등 다른 필드로 이미 해석 가능한 줄은 제외하고
+ *   ("면적 단위 변경평" 같은 고정 UI 문구도 명시 제외),
+ * - 세그먼트(또는 공백 토�큰)가 전부 짧고 숫자·㎡·원·괄호·슬래시·% 같은
+ *   기호가 섞이지 않아야 하며,
+ * - 여러 후보가 남으면 상세 정보 표 경계에 가장 가까운(마지막) 줄을 씁니다
+ *   (고정된 줄 번호가 아니라 경계와의 상대적 위치).
+ */
+function findFeatureLineCandidate(text: string): FeatureLineCandidate | undefined {
   const boundaryIndex = text.search(SECTION_BOUNDARY_PATTERN);
   const zone = boundaryIndex === -1 ? text : text.slice(0, boundaryIndex);
   const lines = zone
@@ -289,18 +314,15 @@ function findFeatureLineCandidate(text: string): string | undefined {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  let best: string | undefined;
+  // 1) 쉼표로 구분된 태그 목록(기존 신형 대응, 변경 없음).
+  let commaCandidate: string | undefined;
   for (const line of lines) {
+    if (isLikelyOtherFieldLine(line)) continue;
     const segments = line
       .split(",")
       .map((segment) => segment.trim())
       .filter(Boolean);
     if (segments.length < 2) continue;
-    if (parsePriceSection(line).transactionType) continue;
-    const areas = parseAreas(line);
-    if (areas.supplyArea !== undefined || areas.exclusiveArea !== undefined) continue;
-    if (parseFloors(line).floor !== undefined) continue;
-    if (parseRoomsBathrooms(line).roomCount !== undefined) continue;
 
     const looksLikeTags = segments.every(
       (segment) =>
@@ -308,9 +330,37 @@ function findFeatureLineCandidate(text: string): string | undefined {
     );
     if (!looksLikeTags) continue;
 
-    best = line;
+    commaCandidate = line;
   }
-  return best;
+  if (commaCandidate) {
+    return {
+      tags: commaCandidate.split(",").map((tag) => tag.trim()).filter(Boolean),
+    };
+  }
+
+  // 2) 쉼표 없이 공백으로만 나열된 자연어 문장(신규).
+  let spaceCandidate: string | undefined;
+  for (const line of lines) {
+    if (isLikelyOtherFieldLine(line)) continue;
+    const tokens = line.split(/\s+/).filter(Boolean);
+    if (tokens.length < 3) continue;
+
+    const hasBadToken = tokens.some(
+      (token) => /[\d㎡원()/%％]/.test(token) || token.length > 10,
+    );
+    if (hasBadToken) continue;
+
+    spaceCandidate = line;
+  }
+  if (spaceCandidate) {
+    return {
+      tags: spaceCandidate.split(/\s+/).filter(Boolean),
+      // 재조합하지 않고 원문 줄을 그대로 보관 — 매물설명에서 그대로 씁니다.
+      naturalSentence: spaceCandidate,
+    };
+  }
+
+  return undefined;
 }
 
 /**
@@ -319,26 +369,17 @@ function findFeatureLineCandidate(text: string): string | undefined {
  * 않습니다. 라벨을 찾지 못하면(신형 화면) 라벨 없이 남은 태그 목록 후보를
  * 찾는 방식으로 대체합니다.
  */
-function parseFeatureTags(text: string): string[] | undefined {
+function parseFeatureResult(text: string): FeatureLineCandidate | undefined {
   const labelMatch = text.match(/매물특징\s*[:：]?\s*([^\n]{1,200})/);
   if (labelMatch) {
     const raw = labelMatch[1].replace(FEATURES_UI_NOISE, "").trim();
     if (raw) {
       const tags = raw.split(/\s+/).filter(Boolean);
-      if (tags.length > 0) return tags;
+      if (tags.length > 0) return { tags };
     }
   }
 
-  const candidateLine = findFeatureLineCandidate(text);
-  if (candidateLine) {
-    const tags = candidateLine
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-    if (tags.length > 0) return tags;
-  }
-
-  return undefined;
+  return findFeatureLineCandidate(text);
 }
 
 /** 네이버가 자동으로 붙이는 "게시일 + 제공자" 메타정보. 실제 소개글이 아닙니다. */
@@ -441,7 +482,7 @@ export function parseNaverListingText(rawText: string): ParsedNaverListing {
   const { supplyArea, exclusiveArea } = parseAreas(text);
   const { floor, totalFloors } = parseFloors(text);
   const { roomCount, bathroomCount } = parseRoomsBathrooms(text);
-  const featureTags = parseFeatureTags(text);
+  const featureResult = parseFeatureResult(text);
   const agentDescription = parseAgentDescription(text);
 
   return {
@@ -460,9 +501,13 @@ export function parseNaverListingText(rawText: string): ParsedNaverListing {
     bathroomCount,
     maintenanceFee: parseMaintenanceFee(text),
     moveInDate: parseMoveInDate(text),
-    features: featureTags,
+    features: featureResult?.tags,
+    // 공백형(자연어 문장)일 때는 원문을 그대로 쓰고, 그 외(라벨형/쉼표형)는
+    // 기존과 동일하게 태그를 공백으로 이어붙입니다(구형 동작 변경 없음).
     shortDescription:
-      agentDescription ?? (featureTags ? featureTags.join(" ") : undefined),
+      agentDescription ??
+      featureResult?.naturalSentence ??
+      (featureResult?.tags ? featureResult.tags.join(" ") : undefined),
   };
 }
 
