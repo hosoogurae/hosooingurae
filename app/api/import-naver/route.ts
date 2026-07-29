@@ -3,10 +3,13 @@ import {
   findMatchingUnitTypes,
   resolveUnitTypeCandidates,
 } from "../../lib/floorPlans";
+import { getListingById } from "../../lib/listings";
+import { findNaverDuplicate } from "../../lib/naverDuplicate";
 import {
   extractArticleNumber,
   getComplexOptions,
   getSuggestedComplexName,
+  mergeParsedIntoExisting,
   transformToDraftListing,
 } from "../../lib/naverImport";
 import {
@@ -45,43 +48,17 @@ export async function POST(request: NextRequest) {
     ? extractArticleNumber(trimmedUrl)
     : undefined;
 
-  // source_article_id가 이미 등록돼 있으면 중복이므로 미리보기 단계로 가지 않고 바로 안내합니다.
-  if (sourceArticleId) {
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      const { data: existing, error } = await supabase
-        .from("listings")
-        .select("id, price_label")
-        .eq("source_article_id", sourceArticleId)
-        .maybeSingle();
-
-      if (error) {
-        console.error("[api/import-naver] 중복 확인 실패", error);
-      } else if (existing) {
-        return NextResponse.json(
-          {
-            error: "이미 등록된 매물입니다.",
-            duplicate: {
-              listingId: existing.id,
-              priceLabel: existing.price_label,
-              editUrl: `/admin/listings/${existing.id}/edit`,
-            },
-          },
-          { status: 409 },
-        );
-      }
-    }
-  }
-
   const parsed = parseNaverListingText(pastedText);
   const uncertainFields = getUncertainFieldLabels(parsed);
 
+  const importSource = {
+    url: trimmedUrl || undefined,
+    sourceArticleId,
+    rawSourceText: pastedText,
+  };
+
   const [draft, complexOptions] = await Promise.all([
-    transformToDraftListing(parsed, {
-      url: trimmedUrl || undefined,
-      sourceArticleId,
-      rawSourceText: pastedText,
-    }),
+    transformToDraftListing(parsed, importSource),
     getComplexOptions(),
   ]);
 
@@ -89,6 +66,34 @@ export async function POST(request: NextRequest) {
   const suggestedComplexName = draft.complexId
     ? undefined
     : getSuggestedComplexName(pastedText);
+
+  // 이미 등록된 것으로 보이는 매물이 있는지 확인합니다. 예전처럼 409로
+  // 막지 않고, draft와 함께 duplicate 정보를 내려줘서 관리자가 "기존 매물
+  // 업데이트" / "새 매물로 등록" / "취소" 중 하나를 직접 고를 수 있게 합니다.
+  let duplicate;
+  let mergedPreview;
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    duplicate = await findNaverDuplicate(supabase, {
+      sourceArticleId,
+      articleNumber: parsed.articleNumber,
+      complexId: draft.complexId,
+      building: draft.building,
+      transactionType: draft.transactionType,
+      supplyArea: draft.supplyArea,
+      exclusiveArea: draft.exclusiveArea,
+      floor: draft.floor,
+    });
+
+    if (duplicate) {
+      const existingListing = await getListingById(duplicate.listing.id, {
+        includeDrafts: true,
+      });
+      if (existingListing) {
+        mergedPreview = mergeParsedIntoExisting(existingListing, parsed, importSource);
+      }
+    }
+  }
 
   // 원문에서 파싱된 공급/전용면적과, 그 단지에 이미 등록된 평면도의 공급/전용
   // 면적을 ±0.05㎡ 오차로 비교합니다. 면적만으로 안 좁혀지면(예: 110D/110D-1처럼
@@ -117,5 +122,7 @@ export async function POST(request: NextRequest) {
     uncertainFields,
     suggestedComplexName,
     unitTypeCandidates,
+    duplicate,
+    mergedPreview,
   });
 }

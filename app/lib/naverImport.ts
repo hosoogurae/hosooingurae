@@ -106,13 +106,19 @@ export interface ImportSource {
   rawSourceText: string;
 }
 
+/** verifiedOwnerConfirmationDate(YYYY-MM-DD)를 lastVerifiedAt에 쓸 ISO 문자열로 변환합니다. */
+function toLastVerifiedAt(date: string | undefined): string | undefined {
+  return date ? `${date}T00:00:00.000Z` : undefined;
+}
+
 /**
  * 텍스트 파서(app/lib/naverTextParser.ts)가 반환한 결과를 기존 Listing 데이터
  * 구조로 변환합니다.
  *
  * 파서가 인식하지 못한 값은 추측하지 않고 빈 값(문자열은 "", 숫자는 0)으로
- * 남겨둡니다. 어떤 필드가 비어있는지는 getUncertainFieldLabels()로 별도 안내하며,
- * 이 draft는 항상 status: "draft"로 시작해 관리자가 검토 후 직접 공개로 전환합니다.
+ * 남겨둡니다. 어떤 필드가 비어있는지는 getUncertainFieldLabels()로 별도 안내합니다.
+ * status는 기본 공개(published)로 시작하되, 관리자가 등록 화면에서 체크를
+ * 해제하면 임시저장으로 등록할 수 있습니다.
  */
 export async function transformToDraftListing(
   parsed: ParsedNaverListing,
@@ -125,7 +131,7 @@ export async function transformToDraftListing(
     id: generateListingId(parsed.complexName ?? "naver-import"),
     complexId,
     propertyType: parsed.propertyType ?? "아파트",
-    status: "draft",
+    status: "published",
     dealStatus: "advertising",
     transactionType: parsed.transactionType ?? "매매",
     price: parsed.price ?? 0,
@@ -143,10 +149,66 @@ export async function transformToDraftListing(
     shortDescription: parsed.shortDescription ?? "",
     features: parsed.features ?? [],
     naverUrl: source.url,
+    articleNumber: parsed.articleNumber,
     sourceType: "naver",
     sourceArticleId: source.sourceArticleId,
     rawSourceText: source.rawSourceText,
     verifiedDate: new Date().toISOString().slice(0, 10),
+    // 집주인확인매물 날짜를 찾았을 때만 채우고, 못 찾으면 비워둡니다(오늘
+    // 날짜로 대체 금지). 비어있으면 getVerificationUrgency가 "urgent"로 잡아
+    // 기존 "확인 필요" 메커니즘이 자연스럽게 안내합니다.
+    lastVerifiedAt: toLastVerifiedAt(parsed.verifiedOwnerConfirmationDate),
     isFeatured: false,
+  };
+}
+
+/**
+ * 새로 파싱한 결과를 이미 등록된 매물(existing)에 병합합니다("기존 매물
+ * 업데이트" 흐름 전용). 관리자가 예전에 직접 입력해둔 값을, 이번 파싱
+ * 결과가 비어있다는 이유로 지우지 않도록 각 필드마다 "새 값이 실제로
+ * 있을 때만 덮어쓰기" 규칙을 적용합니다.
+ *
+ * 공개 상태(status)·거래 진행 상태(dealStatus)·대표매물 여부·사진 등은
+ * 이 업데이트의 대상이 아니므로 기존 값을 그대로 유지합니다. 마지막
+ * 확인일은 이번에 새로 추출한 날짜가 있으면 그 값을, 없으면 기존 값을
+ * 그대로 유지합니다(우선순위: 관리자가 이후 화면에서 직접 수정 > 새로
+ * 추출한 날짜 > 기존 값 > 빈 값 — 관리자의 화면 수정은 이 병합 결과를
+ * 그대로 폼에 채운 뒤 저장 전 자유롭게 고칠 수 있게 하는 것으로 만족됩니다).
+ */
+export function mergeParsedIntoExisting(
+  existing: Listing,
+  parsed: ParsedNaverListing,
+  source: ImportSource,
+): Listing {
+  const nonEmptyString = (value: string | undefined, fallback: string): string =>
+    value && value.trim() !== "" ? value : fallback;
+  const positiveNumber = (value: number | undefined, fallback: number): number =>
+    value !== undefined && value > 0 ? value : fallback;
+
+  return {
+    ...existing,
+    propertyType: parsed.propertyType ?? existing.propertyType,
+    transactionType: parsed.transactionType ?? existing.transactionType,
+    price: positiveNumber(parsed.price, existing.price),
+    priceLabel: nonEmptyString(parsed.priceLabel, existing.priceLabel),
+    building: nonEmptyString(parsed.building, existing.building),
+    floor: positiveNumber(parsed.floor, existing.floor),
+    totalFloors: positiveNumber(parsed.totalFloors, existing.totalFloors),
+    supplyArea: positiveNumber(parsed.supplyArea, existing.supplyArea),
+    exclusiveArea: positiveNumber(parsed.exclusiveArea, existing.exclusiveArea),
+    roomCount: positiveNumber(parsed.roomCount, existing.roomCount),
+    bathroomCount: positiveNumber(parsed.bathroomCount, existing.bathroomCount),
+    direction: nonEmptyString(parsed.direction, existing.direction),
+    moveInDate: nonEmptyString(parsed.moveInDate, existing.moveInDate),
+    maintenanceFee: nonEmptyString(parsed.maintenanceFee, existing.maintenanceFee ?? ""),
+    shortDescription: nonEmptyString(parsed.shortDescription, existing.shortDescription),
+    features: parsed.features && parsed.features.length > 0 ? parsed.features : existing.features,
+    naverUrl: source.url ?? existing.naverUrl,
+    articleNumber: parsed.articleNumber ?? existing.articleNumber,
+    sourceType: existing.sourceType ?? "naver",
+    sourceArticleId: source.sourceArticleId ?? existing.sourceArticleId,
+    rawSourceText: source.rawSourceText,
+    lastVerifiedAt:
+      toLastVerifiedAt(parsed.verifiedOwnerConfirmationDate) ?? existing.lastVerifiedAt,
   };
 }

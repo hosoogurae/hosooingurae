@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Listing } from "../../../data/listings";
 import type { ListingSubmission } from "../../../data/listingSubmissions";
+import type { DuplicateMatch } from "../../../lib/naverDuplicate";
 import type { ComplexOption } from "../../../lib/naverImport";
 import { parseKoreanAmountToManwon } from "../../../lib/naverTextParser";
 import {
@@ -13,12 +14,9 @@ import {
   type ComplexMode,
   type NewComplexState,
 } from "../../ListingFields";
+import NaverDuplicatePanel from "../../NaverDuplicatePanel";
 
-interface NaverDuplicateInfo {
-  listingId: string;
-  priceLabel: string;
-  editUrl: string;
-}
+type NaverDuplicateChoice = "update" | "new" | null;
 
 function normalizeComplexName(name: string): string {
   return name.replace(/\s+/g, "").toLowerCase();
@@ -88,9 +86,13 @@ export default function AdminRegisterPage() {
   const [naverPastedText, setNaverPastedText] = useState("");
   const [naverAnalyzing, setNaverAnalyzing] = useState(false);
   const [naverError, setNaverError] = useState<string | null>(null);
-  const [naverDuplicate, setNaverDuplicate] = useState<NaverDuplicateInfo | null>(
+  const [naverDuplicateMatch, setNaverDuplicateMatch] =
+    useState<DuplicateMatch | null>(null);
+  const [naverMergedPreview, setNaverMergedPreview] = useState<Listing | null>(
     null,
   );
+  const [naverDuplicateChoice, setNaverDuplicateChoice] =
+    useState<NaverDuplicateChoice>(null);
   const [naverUncertainFields, setNaverUncertainFields] = useState<
     string[] | null
   >(null);
@@ -131,7 +133,9 @@ export default function AdminRegisterPage() {
 
     setNaverAnalyzing(true);
     setNaverError(null);
-    setNaverDuplicate(null);
+    setNaverDuplicateMatch(null);
+    setNaverMergedPreview(null);
+    setNaverDuplicateChoice(null);
     setNaverUncertainFields(null);
     setNaverUnitTypeCandidates(null);
 
@@ -144,11 +148,7 @@ export default function AdminRegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 409 && data.duplicate) {
-          setNaverDuplicate(data.duplicate as NaverDuplicateInfo);
-        } else {
-          setNaverError(data.error ?? "분석에 실패했습니다.");
-        }
+        setNaverError(data.error ?? "분석에 실패했습니다.");
         return;
       }
 
@@ -159,11 +159,32 @@ export default function AdminRegisterPage() {
         (data.uncertainFields as string[] | undefined) ?? [],
         data.suggestedComplexName as string | undefined,
       );
+      setNaverDuplicateMatch((data.duplicate as DuplicateMatch | undefined) ?? null);
+      setNaverMergedPreview((data.mergedPreview as Listing | undefined) ?? null);
     } catch {
       setNaverError("네트워크 오류로 분석에 실패했습니다.");
     } finally {
       setNaverAnalyzing(false);
     }
+  }
+
+  /** "기존 매물 업데이트"를 선택하면 병합 미리보기 값을 그대로 등록 폼에 채웁니다. */
+  function handleChooseUpdateExisting() {
+    if (!naverMergedPreview) return;
+    setDraft(naverMergedPreview);
+    setFeaturesInput(naverMergedPreview.features.join(", "));
+    setComplexMode("existing");
+    setNaverDuplicateChoice("update");
+  }
+
+  function handleChooseRegisterNew() {
+    setNaverDuplicateChoice("new");
+  }
+
+  function handleCancelNaverDuplicate() {
+    setNaverDuplicateMatch(null);
+    setNaverMergedPreview(null);
+    setNaverDuplicateChoice(null);
   }
 
   function applyPrefillFromSubmission(
@@ -269,7 +290,9 @@ export default function AdminRegisterPage() {
     setNaverUrl("");
     setNaverPastedText("");
     setNaverError(null);
-    setNaverDuplicate(null);
+    setNaverDuplicateMatch(null);
+    setNaverMergedPreview(null);
+    setNaverDuplicateChoice(null);
     setNaverUncertainFields(null);
     setNaverUnitTypeCandidates(null);
   }
@@ -303,34 +326,49 @@ export default function AdminRegisterPage() {
   }
 
   async function handleSubmit() {
+    // 중복이 발견됐는데 아직 관리자가 셋 중 하나를 고르지 않았다면 저장을 막습니다.
+    if (naverDuplicateMatch && !naverDuplicateChoice) return;
+
     setSubmitting(true);
     setSubmitErrors(null);
 
     try {
+      const isUpdatingExisting =
+        naverDuplicateChoice === "update" && naverDuplicateMatch;
+
       const payload: Record<string, unknown> = {
         ...draft,
-        id: undefined, // 매물 ID는 서버가 자동으로 만들어줍니다.
+        id: isUpdatingExisting ? draft.id : undefined, // 신규 등록은 서버가 ID를 자동으로 만들어줍니다.
         features: featuresInput
           .split(",")
           .map((feature) => feature.trim())
           .filter(Boolean),
       };
 
+      if (naverDuplicateChoice === "new") {
+        payload.allowDuplicateArticle = true;
+      }
+
       // 접수 건에서 넘어온 경우, 접수 때 올린 사진을 그대로 매물 사진으로 승계합니다.
       if (sourceSubmission && sourceSubmission.photos.length > 0) {
         payload.images = sourceSubmission.photos;
       }
 
-      if (complexMode === "new") {
+      if (!isUpdatingExisting && complexMode === "new") {
         delete payload.complexId;
         payload.newComplex = newComplex;
       }
 
-      const response = await fetch("/api/listings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        isUpdatingExisting
+          ? `/api/listings/${naverDuplicateMatch.listing.id}`
+          : "/api/listings",
+        {
+          method: isUpdatingExisting ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       const data = await response.json();
 
       if (!response.ok) {
@@ -499,17 +537,31 @@ export default function AdminRegisterPage() {
           </p>
         )}
 
-        {naverDuplicate && (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            이미 등록된 매물입니다
-            {naverDuplicate.priceLabel ? ` (${naverDuplicate.priceLabel})` : ""}.{" "}
-            <Link
-              href={naverDuplicate.editUrl}
-              className="font-semibold underline underline-offset-4"
+        {naverDuplicateMatch && !naverDuplicateChoice && (
+          <NaverDuplicatePanel
+            duplicate={naverDuplicateMatch}
+            mergedPreview={naverMergedPreview ?? undefined}
+            onUpdateExisting={handleChooseUpdateExisting}
+            onRegisterNew={handleChooseRegisterNew}
+            onCancel={handleCancelNaverDuplicate}
+          />
+        )}
+
+        {naverDuplicateChoice === "update" && naverDuplicateMatch && (
+          <div className="mt-3 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
+            <strong>
+              {naverDuplicateMatch.listing.complexName}{" "}
+              {naverDuplicateMatch.listing.building}
+            </strong>{" "}
+            매물을 업데이트합니다(새 매물로 등록되지 않습니다).{" "}
+            <button
+              type="button"
+              onClick={handleChooseRegisterNew}
+              className="font-semibold text-gold-600 underline-offset-4 hover:underline"
             >
-              수정 화면으로 이동 →
-            </Link>
-          </p>
+              새 매물로 등록할래요
+            </button>
+          </div>
         )}
 
         {naverUncertainFields && (
@@ -557,10 +609,14 @@ export default function AdminRegisterPage() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || Boolean(naverDuplicateMatch && !naverDuplicateChoice)}
             className="w-full rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-3 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
-            {submitting ? "등록 중..." : "등록하기"}
+            {submitting
+              ? "저장 중..."
+              : naverDuplicateChoice === "update"
+                ? "기존 매물 업데이트 저장"
+                : "등록하기"}
           </button>
         </div>
       </div>

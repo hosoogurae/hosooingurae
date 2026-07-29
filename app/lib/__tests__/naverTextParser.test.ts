@@ -358,3 +358,39 @@ describe("getComplexNameCandidates — 배지 위치가 달라져도 후보를 �
     expect(candidates[0]).toBe("호수마을e편한세상3단지 303동");
   });
 });
+
+describe("parseNaverListingText — 매물번호 추출", () => {
+  it("\"매물번호\" 라벨 뒤 숫자를 인식한다(라벨과 값이 다른 줄)", () => {
+    const parsed = parseNaverListingText(NAVER_NEW_SAMPLE_WITH_DIGITS_IN_FEATURES);
+    expect(parsed.articleNumber).toBe("2640683107");
+  });
+
+  it("매물번호가 없으면 undefined다", () => {
+    const parsed = parseNaverListingText(
+      "테스트단지 202동\n매매 3억\n아파트 남향\n채광좋음 즉시입주\n기본 정보",
+    );
+    expect(parsed.articleNumber).toBeUndefined();
+  });
+});
+
+describe("parseNaverListingText — 집주인확인매물 날짜 추출", () => {
+  it("\"집주인확인매물 2026. 07. 29.\" 형태를 YYYY-MM-DD로 정규화한다", () => {
+    const parsed = parseNaverListingText(NAVER_NEW_SAMPLE_WITH_DIGITS_IN_FEATURES);
+    expect(parsed.verifiedOwnerConfirmationDate).toBe("2026-07-29");
+  });
+
+  it("\"집주인 확인매물 2026.07.29\"처럼 공백/마침표 표기가 달라도 인식한다", () => {
+    const parsed = parseNaverListingText("집주인 확인매물 2026.07.29\n기본 정보");
+    expect(parsed.verifiedOwnerConfirmationDate).toBe("2026-07-29");
+  });
+
+  it("\"확인매물 2026. 7. 29.\"처럼 \"집주인\" 없이 한 자리 월/일이어도 인식한다", () => {
+    const parsed = parseNaverListingText("확인매물 2026. 7. 29.\n기본 정보");
+    expect(parsed.verifiedOwnerConfirmationDate).toBe("2026-07-29");
+  });
+
+  it("날짜를 찾지 못하면 undefined다(오늘 날짜로 대체하지 않음)", () => {
+    const parsed = parseNaverListingText(NAVER_OLD_SAMPLE);
+    expect(parsed.verifiedOwnerConfirmationDate).toBeUndefined();
+  });
+});

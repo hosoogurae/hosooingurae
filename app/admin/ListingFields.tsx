@@ -28,12 +28,27 @@ export const DEAL_STATUS_LABELS: Record<DealStatus, string> = {
   hold: "보류",
 };
 
+export const DEAL_STATUS_BADGE_CLASS: Record<DealStatus, string> = {
+  advertising: "bg-green-500/10 text-green-700",
+  negotiating: "bg-blue-500/10 text-blue-700",
+  completed: "bg-navy-900/10 text-navy-800",
+  hold: "bg-orange-500/10 text-orange-700",
+};
+
 function formatLastVerifiedAt(iso: string | undefined): string {
   if (!iso) return "확인 기록 없음";
   const date = new Date(iso);
   return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()} ${String(
     date.getHours(),
   ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")} 확인`;
+}
+
+/** lastVerifiedAt(ISO 문자열) → <input type="date">가 요구하는 YYYY-MM-DD. */
+function toDateInputValue(iso: string | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
 }
 
 export function Field({
@@ -488,10 +503,26 @@ export function ListingFormFields({
           </select>
         </Field>
 
-        <Field label="마지막 확인일" hint="목록 화면의 '오늘 확인' 버튼으로 갱신됩니다.">
-          <p className={`${inputClass} bg-navy-900/5 text-navy-800/60`}>
+        <Field
+          label="마지막 확인일"
+          hint="저장 시 이 값이 최종 반영됩니다. 네이버 재가져오기로 새 날짜를 찾으면 이 값이 제안값으로 바뀌며, 목록 화면의 '오늘 확인' 버튼으로도 갱신할 수 있습니다."
+        >
+          <input
+            type="date"
+            value={toDateInputValue(draft.lastVerifiedAt)}
+            onChange={(event) =>
+              onChangeField(
+                "lastVerifiedAt",
+                event.target.value
+                  ? `${event.target.value}T00:00:00.000Z`
+                  : undefined,
+              )
+            }
+            className={inputClass}
+          />
+          <span className="mt-1 block text-xs text-navy-800/40">
             {formatLastVerifiedAt(draft.lastVerifiedAt)}
-          </p>
+          </span>
         </Field>
       </div>
 

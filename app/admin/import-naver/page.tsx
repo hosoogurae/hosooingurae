@@ -3,17 +3,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { Listing } from "../../data/listings";
+import type { DuplicateMatch } from "../../lib/naverDuplicate";
 import type { ComplexOption } from "../../lib/naverImport";
 import { buildNaverPhotosBookmarklet } from "../../lib/naverPhotosBookmarklet";
 import { Field, ListingFormFields, inputClass } from "../ListingFields";
+import NaverDuplicatePanel from "../NaverDuplicatePanel";
 
 type Step = "input" | "preview" | "done";
-
-interface DuplicateInfo {
-  listingId: string;
-  priceLabel: string;
-  editUrl: string;
-}
+type DuplicateChoice = "update" | "new" | null;
 
 interface ImportResponse {
   draft: Listing;
@@ -21,6 +18,8 @@ interface ImportResponse {
   uncertainFields: string[];
   suggestedComplexName?: string;
   unitTypeCandidates?: string[];
+  duplicate?: DuplicateMatch;
+  mergedPreview?: Listing;
 }
 
 export default function AdminImportPage() {
@@ -29,7 +28,11 @@ export default function AdminImportPage() {
   const [pastedText, setPastedText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
+  const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(
+    null,
+  );
+  const [mergedPreview, setMergedPreview] = useState<Listing | null>(null);
+  const [duplicateChoice, setDuplicateChoice] = useState<DuplicateChoice>(null);
 
   const [draft, setDraft] = useState<Listing | null>(null);
   const [complexOptions, setComplexOptions] = useState<ComplexOption[]>([]);
@@ -69,7 +72,9 @@ export default function AdminImportPage() {
   async function handleImport(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    setDuplicate(null);
+    setDuplicateMatch(null);
+    setMergedPreview(null);
+    setDuplicateChoice(null);
     setLoading(true);
 
     try {
@@ -79,11 +84,6 @@ export default function AdminImportPage() {
         body: JSON.stringify({ url, pastedText }),
       });
       const data = await response.json();
-
-      if (response.status === 409 && data.duplicate) {
-        setDuplicate(data.duplicate as DuplicateInfo);
-        return;
-      }
 
       if (!response.ok) {
         throw new Error(data.error ?? "매물 정보를 분석하지 못했습니다.");
@@ -98,6 +98,8 @@ export default function AdminImportPage() {
       setNewComplexName(payload.suggestedComplexName ?? "");
       setNewComplexAddress("");
       setCreateComplexError(null);
+      setDuplicateMatch(payload.duplicate ?? null);
+      setMergedPreview(payload.mergedPreview ?? null);
       setStep("preview");
     } catch (err) {
       setError(
@@ -108,32 +110,54 @@ export default function AdminImportPage() {
     }
   }
 
+  /** "기존 매물 업데이트"를 선택하면 병합 미리보기 값을 그대로 폼에 채웁니다. */
+  function handleChooseUpdateExisting() {
+    if (!mergedPreview) return;
+    setDraft(mergedPreview);
+    setFeaturesInput(mergedPreview.features.join(", "));
+    setDuplicateChoice("update");
+  }
+
+  function handleChooseRegisterNew() {
+    setDuplicateChoice("new");
+  }
+
+  function handleCancelDuplicate() {
+    resetFlow();
+  }
+
   async function handleRegister() {
     if (!draft) return;
+    // 중복이 발견됐는데 아직 관리자가 셋 중 하나를 고르지 않았다면 저장을 막습니다.
+    if (duplicateMatch && !duplicateChoice) return;
 
     setSubmitting(true);
     setSubmitErrors(null);
 
     try {
-      const payload: Listing = {
+      const payload: Record<string, unknown> = {
         ...draft,
         features: featuresInput
           .split(",")
           .map((feature) => feature.trim())
           .filter(Boolean),
       };
-
-      const response = await fetch("/api/listings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-
-      if (response.status === 409 && data.duplicate) {
-        setDuplicate(data.duplicate as DuplicateInfo);
-        return;
+      if (duplicateChoice === "new") {
+        payload.allowDuplicateArticle = true;
       }
+
+      const isUpdatingExisting = duplicateChoice === "update" && duplicateMatch;
+      const response = await fetch(
+        isUpdatingExisting
+          ? `/api/listings/${duplicateMatch.listing.id}`
+          : "/api/listings",
+        {
+          method: isUpdatingExisting ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await response.json();
 
       if (!response.ok) {
         setSubmitErrors(data.errors ?? [data.error ?? "등록에 실패했습니다."]);
@@ -196,7 +220,9 @@ export default function AdminImportPage() {
     setPastedText("");
     setDraft(null);
     setError(null);
-    setDuplicate(null);
+    setDuplicateMatch(null);
+    setMergedPreview(null);
+    setDuplicateChoice(null);
     setUncertainFields([]);
     setUnitTypeCandidates([]);
     setSubmitErrors(null);
@@ -305,19 +331,6 @@ export default function AdminImportPage() {
             />
           </Field>
 
-          {duplicate && (
-            <div className="mt-3 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
-              이미 등록된 매물입니다: <strong>{duplicate.priceLabel}</strong>
-              <br />
-              <Link
-                href={duplicate.editUrl}
-                className="font-semibold text-gold-600 underline-offset-4 hover:underline"
-              >
-                기존 매물 수정하러 가기 →
-              </Link>
-            </div>
-          )}
-
           {error && (
             <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
@@ -338,11 +351,37 @@ export default function AdminImportPage() {
         <div className="mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8">
           <h2 className="text-lg font-bold text-navy-950">미리보기 · 수정</h2>
           <p className="mt-1 text-sm text-navy-800/60">
-            등록하기 전에 내용을 확인하고 필요한 부분을 수정해주세요. 임시저장
-            (비공개) 상태로 시작하며, 검토가 끝나면 매물 관리 화면에서 공개로
-            전환할 수 있습니다.
+            등록하기 전에 내용을 확인하고 필요한 부분을 수정해주세요. 기본적으로
+            바로 공개 상태로 시작하며, 아래 &quot;공개 상태&quot; 체크를
+            해제하면 임시저장(비공개)으로 등록할 수 있습니다.
           </p>
 
+          {duplicateMatch && !duplicateChoice && (
+            <NaverDuplicatePanel
+              duplicate={duplicateMatch}
+              mergedPreview={mergedPreview ?? undefined}
+              onUpdateExisting={handleChooseUpdateExisting}
+              onRegisterNew={handleChooseRegisterNew}
+              onCancel={handleCancelDuplicate}
+            />
+          )}
+
+          {duplicateChoice === "update" && duplicateMatch && (
+            <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
+              <strong>{duplicateMatch.listing.complexName} {duplicateMatch.listing.building}</strong>{" "}
+              매물을 업데이트합니다(새 매물로 등록되지 않습니다).{" "}
+              <button
+                type="button"
+                onClick={handleChooseRegisterNew}
+                className="font-semibold text-gold-600 underline-offset-4 hover:underline"
+              >
+                새 매물로 등록할래요
+              </button>
+            </div>
+          )}
+
+          {(!duplicateMatch || duplicateChoice) && (
+            <>
           {uncertainFields.length > 0 && (
             <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
               다음 항목은 텍스트에서 확인하지 못해 비어있습니다. 아래에서 직접
@@ -425,19 +464,6 @@ export default function AdminImportPage() {
             </pre>
           </details>
 
-          {duplicate && (
-            <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
-              이미 등록된 매물입니다: <strong>{duplicate.priceLabel}</strong>
-              <br />
-              <Link
-                href={duplicate.editUrl}
-                className="font-semibold text-gold-600 underline-offset-4 hover:underline"
-              >
-                기존 매물 수정하러 가기 →
-              </Link>
-            </div>
-          )}
-
           {submitErrors && (
             <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               <ul className="list-disc space-y-0.5 pl-4">
@@ -455,7 +481,11 @@ export default function AdminImportPage() {
               disabled={submitting}
               className="rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2.5 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? "등록 중..." : "임시저장으로 등록하기"}
+              {submitting
+                ? "저장 중..."
+                : duplicateChoice === "update"
+                  ? "기존 매물 업데이트 저장"
+                  : "등록하기"}
             </button>
             <button
               type="button"
@@ -465,18 +495,27 @@ export default function AdminImportPage() {
               다시 가져오기
             </button>
           </div>
+            </>
+          )}
         </div>
       )}
 
       {step === "done" && registeredListing && (
         <div className="mt-8 rounded-xl border border-navy-900/10 p-6 text-center sm:p-8">
-          <p className="text-sm font-semibold text-gold-600">등록 완료</p>
+          <p className="text-sm font-semibold text-gold-600">
+            {duplicateChoice === "update" ? "업데이트 완료" : "등록 완료"}
+          </p>
           <h2 className="mt-2 text-lg font-bold text-navy-950">
-            임시저장 상태로 매물이 등록되었습니다.
+            {duplicateChoice === "update"
+              ? "기존 매물 정보가 업데이트되었습니다."
+              : registeredListing.status === "published"
+                ? "매물이 공개 상태로 등록되었습니다."
+                : "임시저장 상태로 매물이 등록되었습니다."}
           </h2>
           <p className="mt-2 text-sm text-navy-800/60">
-            아직 홈페이지에는 공개되지 않았습니다. 내용을 다시 확인한 뒤
-            공개로 전환해주세요.
+            {registeredListing.status === "published"
+              ? "지금 바로 홈페이지에서 확인할 수 있어요."
+              : "아직 홈페이지에는 공개되지 않았습니다. 내용을 다시 확인한 뒤 공개로 전환해주세요."}
           </p>
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link

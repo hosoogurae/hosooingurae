@@ -36,6 +36,14 @@ export interface ParsedNaverListing {
    * 없으면 구형과 동일하게 features를 원문 순서 그대로 공백으로 이어붙입니다.
    */
   shortDescription?: string;
+  /** "매물번호" 라벨 뒤 숫자. naverUrl의 articleNo와 같은 식별 개념으로 취급합니다. */
+  articleNumber?: string;
+  /**
+   * "집주인확인매물 2026. 07. 29." 같은 문구에서 추출한 날짜(YYYY-MM-DD).
+   * 마지막 확인일의 기본값 후보로만 쓰이며, 값이 없으면 오늘 날짜로
+   * 대체하지 않고 undefined로 남겨둡니다(허위 날짜 생성 금지).
+   */
+  verifiedOwnerConfirmationDate?: string;
 }
 
 const TRANSACTION_TYPES: TransactionType[] = ["매매", "전세", "월세"];
@@ -472,6 +480,28 @@ export function stripTrailingBuildingFloor(line: string): string {
   return line.replace(/\s*\d+\s*동\s*$/, "").trim();
 }
 
+/** "매물번호" 라벨 뒤 숫자를 추출합니다. 라벨과 값이 다른 줄이어도(신형 화면) 인식됩니다. */
+function parseArticleNumber(text: string): string | undefined {
+  const match = text.match(/매물\s*번호\s*[:：]?\s*(\d{6,})/);
+  return match ? match[1] : undefined;
+}
+
+/**
+ * "집주인확인매물 2026. 07. 29.", "집주인 확인매물 2026.07.29", "확인매물
+ * 2026. 7. 29." 처럼 공백·마침표 표기가 제각각인 문구에서 날짜를 추출해
+ * YYYY-MM-DD로 정규화합니다. 못 찾으면 undefined — 오늘 날짜로 대체하지
+ * 않습니다(허위 날짜 생성 금지).
+ */
+function parseVerifiedOwnerConfirmationDate(text: string): string | undefined {
+  const match = text.match(
+    /(?:집주인\s*)?확인매물\s*(\d{4})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})\s*\.?/,
+  );
+  if (!match) return undefined;
+
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
 /**
  * "동" 표기에서 동 번호만 추출합니다("201동"). "구래동", "공동주택"처럼
  * 숫자와 무관한 "동"과 헷갈리지 않도록, 반드시 숫자가 바로 앞에 붙어있을
@@ -529,6 +559,8 @@ export function parseNaverListingText(rawText: string): ParsedNaverListing {
       agentDescription ??
       featureResult?.naturalSentence ??
       (featureResult?.tags ? featureResult.tags.join(" ") : undefined),
+    articleNumber: parseArticleNumber(text),
+    verifiedOwnerConfirmationDate: parseVerifiedOwnerConfirmationDate(text),
   };
 }
 

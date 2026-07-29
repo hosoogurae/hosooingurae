@@ -151,13 +151,25 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 네이버 매물번호(source_article_id) 기준 중복 등록 방지. 값이 있을 때만 검사하며,
-  // 여러 매물이 이 값 없이(null) 존재하는 것은 정상입니다.
-  if (listing.sourceArticleId) {
+  // 네이버 매물번호(source_article_id 또는 article_number) 기준 중복 등록
+  // 방지. 관리자가 /admin/import-naver 등에서 중복 확인 화면을 이미 보고
+  // "새 매물로 등록"을 명시적으로 선택한 경우에는 allowDuplicateArticle
+  // 플래그로 이 검사를 건너뜁니다(같은 경고를 두 번 띄우지 않기 위함).
+  const allowDuplicateArticle = data.allowDuplicateArticle === true;
+  const idCandidates = [listing.sourceArticleId, listing.articleNumber].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  if (!allowDuplicateArticle && idCandidates.length > 0) {
+    const orParts = idCandidates.flatMap((value) => [
+      `source_article_id.eq.${value}`,
+      `article_number.eq.${value}`,
+    ]);
     const { data: existingBySource, error: sourceCheckError } = await supabase
       .from("listings")
       .select("id, price_label")
-      .eq("source_article_id", listing.sourceArticleId)
+      .or(orParts.join(","))
+      .limit(1)
       .maybeSingle();
 
     if (sourceCheckError) {
