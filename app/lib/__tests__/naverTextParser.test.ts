@@ -8,6 +8,7 @@ import {
 import { NAVER_OLD_SAMPLE } from "./naverOldSample.fixture";
 import { NAVER_NEW_SAMPLE } from "./naverNewSample.fixture";
 import { NAVER_NEW_SAMPLE_NO_COMMA } from "./naverNewSampleNoComma.fixture";
+import { NAVER_NEW_SAMPLE_WITH_DIGITS_IN_FEATURES } from "./naverNewSampleDigitsInFeatures.fixture";
 
 describe("parseNaverListingText — 구형 샘플(반드시 계속 통과해야 함)", () => {
   const parsed = parseNaverListingText(NAVER_OLD_SAMPLE);
@@ -167,6 +168,40 @@ describe("parseNaverListingText — 신형 샘플(쉼표 없는 공백형 특징
   });
 });
 
+describe("parseNaverListingText — 신형 샘플(특징 문장에 숫자가 섞인 경우, 매물번호 2640683107)", () => {
+  const parsed = parseNaverListingText(NAVER_NEW_SAMPLE_WITH_DIGITS_IN_FEATURES);
+
+  it("동/가격/면적/층/향/입주가능일을 인식한다", () => {
+    expect(parsed.building).toBe("302동");
+    expect(parsed.transactionType).toBe("매매");
+    expect(parsed.priceLabel).toBe("4억 3,000만원");
+    expect(parsed.supplyArea).toBe(108.6);
+    expect(parsed.exclusiveArea).toBe(84.64);
+    expect(parsed.floor).toBe(6);
+    expect(parsed.totalFloors).toBe(26);
+    expect(parsed.direction).toBe("남동향");
+    expect(parsed.moveInDate).toBe("즉시입주 협의 가능");
+  });
+
+  it("'방4', '냉장고장2등'처럼 숫자가 섞인 특징 문장도 통째로 제외되지 않는다", () => {
+    expect(parsed.features).toEqual([
+      "인기판상형",
+      "방4",
+      "안방붙박이장",
+      "냉장고장2등",
+      "집상태",
+      "최상",
+    ]);
+    expect(parsed.shortDescription).toBe(
+      "인기판상형 방4 안방붙박이장 냉장고장2등 집상태 최상",
+    );
+  });
+
+  it("인식 실패 필드가 없다(모두 채워짐)", () => {
+    expect(getUncertainFieldLabels(parsed)).toEqual([]);
+  });
+});
+
 describe("경계·예외 상황", () => {
   it("빈 텍스트는 모든 필드가 비어있고 인식 실패로 표시된다", () => {
     const parsed = parseNaverListingText("");
@@ -257,6 +292,34 @@ describe("경계·예외 상황", () => {
     const parsed = parseNaverListingText(text);
     expect(parsed.features).toBeUndefined();
     expect(parsed.shortDescription).toBeUndefined();
+  });
+
+  it("공백형 특징 후보는 순수 숫자+단위 토큰(㎡·원 기호 없이도)이 있으면 인정하지 않는다", () => {
+    const text = [
+      "테스트단지 202동",
+      "매매 3억",
+      "아파트 남향",
+      "채광좋음 26층 즉시입주",
+      "집주인확인매물 2026. 07. 28.",
+      "기본 정보",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.features).toBeUndefined();
+    expect(parsed.shortDescription).toBeUndefined();
+  });
+
+  it("공백형 특징 후보는 한글 단어에 숫자가 자연스럽게 섞인 토큰은 그대로 허용한다", () => {
+    const text = [
+      "테스트단지 202동",
+      "매매 3억",
+      "아파트 남향",
+      "방3 붙박이장2개 채광좋음",
+      "집주인확인매물 2026. 07. 28.",
+      "기본 정보",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.features).toEqual(["방3", "붙박이장2개", "채광좋음"]);
+    expect(parsed.shortDescription).toBe("방3 붙박이장2개 채광좋음");
   });
 
   it("여러 공백형 후보가 있으면 경계에 가장 가까운(마지막) 줄을 선택한다", () => {

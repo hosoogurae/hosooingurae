@@ -345,8 +345,16 @@ function findFeatureLineCandidate(text: string): FeatureLineCandidate | undefine
     const tokens = line.split(/\s+/).filter(Boolean);
     if (tokens.length < 3) continue;
 
+    // 숫자가 "섞여 있다"는 이유만으로 제외하면 "방4", "냉장고장2등"처럼
+    // 실제 특징 표현에 자연스럽게 붙는 숫자까지 걸러져 버립니다. 그래서
+    // (1) ㎡·원·괄호·슬래시·% 같은 단위/기호가 있거나, (2) 토큰 전체가
+    // 숫자(+선택적 단위 접미사)로만 이뤄진 경우(가격·면적 그 자체)만
+    // 걸러내고, 한글 단어 속에 숫자가 섞인 토큰은 그대로 통과시킵니다.
     const hasBadToken = tokens.some(
-      (token) => /[\d㎡원()/%％]/.test(token) || token.length > 10,
+      (token) =>
+        /[㎡원()/%％]/.test(token) ||
+        /^[\d.,]+(㎡|원|개|층|만원|억)?$/.test(token) ||
+        token.length > 10,
     );
     if (hasBadToken) continue;
 
@@ -379,7 +387,20 @@ function parseFeatureResult(text: string): FeatureLineCandidate | undefined {
     }
   }
 
-  return findFeatureLineCandidate(text);
+  const candidate = findFeatureLineCandidate(text);
+  if (!candidate) {
+    // 라벨형/쉼표형/공백형 셋 다 실패한 경우 — 다음에 또 레이아웃이 바뀌면
+    // 이 로그(서버 콘솔/Vercel 함수 로그)만 보고도 어떤 구간을 살펴봤는지,
+    // 왜 후보가 하나도 안 남았는지 바로 알 수 있게 남깁니다.
+    const boundaryIndex = text.search(SECTION_BOUNDARY_PATTERN);
+    const zone = boundaryIndex === -1 ? text : text.slice(0, boundaryIndex);
+    console.warn(
+      "[naverTextParser] 특징/매물설명 후보를 찾지 못했습니다.\n" +
+        `--- 후보 검색 구간(경계 이전) ---\n${zone}\n` +
+        "--- 검색 구간 끝 ---",
+    );
+  }
+  return candidate;
 }
 
 /** 네이버가 자동으로 붙이는 "게시일 + 제공자" 메타정보. 실제 소개글이 아닙니다. */
