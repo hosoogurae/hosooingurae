@@ -91,6 +91,11 @@ export default function AdminDashboardPage() {
 
   const cards: DashboardCard[] = [
     {
+      title: "상담 도우미",
+      description: "고객과 대면 상담할 때 마이크로 들은 말을 큰 글씨 자막으로 보여줍니다.",
+      href: "/admin/consult-helper",
+    },
+    {
       title: "신규 매물 접수",
       description: "홈페이지로 들어온 매물 접수를 확인하고 연락하세요.",
       href: "/admin/listing-submissions",

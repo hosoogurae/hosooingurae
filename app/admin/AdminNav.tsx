@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AdminLogoutButton } from "./AdminLogoutButton";
+import { AdminInstallPwaButton } from "./AdminInstallPwaButton";
 
 const NAV_ITEMS = [
   { label: "대시보드", href: "/admin" },
+  { label: "상담 도우미", href: "/admin/consult-helper" },
   { label: "매물 접수", href: "/admin/listing-submissions" },
   { label: "매물 등록", href: "/admin/listings/new" },
   { label: "매물 관리", href: "/admin/listings" },
@@ -47,7 +49,8 @@ export function AdminNav() {
         >
           홈페이지 보기
         </a>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <AdminInstallPwaButton />
           <AdminLogoutButton />
         </div>
       </nav>
