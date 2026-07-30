@@ -33,6 +33,15 @@ const MIC_PERMISSION_LABEL: Record<string, string> = {
 
 type Mode = "free" | "openai";
 
+const MODE_STORAGE_KEY = "hosoogurae:consult-helper:mode";
+
+/** 기본값은 고정확도(OpenAI) 모드. 마지막으로 고른 모드가 있으면 그걸 우선합니다. */
+function getInitialMode(): Mode {
+  if (typeof window === "undefined") return "openai";
+  const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
+  return stored === "free" ? "free" : "openai";
+}
+
 /** 리서치 시점 대략적인 환산용 환율. 실제 환율에 따라 달라질 수 있습니다. */
 const APPROX_KRW_PER_USD = 1400;
 
@@ -50,8 +59,13 @@ function formatCost(usd: number): string {
 export default function ConsultHelperPage() {
   // 청력 보조가 목적이라 기본값을 "보통"보다 한 단계 위로 시작합니다.
   const [fontScale, setFontScale] = useState<FontScale>("large");
-  const [mode, setMode] = useState<Mode>("free");
+  const [mode, setModeState] = useState<Mode>(getInitialMode);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  function setMode(next: Mode) {
+    setModeState(next);
+    window.localStorage.setItem(MODE_STORAGE_KEY, next);
+  }
 
   const freeEngine = useSpeechTranscription();
   const openAiEngine = useOpenAiRealtimeTranscription();
