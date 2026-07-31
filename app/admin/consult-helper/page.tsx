@@ -383,6 +383,19 @@ export default function ConsultHelperPage() {
         </div>
       </details>
 
+      {mode === "openai" && openAiEngine.debugLog.length > 0 && (
+        <div className="mt-3 max-h-56 overflow-y-auto rounded-md bg-navy-950 px-3 py-2">
+          <p className="mb-1 text-[11px] font-semibold text-white/40">
+            WebRTC 연결 로그 (진단용)
+          </p>
+          {openAiEngine.debugLog.map((entry, index) => (
+            <p key={index} className="font-mono text-[11px] leading-relaxed text-white/70">
+              <span className="text-white/40">{entry.time}</span> {entry.message}
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="mt-4 flex flex-1 flex-col">
         <TranscriptView transcript={engine.transcript} fontScale={fontScale} />
       </div>

@@ -28,6 +28,11 @@ const OPENAI_SDP_EXCHANGE_URL = "https://api.openai.com/v1/realtime/calls";
 /** 연결이 예기치 않게 끊겼을 때 자동 재연결을 시도하는 최대 횟수. */
 const MAX_AUTO_RECONNECT_ATTEMPTS = 2;
 
+export interface DebugLogEntry {
+  time: string;
+  message: string;
+}
+
 interface UseOpenAiRealtimeTranscriptionResult {
   status: ConsultStatus;
   isSupported: boolean;
@@ -41,6 +46,8 @@ interface UseOpenAiRealtimeTranscriptionResult {
   turnDetectionMode: TurnDetectionMode;
   setTurnDetectionMode: (mode: TurnDetectionMode) => void;
   reconnectAttempt: number;
+  /** WebRTC 연결 과정 진단용 로그(콘솔 + 화면 표시 겸용). 기능에는 영향 없음. */
+  debugLog: DebugLogEntry[];
   start: () => void;
   pause: () => void;
   resume: () => void;
@@ -89,7 +96,18 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
   const [turnDetectionMode, setTurnDetectionModeState] =
     useState<TurnDetectionMode>("server_vad_default");
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [debugLog, setDebugLog] = useState<DebugLogEntry[]>([]);
   const isSupported = useIsWebRtcSupported();
+
+  /** Android에서만 실패하는 원인을 찾기 위한 진단용 로그. 콘솔과 화면에 동시 출력하며, 그 외에는 아무 것도 바꾸지 않습니다. */
+  const log = useCallback((message: string) => {
+    const time = new Date().toLocaleTimeString("ko-KR", { hour12: false });
+    console.log(`[consult-helper/openai] ${message}`);
+    setDebugLog((prev) => {
+      const next = [...prev, { time, message }];
+      return next.length > 200 ? next.slice(next.length - 200) : next;
+    });
+  }, []);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -169,17 +187,23 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
         return;
       }
 
+      if (payload.type === "response.audio_transcript.delta") {
+        log("response.audio_transcript.delta 수신");
+      }
+
       if (payload.type === "conversation.item.input_audio_transcription.delta") {
+        log("conversation.item.input_audio_transcription.delta 수신");
         const delta = (payload as TranscriptionDeltaEvent).delta ?? "";
         setTranscript((prev) => setInterimText(prev, delta));
       } else if (
         payload.type === "conversation.item.input_audio_transcription.completed"
       ) {
+        log("conversation.item.input_audio_transcription.completed 수신");
         const text = (payload as TranscriptionCompletedEvent).transcript ?? "";
         setTranscript((prev) => appendFinalEntry(prev, text));
       }
     };
-  }, []);
+  }, [log]);
 
   // 아래에서 서로를 참조해야 해서(연결 실패 시 이 함수가 재연결로 자기
   // 자신을 다시 부름) ref에 최신 함수를 담아 순환 참조 문제를 피합니다.
@@ -245,8 +269,10 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
         });
         const tokenData = await tokenResponse.json();
         if (!tokenResponse.ok || typeof tokenData.clientSecret !== "string") {
+          log(`realtime-token 발급 실패 (status=${tokenResponse.status})`);
           throw new Error(tokenData.error ?? "고정확도 모드 연결에 실패했습니다.");
         }
+        log(`realtime-token 발급 성공 (status=${tokenResponse.status})`);
         if (generation !== connectionGenerationRef.current) return; // 이미 교체됨
 
         const clientSecret: string = tokenData.clientSecret;
@@ -262,20 +288,36 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
         stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
 
         const dataChannel = pc.createDataChannel("oai-events");
-        dataChannel.onmessage = (event) => makeHandleRealtimeEvent(generation)(event.data);
-        dataChannel.onclose = () => handleDisconnect(generation);
-        dataChannel.onerror = () => handleDisconnect(generation);
+        log("DataChannel 생성");
+        dataChannel.onopen = () => log("DataChannel open");
+        dataChannel.onmessage = (event) => {
+          log(`DataChannel message 수신 (${String(event.data).length}자)`);
+          makeHandleRealtimeEvent(generation)(event.data);
+        };
+        dataChannel.onclose = () => {
+          log("DataChannel close");
+          handleDisconnect(generation);
+        };
+        dataChannel.onerror = () => {
+          log("DataChannel error");
+          handleDisconnect(generation);
+        };
         dataChannelRef.current = dataChannel;
 
         pc.onconnectionstatechange = () => {
+          log(`peerConnection connectionState: ${pc.connectionState}`);
           if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
             handleDisconnect(generation);
           }
+        };
+        pc.oniceconnectionstatechange = () => {
+          log(`ICE connectionState: ${pc.iceConnectionState}`);
         };
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
+        log("SDP 요청 시작");
         const sdpResponse = await fetch(OPENAI_SDP_EXCHANGE_URL, {
           method: "POST",
           body: offer.sdp,
@@ -286,10 +328,13 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
         });
 
         if (!sdpResponse.ok) {
+          log(`SDP 응답 실패 (status=${sdpResponse.status})`);
           throw new Error("고정확도 모드 연결에 실패했습니다.");
         }
+        log(`SDP 응답 성공 (status=${sdpResponse.status})`);
         const answerSdp = await sdpResponse.text();
         await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+        log("setRemoteDescription 성공");
 
         if (generation !== connectionGenerationRef.current) {
           pc.close();
@@ -303,6 +348,7 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
         startElapsedTimer();
         setStatus("listening");
       } catch (err) {
+        log(`예외 발생: ${err instanceof Error ? err.message : String(err)}`);
         if (generation !== connectionGenerationRef.current) return;
         cleanupConnection();
         setErrorMessage(
@@ -313,7 +359,7 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
         setStatus("error");
       }
     },
-    [cleanupConnection, makeHandleRealtimeEvent, handleDisconnect, startElapsedTimer],
+    [cleanupConnection, makeHandleRealtimeEvent, handleDisconnect, startElapsedTimer, log],
   );
 
   useEffect(() => {
@@ -376,6 +422,7 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
     turnDetectionMode,
     setTurnDetectionMode,
     reconnectAttempt,
+    debugLog,
     start,
     pause,
     resume,
