@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import TranscriptView, { type FontScale } from "./TranscriptView";
 import { useSpeechTranscription } from "./useSpeechTranscription";
 import { useOpenAiRealtimeTranscription } from "./useOpenAiRealtimeTranscription";
@@ -33,14 +33,10 @@ const MIC_PERMISSION_LABEL: Record<string, string> = {
 
 type Mode = "free" | "openai";
 
+/** 이전에 "고정확도 모드 기본값" 실험 때 저장해 둔 값이 있으면 지웁니다 —
+ * 그 실험은 되돌렸고, 이 키는 더 이상 읽지 않습니다. 기존 사용자가 이
+ * 값 때문에 자동으로 유료 모드로 들어가는 일이 없도록 정리만 합니다. */
 const MODE_STORAGE_KEY = "hosoogurae:consult-helper:mode";
-
-/** 기본값은 고정확도(OpenAI) 모드. 마지막으로 고른 모드가 있으면 그걸 우선합니다. */
-function getInitialMode(): Mode {
-  if (typeof window === "undefined") return "openai";
-  const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
-  return stored === "free" ? "free" : "openai";
-}
 
 /** 리서치 시점 대략적인 환산용 환율. 실제 환율에 따라 달라질 수 있습니다. */
 const APPROX_KRW_PER_USD = 1400;
@@ -59,13 +55,12 @@ function formatCost(usd: number): string {
 export default function ConsultHelperPage() {
   // 청력 보조가 목적이라 기본값을 "보통"보다 한 단계 위로 시작합니다.
   const [fontScale, setFontScale] = useState<FontScale>("large");
-  const [mode, setModeState] = useState<Mode>(getInitialMode);
+  const [mode, setMode] = useState<Mode>("free");
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
-  function setMode(next: Mode) {
-    setModeState(next);
-    window.localStorage.setItem(MODE_STORAGE_KEY, next);
-  }
+  useEffect(() => {
+    window.localStorage.removeItem(MODE_STORAGE_KEY);
+  }, []);
 
   const freeEngine = useSpeechTranscription();
   const openAiEngine = useOpenAiRealtimeTranscription();
