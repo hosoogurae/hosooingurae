@@ -118,18 +118,9 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     }
 
     const recognition = new Ctor();
-    // 실험 C: lang을 명시하지 않고 브라우저/기기 기본 언어를 쓰도록 비워둡니다
-    // (일부 Android 기기에서 특정 언어 코드의 온디바이스 인식팩이 없을 때
-    // onspeechstart/onresult 없이 조용히 실패하는 사례가 보고된 바 있습니다).
-    // 실험 A: Android Chrome은 continuous:true 세션을 데스크톱처럼 길게 유지하지
-    // 않고 onspeechstart/onresult 없이 ~5초마다 조용히 onend로 끊는 것을 로그로
-    // 확인했습니다. continuous:false로 두면 Android가 실제로 쓰는 단발 인식
-    // 방식에 맞춰, 매 인식마다 onend에서 기존 재시작 로직이 새 세션을 열게
-    // 됩니다(재시작 로직 자체는 변경하지 않음).
-    recognition.continuous = false;
-    // 실험 B: continuous:false로도 onspeechstart/onresult가 안 뜨는 게
-    // 확인돼, 중간 결과 처리 경로 자체를 격리해서 원인을 좁혀봅니다.
-    recognition.interimResults = false;
+    recognition.lang = "ko-KR";
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => log("onstart");
