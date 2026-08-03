@@ -73,16 +73,23 @@ function useIsWebRtcSupported(): boolean {
 
 interface TranscriptionDeltaEvent {
   type: "conversation.item.input_audio_transcription.delta";
+  item_id?: string;
+  content_index?: number;
   delta?: string;
 }
 interface TranscriptionCompletedEvent {
   type: "conversation.item.input_audio_transcription.completed";
+  item_id?: string;
+  content_index?: number;
   transcript?: string;
 }
 type RealtimeEvent =
   | TranscriptionDeltaEvent
   | TranscriptionCompletedEvent
   | { type: string; [key: string]: unknown };
+
+/** 화면 로그가 원본 이벤트 페이로드를 얼마나 자세히 남길지(처음 몇 건만 — 도배 방지). */
+const RAW_EVENT_LOG_LIMIT = 3;
 
 export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscriptionResult {
   const [status, setStatus] = useState<ConsultStatus>("idle");
@@ -126,6 +133,13 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
   const disconnectHandledRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const turnDetectionModeRef = useRef<TurnDetectionMode>("server_vad_default");
+  // delta는 공식 문서상 "word-by-word" 증분 조각이라, 화면에 보여줄 interimText는
+  // 여기서 직접 이어붙여 누적합니다(transcript.ts의 setInterimText 자체는 무료
+  // 모드도 같이 쓰는 "그대로 교체" 유틸이라 손대지 않습니다). completed가 오면
+  // 비우고, completed 없이 delta만 계속 와도 누적된 값이 계속 화면에 보입니다.
+  const interimAccumulatorRef = useRef("");
+  const deltaRawLogCountRef = useRef(0);
+  const completedRawLogCountRef = useRef(0);
 
   const startElapsedTimer = useCallback(() => {
     segmentStartRef.current = Date.now();
@@ -192,15 +206,57 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
       }
 
       if (payload.type === "conversation.item.input_audio_transcription.delta") {
-        log("conversation.item.input_audio_transcription.delta 수신");
-        const delta = (payload as TranscriptionDeltaEvent).delta ?? "";
-        setTranscript((prev) => setInterimText(prev, delta));
+        const event = payload as TranscriptionDeltaEvent;
+        const rawDelta = event.delta;
+
+        if (deltaRawLogCountRef.current < RAW_EVENT_LOG_LIMIT) {
+          deltaRawLogCountRef.current += 1;
+          log(
+            `delta 원본 #${deltaRawLogCountRef.current}: type=${event.type}, item_id=${event.item_id ?? "(없음)"}, ` +
+              `content_index=${event.content_index ?? "(없음)"}, delta 자료형=${typeof rawDelta}, ` +
+              `delta 앞100자="${String(rawDelta ?? "").slice(0, 100)}"`,
+          );
+        }
+
+        const delta = typeof rawDelta === "string" ? rawDelta : "";
+        interimAccumulatorRef.current += delta;
+        log(
+          `conversation.item.input_audio_transcription.delta 수신 (누적 interimText 앞100자="${interimAccumulatorRef.current.slice(0, 100)}")`,
+        );
+
+        setTranscript((prev) => {
+          const next = setInterimText(prev, interimAccumulatorRef.current);
+          log(
+            `reducer 후: entries=${next.entries.length}, interimText 앞100자="${next.interimText.slice(0, 100)}"`,
+          );
+          return next;
+        });
       } else if (
         payload.type === "conversation.item.input_audio_transcription.completed"
       ) {
-        log("conversation.item.input_audio_transcription.completed 수신");
-        const text = (payload as TranscriptionCompletedEvent).transcript ?? "";
-        setTranscript((prev) => appendFinalEntry(prev, text));
+        const event = payload as TranscriptionCompletedEvent;
+        const rawTranscript = event.transcript;
+
+        if (completedRawLogCountRef.current < RAW_EVENT_LOG_LIMIT) {
+          completedRawLogCountRef.current += 1;
+          log(
+            `completed 원본 #${completedRawLogCountRef.current}: type=${event.type}, item_id=${event.item_id ?? "(없음)"}, ` +
+              `content_index=${event.content_index ?? "(없음)"}, transcript 필드 존재=${typeof rawTranscript === "string"}, ` +
+              `transcript 앞100자="${String(rawTranscript ?? "").slice(0, 100)}"`,
+          );
+        }
+
+        interimAccumulatorRef.current = "";
+        const text = typeof rawTranscript === "string" ? rawTranscript : "";
+        log(`conversation.item.input_audio_transcription.completed 수신 (id/text 앞100자="${text.slice(0, 100)}")`);
+
+        setTranscript((prev) => {
+          const next = appendFinalEntry(prev, text);
+          log(
+            `reducer 후: entries=${next.entries.length}, interimText 앞100자="${next.interimText.slice(0, 100)}"`,
+          );
+          return next;
+        });
       }
     };
   }, [log]);
@@ -248,6 +304,7 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
         accumulatedMsRef.current = 0;
         setElapsedSeconds(0);
         setLastSessionSummary(null);
+        interimAccumulatorRef.current = "";
       }
 
       // 이전 연결(있다면)을 먼저 완전히 정리한 뒤, 새 세대 번호를 발급합니다 —
@@ -407,6 +464,7 @@ export function useOpenAiRealtimeTranscription(): UseOpenAiRealtimeTranscription
   }, [cleanupConnection, stopElapsedTimer]);
 
   const clear = useCallback(() => {
+    interimAccumulatorRef.current = "";
     setTranscript(clearTranscript());
   }, []);
 
