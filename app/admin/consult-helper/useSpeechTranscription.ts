@@ -83,6 +83,22 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
 
   useEffect(() => {
     log(`SpeechRecognition 지원 여부: ${isSupported}`);
+    log(`window.SpeechRecognition 존재: ${typeof window.SpeechRecognition !== "undefined"}`);
+    log(`window.webkitSpeechRecognition 존재: ${typeof window.webkitSpeechRecognition !== "undefined"}`);
+    log(`navigator.userAgent: ${navigator.userAgent}`);
+    const chromeVersionMatch = navigator.userAgent.match(/Chrome\/([\d.]+)/);
+    log(`Chrome 버전: ${chromeVersionMatch ? chromeVersionMatch[1] : "(UA에서 못 찾음)"}`);
+    const uaData = (navigator as { userAgentData?: unknown }).userAgentData as
+      | { platform?: string; mobile?: boolean; brands?: { brand: string; version: string }[] }
+      | undefined;
+    if (uaData) {
+      log(
+        `navigator.userAgentData: platform=${uaData.platform}, mobile=${uaData.mobile}, ` +
+          `brands=${JSON.stringify(uaData.brands)}`,
+      );
+    } else {
+      log("navigator.userAgentData: (없음)");
+    }
   }, [isSupported, log]);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -117,7 +133,25 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
       return;
     }
 
+    const usedCtorName =
+      Ctor === window.SpeechRecognition
+        ? "window.SpeechRecognition"
+        : Ctor === window.webkitSpeechRecognition
+          ? "window.webkitSpeechRecognition"
+          : "(알 수 없음)";
+    log(`사용된 constructor: ${usedCtorName}`);
+
     const recognition = new Ctor();
+    log(`recognition.constructor.name: ${recognition.constructor?.name}`);
+    const proto = Object.getPrototypeOf(recognition);
+    log(`recognition의 prototype.constructor.name: ${proto?.constructor?.name}`);
+    log(
+      `사용 API 존재 여부: start=${typeof recognition.start === "function"}, ` +
+        `stop=${typeof recognition.stop === "function"}, abort=${typeof recognition.abort === "function"}, ` +
+        `onresult=${"onresult" in recognition}, onaudiostart=${"onaudiostart" in recognition}, ` +
+        `onspeechstart=${"onspeechstart" in recognition}`,
+    );
+
     recognition.lang = "ko-KR";
     recognition.continuous = true;
     recognition.interimResults = true;
