@@ -119,7 +119,12 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
 
     const recognition = new Ctor();
     recognition.lang = "ko-KR";
-    recognition.continuous = true;
+    // 실험 A: Android Chrome은 continuous:true 세션을 데스크톱처럼 길게 유지하지
+    // 않고 onspeechstart/onresult 없이 ~5초마다 조용히 onend로 끊는 것을 로그로
+    // 확인했습니다. continuous:false로 두면 Android가 실제로 쓰는 단발 인식
+    // 방식에 맞춰, 매 인식마다 onend에서 기존 재시작 로직이 새 세션을 열게
+    // 됩니다(재시작 로직 자체는 변경하지 않음).
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
