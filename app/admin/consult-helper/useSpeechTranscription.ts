@@ -125,7 +125,9 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     // 방식에 맞춰, 매 인식마다 onend에서 기존 재시작 로직이 새 세션을 열게
     // 됩니다(재시작 로직 자체는 변경하지 않음).
     recognition.continuous = false;
-    recognition.interimResults = true;
+    // 실험 B: continuous:false로도 onspeechstart/onresult가 안 뜨는 게
+    // 확인돼, 중간 결과 처리 경로 자체를 격리해서 원인을 좁혀봅니다.
+    recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => log("onstart");
