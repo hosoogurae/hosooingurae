@@ -17,6 +17,11 @@ import {
 
 export type ConsultStatus = "idle" | "listening" | "paused" | "ended";
 
+export interface SpeechDebugLogEntry {
+  time: string;
+  message: string;
+}
+
 export interface UseSpeechTranscriptionResult {
   status: ConsultStatus;
   /** 이 브라우저가 SpeechRecognition을 지원하는지(Chrome/Edge 최신 버전이면 true). */
@@ -24,6 +29,8 @@ export interface UseSpeechTranscriptionResult {
   transcript: TranscriptState;
   /** 권한 거부 등 사용자에게 보여줄 한 줄 안내. 없으면 null. */
   errorMessage: string | null;
+  /** 무료 모드(Web Speech API) 전용 진단 로그. OpenAI 모드 로그와는 완전히 별개입니다. */
+  debugLog: SpeechDebugLogEntry[];
   start: () => void;
   pause: () => void;
   resume: () => void;
@@ -61,7 +68,22 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     EMPTY_TRANSCRIPT_STATE,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [debugLog, setDebugLog] = useState<SpeechDebugLogEntry[]>([]);
   const isSupported = useIsSpeechRecognitionSupported();
+
+  /** Android에서만 자막이 안 나오는 원인을 찾기 위한 무료 모드 전용 진단 로그. 콘솔과 화면에 동시 출력하며, 그 외에는 아무 것도 바꾸지 않습니다. */
+  const log = useCallback((message: string) => {
+    const time = new Date().toLocaleTimeString("ko-KR", { hour12: false });
+    console.log(`[consult-helper/free] ${message}`);
+    setDebugLog((prev) => {
+      const next = [...prev, { time, message }];
+      return next.length > 200 ? next.slice(next.length - 200) : next;
+    });
+  }, []);
+
+  useEffect(() => {
+    log(`SpeechRecognition 지원 여부: ${isSupported}`);
+  }, [isSupported, log]);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   // 사용자가 직접 멈춘 것(pause/stop)인지, 브라우저가 조용히 세션을 끊은
@@ -101,7 +123,14 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
+    recognition.onstart = () => log("onstart");
+    recognition.onaudiostart = () => log("onaudiostart");
+    recognition.onspeechstart = () => log("onspeechstart");
+
     recognition.onresult = (event) => {
+      log(
+        `onresult 수신 (resultIndex=${event.resultIndex}, results.length=${event.results.length})`,
+      );
       setErrorMessage(null);
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -115,6 +144,7 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     };
 
     recognition.onerror = (event) => {
+      log(`onerror: ${event.error}`);
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         intentionalStopRef.current = true;
         setErrorMessage(
@@ -139,6 +169,7 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     };
 
     recognition.onend = () => {
+      log("onend");
       if (intentionalStopRef.current) {
         return;
       }
@@ -150,6 +181,7 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
         (t) => now - t < RESTART_BURST_WINDOW_MS,
       );
       restartTimestampsRef.current.push(now);
+      log(`자동 재시작 횟수: ${restartTimestampsRef.current.length}`);
 
       if (restartTimestampsRef.current.length > RESTART_BURST_LIMIT) {
         setErrorMessage("자동 재연결에 실패했어요. '다시 시작'을 눌러주세요.");
@@ -161,23 +193,26 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
 
     recognitionRef.current = recognition;
     intentionalStopRef.current = false;
+    log("recognition.start() 호출");
     try {
       recognition.start();
-    } catch {
+    } catch (err) {
       // 이미 시작된 인스턴스에 start()를 다시 호출하면 예외가 발생할 수 있음 — 무시.
+      log(`recognition.start() 예외: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }, []);
+  }, [log]);
 
   useEffect(() => {
     createAndStartRef.current = createAndStartRecognition;
   }, [createAndStartRecognition]);
 
   const start = useCallback(() => {
+    log("start() 호출됨 (버튼 클릭)");
     setErrorMessage(null);
     restartTimestampsRef.current = [];
     setStatus("listening");
     createAndStartRecognition();
-  }, [createAndStartRecognition]);
+  }, [createAndStartRecognition, log]);
 
   const pause = useCallback(() => {
     intentionalStopRef.current = true;
@@ -207,6 +242,7 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     isSupported,
     transcript,
     errorMessage,
+    debugLog,
     start,
     pause,
     resume,

@@ -24,6 +24,8 @@ interface SpeechRecognition extends EventTarget {
   onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
   onend: ((this: SpeechRecognition) => void) | null;
   onstart: ((this: SpeechRecognition) => void) | null;
+  onaudiostart: ((this: SpeechRecognition) => void) | null;
+  onspeechstart: ((this: SpeechRecognition) => void) | null;
 }
 
 // eslint-disable-next-line no-var -- 생성자+인터페이스 선언 병합에는 var가 필요한 TS 표준 관용구
