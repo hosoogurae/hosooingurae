@@ -57,6 +57,25 @@ function getSpeechRecognitionCtor(): typeof SpeechRecognition | undefined {
   return window.webkitSpeechRecognition ?? window.SpeechRecognition;
 }
 
+interface SpeechRecognitionSelection {
+  ctor: typeof SpeechRecognition;
+  /** 실제로 어느 전역에서 골랐는지 — Ctor === window.SpeechRecognition 같은
+   * 사후 동일성 비교로 역추론하지 않습니다(두 전역이 같은 객체를 가리킬 수
+   * 있어 그 방식은 신뢰할 수 없다고 확인됐습니다). */
+  key: "webkitSpeechRecognition" | "SpeechRecognition";
+}
+
+function getSpeechRecognitionSelection(): SpeechRecognitionSelection | undefined {
+  if (typeof window === "undefined") return undefined;
+  if (window.webkitSpeechRecognition) {
+    return { ctor: window.webkitSpeechRecognition, key: "webkitSpeechRecognition" };
+  }
+  if (window.SpeechRecognition) {
+    return { ctor: window.SpeechRecognition, key: "SpeechRecognition" };
+  }
+  return undefined;
+}
+
 function subscribeNever() {
   // 지원 여부는 페이지 생명주기 동안 바뀌지 않으므로 구독할 대상이 없습니다.
   return () => {};
@@ -159,22 +178,27 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
   }, [stopRecognitionInstance]);
 
   const createAndStartRecognition = useCallback(() => {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const hasSpeechRecognition = typeof window.SpeechRecognition !== "undefined";
+    const hasWebkitSpeechRecognition = typeof window.webkitSpeechRecognition !== "undefined";
+    log(
+      `constructor 선택 전: isAndroid=${isAndroid}, hasSpeechRecognition=${hasSpeechRecognition}, ` +
+        `hasWebkitSpeechRecognition=${hasWebkitSpeechRecognition}`,
+    );
+    log(
+      `window.SpeechRecognition === window.webkitSpeechRecognition: ${window.SpeechRecognition === window.webkitSpeechRecognition}`,
+    );
+
+    const selection = getSpeechRecognitionSelection();
+    if (!selection) {
       setErrorMessage(
         "이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Edge 최신 버전을 사용해주세요.",
       );
       setStatus("idle");
       return;
     }
-
-    const usedCtorName =
-      Ctor === window.SpeechRecognition
-        ? "window.SpeechRecognition"
-        : Ctor === window.webkitSpeechRecognition
-          ? "window.webkitSpeechRecognition"
-          : "(알 수 없음)";
-    log(`사용된 constructor: ${usedCtorName}`);
+    const { ctor: Ctor, key: selectedKey } = selection;
+    log(`선택된 키: window.${selectedKey}`);
 
     const recognition = new Ctor();
     log(`recognition.constructor.name: ${recognition.constructor?.name}`);
