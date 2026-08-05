@@ -99,6 +99,28 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     } else {
       log("navigator.userAgentData: (없음)");
     }
+
+    // Chrome 최신 온디바이스 인식(processLocally) 가용성 진단 — install()은 호출하지 않습니다.
+    const Ctor = getSpeechRecognitionCtor();
+    if (Ctor) {
+      log(`typeof SpeechRecognition.available: ${typeof Ctor.available}`);
+      log(`typeof SpeechRecognition.install: ${typeof Ctor.install}`);
+      if (typeof Ctor.available === "function") {
+        Ctor.available({ langs: ["ko-KR"], processLocally: true, quality: "dictation" })
+          .then((result) => {
+            log(`SpeechRecognition.available() 결과: ${result}`);
+          })
+          .catch((err: unknown) => {
+            const name = err instanceof Error ? err.name : "(알 수 없음)";
+            const message = err instanceof Error ? err.message : String(err);
+            log(`SpeechRecognition.available() 예외: ${name} - ${message}`);
+          });
+      } else {
+        log("SpeechRecognition.available 함수가 없어 호출하지 않음");
+      }
+    } else {
+      log("SpeechRecognition/webkitSpeechRecognition 생성자 자체가 없어 available/install 확인 불가");
+    }
   }, [isSupported, log]);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -151,6 +173,8 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
         `onresult=${"onresult" in recognition}, onaudiostart=${"onaudiostart" in recognition}, ` +
         `onspeechstart=${"onspeechstart" in recognition}`,
     );
+    log(`"processLocally" in recognition: ${"processLocally" in recognition}`);
+    log(`recognition.processLocally 기본값: ${recognition.processLocally}`);
 
     recognition.lang = "ko-KR";
     recognition.continuous = true;

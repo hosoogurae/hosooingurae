@@ -17,6 +17,8 @@ interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   maxAlternatives: number;
+  /** Chrome의 최신 온디바이스 인식 옵션 — 표준 lib.dom.d.ts에 아직 없어 진단 목적으로만 선언. */
+  processLocally?: boolean;
   start(): void;
   stop(): void;
   abort(): void;
@@ -28,10 +30,20 @@ interface SpeechRecognition extends EventTarget {
   onspeechstart: ((this: SpeechRecognition) => void) | null;
 }
 
+interface SpeechRecognitionAvailableOptions {
+  langs?: string[];
+  processLocally?: boolean;
+  quality?: string;
+}
+
 // eslint-disable-next-line no-var -- 생성자+인터페이스 선언 병합에는 var가 필요한 TS 표준 관용구
 declare var SpeechRecognition: {
   prototype: SpeechRecognition;
   new (): SpeechRecognition;
+  /** Chrome 최신 온디바이스 인식 가용성 진단용 — 미지원 브라우저에선 undefined. */
+  available?: (options: SpeechRecognitionAvailableOptions) => Promise<string>;
+  /** 이번 작업에서는 호출하지 않습니다(진단만) — 타입 선언만 미리 둡니다. */
+  install?: (options: SpeechRecognitionAvailableOptions) => Promise<boolean>;
 };
 
 interface Window {
