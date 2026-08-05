@@ -45,7 +45,9 @@ const RESTART_BURST_LIMIT = 5;
 
 function getSpeechRecognitionCtor(): typeof SpeechRecognition | undefined {
   if (typeof window === "undefined") return undefined;
-  return window.SpeechRecognition ?? window.webkitSpeechRecognition;
+  // 실험 D: Chrome 150부터 노출되는 접두사 없는 window.SpeechRecognition 대신,
+  // 예전부터 있던 window.webkitSpeechRecognition을 강제로 선택합니다.
+  return window.webkitSpeechRecognition ?? window.SpeechRecognition;
 }
 
 function subscribeNever() {
@@ -175,6 +177,9 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     );
     log(`"processLocally" in recognition: ${"processLocally" in recognition}`);
     log(`recognition.processLocally 기본값: ${recognition.processLocally}`);
+    // 실험 D: 네트워크(비-온디바이스) 인식을 명시적으로 요청합니다.
+    recognition.processLocally = false;
+    log(`recognition.processLocally 명시 설정 후: ${recognition.processLocally}`);
 
     recognition.lang = "ko-KR";
     recognition.continuous = true;
