@@ -43,6 +43,13 @@ export interface UseSpeechTranscriptionResult {
 const RESTART_BURST_WINDOW_MS = 10_000;
 const RESTART_BURST_LIMIT = 5;
 
+// onresult가 한 번도 없이 onend로 끝나는 게 이 횟수만큼 연속되면(예: 이
+// 기기/브라우저에서 음성인식 자체가 동작하지 않는 경우) 더 이상 자동
+// 재시작하지 않고 안내만 표시합니다. onresult가 한 번이라도 오면 0으로
+// 리셋됩니다.
+const NO_RESULT_RESTART_LIMIT = 3;
+const UNSTABLE_DEVICE_MESSAGE = "무료 음성인식이 이 기기에서 불안정합니다.";
+
 function getSpeechRecognitionCtor(): typeof SpeechRecognition | undefined {
   if (typeof window === "undefined") return undefined;
   // 실험 D: Chrome 150부터 노출되는 접두사 없는 window.SpeechRecognition 대신,
@@ -130,6 +137,10 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
   // 것인지 구분하는 플래그 — 후자만 자동 재시작합니다.
   const intentionalStopRef = useRef(true);
   const restartTimestampsRef = useRef<number[]>([]);
+  // 현재 세션에서 onresult가 한 번이라도 왔는지, 그리고 결과 없이 끝난
+  // 세션이 몇 번 연속됐는지(NO_RESULT_RESTART_LIMIT 판단용).
+  const resultReceivedInSessionRef = useRef(false);
+  const noResultRestartCountRef = useRef(0);
   // onend 핸들러가 자기 자신(createAndStartRecognition)을 안전하게 다시
   // 호출할 수 있도록 최신 함수를 담아두는 ref (TDZ/자기참조 문제 회피).
   const createAndStartRef = useRef<() => void>(() => {});
@@ -186,6 +197,8 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
+    resultReceivedInSessionRef.current = false;
+
     recognition.onstart = () => log("onstart");
     recognition.onaudiostart = () => log("onaudiostart");
     recognition.onspeechstart = () => log("onspeechstart");
@@ -194,6 +207,7 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
       log(
         `onresult 수신 (resultIndex=${event.resultIndex}, results.length=${event.results.length})`,
       );
+      resultReceivedInSessionRef.current = true;
       setErrorMessage(null);
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -251,6 +265,20 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
         return;
       }
 
+      if (resultReceivedInSessionRef.current) {
+        noResultRestartCountRef.current = 0;
+      } else {
+        noResultRestartCountRef.current += 1;
+        log(`결과 없이 종료된 연속 횟수: ${noResultRestartCountRef.current}`);
+        if (noResultRestartCountRef.current >= NO_RESULT_RESTART_LIMIT) {
+          log("결과 없이 종료된 연속 횟수가 한도를 넘어 자동 재시작을 멈춥니다.");
+          intentionalStopRef.current = true;
+          setErrorMessage(UNSTABLE_DEVICE_MESSAGE);
+          setStatus("idle");
+          return;
+        }
+      }
+
       createAndStartRef.current();
     };
 
@@ -273,6 +301,7 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     log("start() 호출됨 (버튼 클릭)");
     setErrorMessage(null);
     restartTimestampsRef.current = [];
+    noResultRestartCountRef.current = 0;
     setStatus("listening");
     createAndStartRecognition();
   }, [createAndStartRecognition, log]);
@@ -287,6 +316,7 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
   const resume = useCallback(() => {
     setErrorMessage(null);
     restartTimestampsRef.current = [];
+    noResultRestartCountRef.current = 0;
     setStatus("listening");
     createAndStartRecognition();
   }, [createAndStartRecognition]);
