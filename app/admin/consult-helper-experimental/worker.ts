@@ -21,6 +21,24 @@ if (env.backends.onnx.wasm) {
 // 쓰지 않습니다.
 const MODEL_ID = "onnx-community/whisper-tiny";
 
+/**
+ * Whisper는 transformers.js 내부적으로 Seq2Seq 모델 타입이라, 세션 키가
+ * 파일명과 다릅니다(라이브러리 소스 MODEL_SESSION_CONFIG 확인):
+ *   sessions: () => ({ model: "encoder_model", decoder_model_merged: "decoder_model_merged" })
+ * 즉 인코더는 파일명이 encoder_model.onnx여도 dtype 객체의 키는
+ * "encoder_model"이 아니라 "model"이어야 합니다. decoder_model_merged는
+ * 키/파일명이 같습니다.
+ *
+ * 실기기 오류(TransposedDQWeightsForMatMulNBits Missing required scale,
+ * model.decoder.embed_tokens...)는 q8(=_quantized 접미사) 디코더 파일
+ * 자체의 양자화 손상으로 판단해, 디코더만 fp32로 우회합니다. encoder는
+ * q8 그대로 둡니다.
+ */
+const MODULE_DTYPE = {
+  model: "q8",
+  decoder_model_merged: "fp32",
+} as const;
+
 type Transcriber = AutomaticSpeechRecognitionPipeline;
 
 let transcriberPromise: Promise<Transcriber> | null = null;
@@ -73,9 +91,13 @@ async function createTranscriber(
   device: DeviceKind,
   onFileTotal: (file: string, total: number) => void,
 ): Promise<Transcriber> {
+  post({
+    type: "log",
+    message: `모델/dtype: ${MODEL_ID}, model(encoder)=${MODULE_DTYPE.model}, decoder_model_merged=${MODULE_DTYPE.decoder_model_merged}`,
+  });
   return pipeline("automatic-speech-recognition", MODEL_ID, {
     device,
-    dtype: "q8", // 양자화(8bit) 모델 우선
+    dtype: MODULE_DTYPE,
     progress_callback: (progress: unknown) => {
       const p = progress as RawProgressEvent;
       if (p.status === "progress" && typeof p.file === "string" && typeof p.total === "number") {

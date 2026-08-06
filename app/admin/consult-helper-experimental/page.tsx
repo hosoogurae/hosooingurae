@@ -386,8 +386,10 @@ export default function ConsultHelperExperimentalPage() {
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-navy-800/70">
         이 화면은 성능 검증 전용입니다. 음성은 이 기기(브라우저) 안에서만 처리되며
-        OpenAI API 요금이 발생하지 않습니다. 최초 1회 약 39MB 모델 파일을
-        다운로드합니다(이후 재방문 시 브라우저 캐시로 재다운로드 없음).
+        OpenAI API 요금이 발생하지 않습니다. 최초 1회 약 123MB 모델 파일을
+        다운로드합니다(인코더는 양자화 버전, 디코더는 양자화 버전의 오류가
+        확인되어 정밀도가 높은 fp32 버전을 씁니다 — 이후 재방문 시 브라우저
+        캐시로 재다운로드 없음).
       </p>
 
       {errorMessage && (
