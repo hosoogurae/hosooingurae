@@ -29,8 +29,37 @@ function post(message: WorkerToMainMessage): void {
   (self as unknown as Worker).postMessage(message);
 }
 
-function detectPreferredDevice(): DeviceKind {
-  return typeof navigator !== "undefined" && "gpu" in navigator ? "webgpu" : "wasm";
+/**
+ * pipeline()을 부르기 전에 실제 GPU 어댑터 획득을 먼저 시도해 device를
+ * 단 한 번만 확정합니다. transformers.js는 세션 생성을 Worker 전역
+ * 싱글턴 Promise 체인(webInitChain)으로 관리해서, 같은 Worker 안에서
+ * 실패 후 다른 device로 재시도하면 그 체인이 이미 reject된 상태라 두
+ * 번째 시도가 전혀 실행되지 않고 첫 번째 에러가 그대로 다시 던져지는
+ * 것을 실제로 확인했습니다 — 그래서 재시도 없이 사전 검증만 합니다.
+ */
+async function resolveDevice(): Promise<DeviceKind> {
+  const hasWebGpuApi = typeof navigator !== "undefined" && "gpu" in navigator;
+  post({ type: "log", message: `WebGPU API 존재 여부: ${hasWebGpuApi}` });
+
+  if (!hasWebGpuApi) {
+    post({ type: "log", message: "WebGPU API 없음 → wasm 선택" });
+    return "wasm";
+  }
+
+  try {
+    const adapter = await navigator.gpu?.requestAdapter();
+    if (adapter) {
+      post({ type: "log", message: "requestAdapter 성공 → webgpu 선택" });
+      return "webgpu";
+    }
+    post({ type: "log", message: "requestAdapter 결과 null → wasm 선택" });
+    return "wasm";
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "UnknownError";
+    const message = err instanceof Error ? err.message : String(err);
+    post({ type: "log", message: `requestAdapter 예외(${name}: ${message}) → wasm 선택` });
+    return "wasm";
+  }
 }
 
 interface RawProgressEvent {
@@ -67,34 +96,11 @@ async function loadModel(): Promise<Transcriber> {
   const fileTotals = new Map<string, number>();
   const onFileTotal = (file: string, total: number) => fileTotals.set(file, total);
 
-  const preferredDevice = detectPreferredDevice();
-  let device = preferredDevice;
-  let transcriber: Transcriber;
-  try {
-    transcriber = await createTranscriber(device, onFileTotal);
-  } catch (firstErr) {
-    const firstName = firstErr instanceof Error ? firstErr.name : "UnknownError";
-    const firstMessage = firstErr instanceof Error ? firstErr.message : String(firstErr);
-    post({ type: "log", message: `${device} 로딩 실패: ${firstName} - ${firstMessage}` });
+  // device는 여기서 단 한 번만 정해지고, 이 Worker 안에서 다시 바뀌지 않습니다.
+  const device = await resolveDevice();
+  post({ type: "log", message: `최종 선택 device: ${device}` });
 
-    if (device !== "webgpu") {
-      throw firstErr;
-    }
-
-    // WebGPU 실패 시 WASM으로 폴백.
-    device = "wasm";
-    post({ type: "log", message: "wasm으로 재시도" });
-    try {
-      transcriber = await createTranscriber(device, onFileTotal);
-    } catch (secondErr) {
-      const secondName = secondErr instanceof Error ? secondErr.name : "UnknownError";
-      const secondMessage = secondErr instanceof Error ? secondErr.message : String(secondErr);
-      post({ type: "log", message: `wasm 로딩도 실패: ${secondName} - ${secondMessage}` });
-      throw new Error(
-        `WebGPU 실패(${firstName}: ${firstMessage}) 후 WASM도 실패(${secondName}: ${secondMessage})`,
-      );
-    }
-  }
+  const transcriber = await createTranscriber(device, onFileTotal);
 
   const loadMs = performance.now() - startedAt;
   const downloadBytes = [...fileTotals.values()].reduce((sum, total) => sum + total, 0);
