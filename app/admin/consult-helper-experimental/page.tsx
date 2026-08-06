@@ -282,6 +282,11 @@ export default function ConsultHelperExperimentalPage() {
     worker.addEventListener("message", (event: MessageEvent<WorkerToMainMessage>) => {
       const data = event.data;
 
+      if (data.type === "log") {
+        log(data.message);
+        return;
+      }
+
       if (data.type === "loading-progress") {
         fileTotalsRef.current.set(data.file, data.total);
         fileLoadedRef.current.set(data.file, data.loaded);

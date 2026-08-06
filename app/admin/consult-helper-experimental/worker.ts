@@ -1,6 +1,15 @@
 /// <reference lib="webworker" />
-import { pipeline, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
+import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
 import type { DeviceKind, MainToWorkerMessage, WorkerToMainMessage } from "./types";
+
+// 이 배포는 Cross-Origin-Opener-Policy/Cross-Origin-Embedder-Policy 헤더가
+// 없어 crossOriginIsolated가 false입니다. onnxruntime-web의 기본(멀티스레드)
+// WASM 백엔드는 SharedArrayBuffer가 필요해 이런 환경에서 초기화 자체가
+// 실패("no available backend found")합니다. 싱글스레드로 강제해 그 요구사항을
+// 없앱니다. (WebGPU/WASM 자동 폴백 실험 중 실제로 재현·확인된 원인입니다.)
+if (env.backends.onnx.wasm) {
+  env.backends.onnx.wasm.numThreads = 1;
+}
 
 /**
  * 브라우저 로컬 Whisper 추론 전담 Worker. 모델 로딩·추론을 전부 여기서
@@ -63,13 +72,27 @@ async function loadModel(): Promise<Transcriber> {
   let transcriber: Transcriber;
   try {
     transcriber = await createTranscriber(device, onFileTotal);
-  } catch (err) {
-    if (device === "webgpu") {
-      // WebGPU 실패 시 WASM으로 폴백.
-      device = "wasm";
+  } catch (firstErr) {
+    const firstName = firstErr instanceof Error ? firstErr.name : "UnknownError";
+    const firstMessage = firstErr instanceof Error ? firstErr.message : String(firstErr);
+    post({ type: "log", message: `${device} 로딩 실패: ${firstName} - ${firstMessage}` });
+
+    if (device !== "webgpu") {
+      throw firstErr;
+    }
+
+    // WebGPU 실패 시 WASM으로 폴백.
+    device = "wasm";
+    post({ type: "log", message: "wasm으로 재시도" });
+    try {
       transcriber = await createTranscriber(device, onFileTotal);
-    } else {
-      throw err;
+    } catch (secondErr) {
+      const secondName = secondErr instanceof Error ? secondErr.name : "UnknownError";
+      const secondMessage = secondErr instanceof Error ? secondErr.message : String(secondErr);
+      post({ type: "log", message: `wasm 로딩도 실패: ${secondName} - ${secondMessage}` });
+      throw new Error(
+        `WebGPU 실패(${firstName}: ${firstMessage}) 후 WASM도 실패(${secondName}: ${secondMessage})`,
+      );
     }
   }
 

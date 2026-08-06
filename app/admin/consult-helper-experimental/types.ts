@@ -19,4 +19,7 @@ export type WorkerToMainMessage =
       chunkId?: number;
       name: string;
       message: string;
-    };
+    }
+  /** 진단용 자유 텍스트 로그(예: WebGPU 시도 실패 뒤 WASM으로 넘어가는
+   * 중간 과정) — 최종 실패로 취급하지 않고 화면 로그에만 남깁니다. */
+  | { type: "log"; message: string };
