@@ -11,7 +11,7 @@ export type MainToWorkerMessage =
 
 export type WorkerToMainMessage =
   | { type: "loading-progress"; file: string; loaded: number; total: number }
-  | { type: "ready"; device: DeviceKind; loadMs: number; downloadBytes: number }
+  | { type: "ready"; device: DeviceKind; loadMs: number; downloadBytes: number; warmupMs: number }
   | { type: "result"; chunkId: number; text: string; inferenceMs: number }
   | {
       type: "error";
