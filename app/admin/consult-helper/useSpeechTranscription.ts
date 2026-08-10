@@ -17,11 +17,6 @@ import {
 
 export type ConsultStatus = "idle" | "listening" | "paused" | "ended";
 
-export interface SpeechDebugLogEntry {
-  time: string;
-  message: string;
-}
-
 export interface UseSpeechTranscriptionResult {
   status: ConsultStatus;
   /** 이 브라우저가 SpeechRecognition을 지원하는지(Chrome/Edge 최신 버전이면 true). */
@@ -29,8 +24,6 @@ export interface UseSpeechTranscriptionResult {
   transcript: TranscriptState;
   /** 권한 거부 등 사용자에게 보여줄 한 줄 안내. 없으면 null. */
   errorMessage: string | null;
-  /** 무료 모드(Web Speech API) 전용 진단 로그. OpenAI 모드 로그와는 완전히 별개입니다. */
-  debugLog: SpeechDebugLogEntry[];
   start: () => void;
   pause: () => void;
   resume: () => void;
@@ -96,17 +89,11 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     EMPTY_TRANSCRIPT_STATE,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [debugLog, setDebugLog] = useState<SpeechDebugLogEntry[]>([]);
   const isSupported = useIsSpeechRecognitionSupported();
 
-  /** Android에서만 자막이 안 나오는 원인을 찾기 위한 무료 모드 전용 진단 로그. 콘솔과 화면에 동시 출력하며, 그 외에는 아무 것도 바꾸지 않습니다. */
+  /** 무료 모드 전용 진단 로그. 브라우저 콘솔에만 출력하고 화면에는 표시하지 않습니다. */
   const log = useCallback((message: string) => {
-    const time = new Date().toLocaleTimeString("ko-KR", { hour12: false });
     console.log(`[consult-helper/free] ${message}`);
-    setDebugLog((prev) => {
-      const next = [...prev, { time, message }];
-      return next.length > 200 ? next.slice(next.length - 200) : next;
-    });
   }, []);
 
   useEffect(() => {
@@ -359,7 +346,6 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     isSupported,
     transcript,
     errorMessage,
-    debugLog,
     start,
     pause,
     resume,
