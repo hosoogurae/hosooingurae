@@ -113,15 +113,6 @@ async function createTranscriber(
   });
 }
 
-/** encoder/decoder 커널 컴파일 등 최초 1회 비용을 실제 발화 청크가 아니라
- * 여기서 미리 떠안도록, 1초짜리 무음으로 추론을 한 번 돌립니다. */
-async function warmup(transcriber: Transcriber): Promise<number> {
-  const startedAt = performance.now();
-  const silence = new Float32Array(16000); // 16kHz 1초, 전부 0
-  await transcriber(silence, { language: "ko", task: "transcribe" });
-  return performance.now() - startedAt;
-}
-
 async function loadModel(): Promise<Transcriber> {
   const startedAt = performance.now();
   const fileTotals = new Map<string, number>();
@@ -133,13 +124,9 @@ async function loadModel(): Promise<Transcriber> {
 
   const transcriber = await createTranscriber(device, onFileTotal);
 
-  post({ type: "log", message: "워밍업 추론 시작(무음 1초)" });
-  const warmupMs = await warmup(transcriber);
-  post({ type: "log", message: `워밍업 완료: ${Math.round(warmupMs)}ms` });
-
   const loadMs = performance.now() - startedAt;
   const downloadBytes = [...fileTotals.values()].reduce((sum, total) => sum + total, 0);
-  post({ type: "ready", device, loadMs, downloadBytes, warmupMs });
+  post({ type: "ready", device, loadMs, downloadBytes });
   return transcriber;
 }
 
