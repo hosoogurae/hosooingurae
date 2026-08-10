@@ -216,7 +216,10 @@ export function useSpeechTranscription(): UseSpeechTranscriptionResult {
     recognition.processLocally = false;
     log(`recognition.processLocally 명시 설정 후: ${recognition.processLocally}`);
 
-    recognition.lang = "ko-KR";
+    // 실험 E: 한국어(ko-KR)에서만 onspeechstart/onresult가 안 오는 것인지,
+    // 언어 무관하게 이 기기에서 아예 안 되는 것인지 구분하기 위해 잘
+    // 지원되는 언어(en-US)로 대조 테스트합니다.
+    recognition.lang = "en-US";
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
