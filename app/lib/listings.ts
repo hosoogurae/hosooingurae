@@ -2,6 +2,11 @@ import type { Complex } from "../data/complexes";
 import type { Listing } from "../data/listings";
 import { getAllComplexes, getComplexById } from "./complexes";
 import type { ListingSearchFilters } from "./listingFilters";
+import {
+  DEFAULT_LISTING_SORT,
+  getListingSortColumn,
+  type ListingSortKey,
+} from "./listingSort";
 import { getSupabaseClient } from "./supabase/client";
 import type { ListingRow } from "./supabase/database.types";
 import { listingRowToListing } from "./supabase/mappers";
@@ -226,6 +231,7 @@ export async function getAllListings(
   options: {
     includeDrafts?: boolean;
     filters?: ListingSearchFilters;
+    sort?: ListingSortKey;
   } = {},
 ): Promise<ListingWithComplex[]> {
   const supabase = getSupabaseClient();
@@ -233,10 +239,10 @@ export async function getAllListings(
     return [];
   }
 
-  let query = supabase
-    .from("listings")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const { column, ascending } = getListingSortColumn(
+    options.sort ?? DEFAULT_LISTING_SORT,
+  );
+  let query = supabase.from("listings").select("*").order(column, { ascending });
 
   if (!options.includeDrafts) {
     // completed/hold는 status(공개 여부)와 무관하게 항상 공개 조회에서 제외 —

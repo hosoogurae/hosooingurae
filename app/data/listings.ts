@@ -65,6 +65,10 @@ export interface Listing {
   sourceArticleId?: string;
   /** 관리자가 붙여넣은 원문 전체. 관리자 화면에서만 노출(공개 조회에는 포함되지 않음). */
   rawSourceText?: string;
+  /** DB 생성 시각(ISO). "등록일 최신순" 정렬용. */
+  createdAt?: string;
+  /** DB 마지막 수정 시각(ISO) — DB 트리거가 UPDATE마다 자동 갱신합니다. "최신 업데이트순" 정렬 기본값으로 씁니다. */
+  updatedAt?: string;
 }
 
 export const listings: Listing[] = [

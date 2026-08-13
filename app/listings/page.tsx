@@ -9,8 +9,10 @@ import {
   parseListingSearchParams,
   type RawSearchParams,
 } from "../lib/listingFilters";
+import { parseListingSortKey } from "../lib/listingSort";
 import ListingCard from "../components/ListingCard";
 import ListingsFilterBar from "../components/ListingsFilterBar";
+import ListingSortSelect from "../components/ListingSortSelect";
 import CompareToggle from "../components/CompareToggle";
 
 export const metadata: Metadata = {
@@ -33,9 +35,10 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
   const resolvedSearchParams = await searchParams;
   const filters = parseListingSearchParams(resolvedSearchParams);
   const filtersActive = hasActiveFilters(filters);
+  const sort = parseListingSortKey(firstValue(resolvedSearchParams.sort));
 
   const [listings, filteredComplex] = await Promise.all([
-    getAllListings({ filters }),
+    getAllListings({ filters, sort }),
     filters.complexId ? getComplexById(filters.complexId) : Promise.resolve(undefined),
   ]);
 
@@ -100,6 +103,15 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
       </div>
 
       <section className="mx-auto max-w-6xl px-6 py-16">
+        {listings.length > 0 && (
+          <div className="mb-6 flex items-center justify-between">
+            <p className="text-sm text-navy-800/60">
+              총 <strong className="text-navy-900">{listings.length}</strong>건
+            </p>
+            <ListingSortSelect />
+          </div>
+        )}
+
         {listings.length > 0 ? (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((listing) => (

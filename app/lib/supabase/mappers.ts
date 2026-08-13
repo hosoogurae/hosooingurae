@@ -124,6 +124,8 @@ export function listingRowToListing(
     rawSourceText: options.includeRawSourceText
       ? row.raw_source_text ?? undefined
       : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
