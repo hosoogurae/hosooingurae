@@ -83,6 +83,41 @@ export async function getFloorPlanCountsByComplex(): Promise<Record<string, numb
   return counts;
 }
 
+/**
+ * 매물 점검 센터의 "평면도 연결 부족" 판정용: 단지별로 어떤 unitType에
+ * 평면도가 등록돼 있는지 맵으로 돌려줍니다. getFloorPlanCountsByComplex와
+ * 같은 쿼리 패턴(전체 테이블을 한 번에 읽음)에 unit_type 컬럼만 더합니다.
+ */
+export async function getFloorPlanUnitTypesByComplex(): Promise<
+  Record<string, string[]>
+> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return {};
+
+  const { data, error } = await supabase
+    .from("floor_plan_images")
+    .select("complex_id, unit_type");
+
+  if (error || !data) {
+    console.error("[floorPlans] 단지별 평면도 타입 조회 실패", error);
+    return {};
+  }
+
+  const unitTypesByComplex: Record<string, Set<string>> = {};
+  for (const row of data) {
+    const set = unitTypesByComplex[row.complex_id] ?? new Set<string>();
+    set.add(row.unit_type);
+    unitTypesByComplex[row.complex_id] = set;
+  }
+
+  return Object.fromEntries(
+    Object.entries(unitTypesByComplex).map(([complexId, types]) => [
+      complexId,
+      Array.from(types),
+    ]),
+  );
+}
+
 /** 관리자용: 단지의 모든 평면도를 타입 구분 없이 전부 가져옵니다(관리 화면 목록용). */
 export async function getFloorPlanImagesByComplex(
   complexId: string,

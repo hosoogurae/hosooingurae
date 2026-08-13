@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: "매물 접수", href: "/admin/listing-submissions" },
   { label: "매물 등록", href: "/admin/listings/new" },
   { label: "매물 관리", href: "/admin/listings" },
+  { label: "매물 점검", href: "/admin/listing-inspection" },
   { label: "단지 관리", href: "/admin/complexes" },
   { label: "평면도 관리", href: "/admin/floor-plans" },
 ];

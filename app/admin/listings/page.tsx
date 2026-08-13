@@ -3,17 +3,18 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { Listing } from "../../data/listings";
+import type { DealStatus, Listing } from "../../data/listings";
 import type { ListingStats, ListingWithComplex } from "../../lib/listings";
 import { getVerificationUrgency } from "../../lib/listingUrgency";
-import { DEAL_STATUS_LABELS } from "../ListingFields";
-
-const DEAL_STATUS_BADGE_CLASS: Record<string, string> = {
-  advertising: "bg-green-500/10 text-green-700",
-  negotiating: "bg-blue-500/10 text-blue-700",
-  completed: "bg-navy-900/10 text-navy-800",
-  hold: "bg-orange-500/10 text-orange-700",
-};
+import {
+  describeLowInfoReason,
+  INSPECTION_CATEGORIES,
+  INSPECTION_CATEGORY_LABELS,
+  matchesInspectionCategory,
+  type InspectionCategory,
+} from "../../lib/listingInspection";
+import { DEAL_STATUS_BADGE_CLASS, DEAL_STATUS_LABELS } from "../ListingFields";
+import { patchListingFields } from "../quickListingActions";
 
 function formatLastVerified(iso: string | undefined): string {
   if (!iso) return "확인 기록 없음";
@@ -81,13 +82,25 @@ function StatCard({
 
 function AdminListingsView() {
   const searchParams = useSearchParams();
-  const urgentOnly = searchParams.get("urgent") === "1";
+  // urgent=1은 이전에 배포된 대시보드 카드 링크와의 하위 호환을 위해 남겨두고,
+  // 새 필터는 전부 ?filter=<InspectionCategory>로 받습니다.
+  const filterParam = searchParams.get("filter");
+  const activeFilter: InspectionCategory | null =
+    searchParams.get("urgent") === "1"
+      ? "urgent"
+      : (INSPECTION_CATEGORIES as string[]).includes(filterParam ?? "")
+        ? (filterParam as InspectionCategory)
+        : null;
 
   const [listings, setListings] = useState<ListingWithComplex[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [quickActionId, setQuickActionId] = useState<string | null>(null);
   const [stats, setStats] = useState<ListingStats | null>(null);
+  const [unitTypesByComplex, setUnitTypesByComplex] = useState<
+    Record<string, string[]>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +140,27 @@ function AdminListingsView() {
     };
   }, []);
 
+  // 평면도 커버리지는 그 필터를 볼 때만 조회합니다(다른 필터에서는 불필요한 호출 안 함).
+  useEffect(() => {
+    if (activeFilter !== "no-floorplan") return;
+    let cancelled = false;
+
+    fetch("/api/admin/floor-plans/coverage")
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled) {
+          setUnitTypesByComplex(data.unitTypesByComplex ?? {});
+        }
+      })
+      .catch(() => {
+        // 실패해도 목록 자체는 보여주되, 이 필터만 빈 결과로 나타납니다.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFilter]);
+
   async function handleDelete(listing: Listing) {
     if (!confirm(`"${listing.priceLabel}" 매물을 삭제할까요? 되돌릴 수 없습니다.`)) {
       return;
@@ -155,53 +189,58 @@ function AdminListingsView() {
     }
   }
 
-  /**
-   * "오늘 확인" — 새 API 없이 이미 들고 있는 매물 전체 객체를 lastVerifiedAt만
-   * 바꿔 기존 PATCH /api/listings/[id]에 그대로 재전송합니다(수정 화면과 동일한
-   * 전체 재저장 패턴).
-   */
   async function handleVerifyToday(listing: ListingWithComplex) {
     setVerifyingId(listing.id);
-    try {
-      const response = await fetch(`/api/listings/${listing.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...listing,
-          lastVerifiedAt: new Date().toISOString(),
-        }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.errors?.[0] ?? "확인일 갱신에 실패했습니다.");
-        return;
-      }
-
+    const { listing: updated, errors } = await patchListingFields(listing, {
+      lastVerifiedAt: new Date().toISOString(),
+    });
+    if (errors) {
+      alert(errors[0]);
+    } else if (updated) {
       setListings(
         (prev) =>
           prev?.map((item) =>
             item.id === listing.id
-              ? { ...item, lastVerifiedAt: data.listing.lastVerifiedAt }
+              ? { ...item, lastVerifiedAt: updated.lastVerifiedAt }
               : item,
           ) ?? null,
       );
       loadStats().then((result) => {
         if (result) setStats(result);
       });
-    } catch {
-      alert("네트워크 오류로 확인일 갱신에 실패했습니다.");
-    } finally {
-      setVerifyingId(null);
     }
+    setVerifyingId(null);
   }
 
-  const visibleListings = urgentOnly
-    ? listings?.filter(
-        (listing) =>
-          (listing.dealStatus === "advertising" ||
-            listing.dealStatus === "negotiating") &&
-          getVerificationUrgency(listing) !== "ok",
+  async function handleQuickStatusChange(
+    listing: ListingWithComplex,
+    dealStatus: DealStatus,
+  ) {
+    setQuickActionId(listing.id);
+    const { listing: updated, errors } = await patchListingFields(listing, {
+      dealStatus,
+    });
+    if (errors) {
+      alert(errors[0]);
+    } else if (updated) {
+      setListings(
+        (prev) =>
+          prev?.map((item) =>
+            item.id === listing.id
+              ? { ...item, dealStatus: updated.dealStatus }
+              : item,
+          ) ?? null,
+      );
+      loadStats().then((result) => {
+        if (result) setStats(result);
+      });
+    }
+    setQuickActionId(null);
+  }
+
+  const visibleListings = activeFilter
+    ? listings?.filter((listing) =>
+        matchesInspectionCategory(listing, activeFilter, unitTypesByComplex),
       ) ?? null
     : listings;
 
@@ -244,9 +283,9 @@ function AdminListingsView() {
         </p>
       )}
 
-      {urgentOnly && (
+      {activeFilter && (
         <div className="mt-6 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          <span>확인이 필요한 매물만 보고 있습니다.</span>
+          <span>{INSPECTION_CATEGORY_LABELS[activeFilter]}만 보고 있습니다.</span>
           <Link href="/admin/listings" className="font-bold underline">
             전체 보기
           </Link>
@@ -257,13 +296,16 @@ function AdminListingsView() {
         <p className="mt-8 text-sm text-navy-800/50">불러오는 중...</p>
       ) : visibleListings.length === 0 ? (
         <p className="mt-8 rounded-xl border border-navy-900/10 px-6 py-16 text-center text-sm text-navy-800/50">
-          {urgentOnly ? "확인이 필요한 매물이 없습니다." : "등록된 매물이 없습니다."}
+          {activeFilter
+            ? `${INSPECTION_CATEGORY_LABELS[activeFilter]}이 없습니다.`
+            : "등록된 매물이 없습니다."}
         </p>
       ) : (
         <ul className="mt-8 flex flex-col gap-3">
           {visibleListings.map((listing) => {
             const urgency = getVerificationUrgency(listing);
             const urgencyBadge = URGENCY_BADGE[urgency];
+            const lowInfoReason = describeLowInfoReason(listing);
 
             return (
               <li
@@ -304,6 +346,16 @@ function AdminListingsView() {
                         {urgencyBadge.label}
                       </span>
                     )}
+                    {!listing.image && (
+                      <span className="rounded-full bg-red-500/10 px-2 py-0.5 font-bold text-red-700">
+                        사진 없음
+                      </span>
+                    )}
+                    {lowInfoReason && (
+                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-700">
+                        {lowInfoReason}
+                      </span>
+                    )}
                   </p>
                   <p className="mt-1 font-bold text-navy-950">
                     {listing.priceLabel}
@@ -312,6 +364,29 @@ function AdminListingsView() {
                   <p className="mt-1 text-xs text-navy-800/50">
                     {formatLastVerified(listing.lastVerifiedAt)}
                   </p>
+
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(Object.keys(DEAL_STATUS_LABELS) as DealStatus[]).map(
+                      (value) => {
+                        const isCurrent = value === listing.dealStatus;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            disabled={isCurrent || quickActionId === listing.id}
+                            onClick={() => handleQuickStatusChange(listing, value)}
+                            className={`rounded-full px-2.5 py-1 text-xs font-bold transition-colors disabled:cursor-not-allowed ${
+                              isCurrent
+                                ? `${DEAL_STATUS_BADGE_CLASS[value]} opacity-70`
+                                : "border border-navy-900/15 text-navy-800/60 hover:border-gold-500 hover:text-gold-600"
+                            }`}
+                          >
+                            {DEAL_STATUS_LABELS[value]}
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
