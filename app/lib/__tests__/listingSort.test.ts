@@ -21,12 +21,13 @@ describe("parseListingSortKey", () => {
 });
 
 describe("isListingSortKey", () => {
-  it("5개 정렬 옵션만 유효하다고 판단한다", () => {
+  it("6개 정렬 옵션만 유효하다고 판단한다", () => {
     expect(isListingSortKey("updated_desc")).toBe(true);
     expect(isListingSortKey("updated_asc")).toBe(true);
     expect(isListingSortKey("price_desc")).toBe(true);
     expect(isListingSortKey("price_asc")).toBe(true);
     expect(isListingSortKey("created_desc")).toBe(true);
+    expect(isListingSortKey("verified_asc")).toBe(true);
     expect(isListingSortKey("created_asc")).toBe(false);
     expect(isListingSortKey(123)).toBe(false);
   });
@@ -62,6 +63,14 @@ describe("getListingSortColumn — DB 쿼리에 쓸 컬럼/방향 매핑", () =>
     expect(getListingSortColumn("created_desc")).toEqual({
       column: "created_at",
       ascending: false,
+    });
+  });
+
+  it("마지막 확인일 오래된 순은 last_verified_at 오름차순이며, 한 번도 확인 안 한(null) 매물을 맨 앞으로 둔다", () => {
+    expect(getListingSortColumn("verified_asc")).toEqual({
+      column: "last_verified_at",
+      ascending: true,
+      nullsFirst: true,
     });
   });
 });

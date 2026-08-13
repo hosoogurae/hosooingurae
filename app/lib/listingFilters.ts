@@ -1,4 +1,4 @@
-import type { PropertyType, TransactionType } from "../data/listings";
+import type { ListingStatus, PropertyType, TransactionType } from "../data/listings";
 
 export interface FilterOption {
   value: string;
@@ -57,6 +57,10 @@ export interface ListingSearchFilters {
   featured?: boolean;
   /** Header의 "아파트" 드롭다운에서 특정 단지를 선택했을 때만 붙는 조건(?complexId=...). */
   complexId?: string;
+  /** 관리자 화면 전용(공개/비공개 필터). 공개 조회 경로는 이 필드를 쓰지 않습니다. */
+  status?: ListingStatus;
+  /** 관리자 화면 전용(단지명·동·매물번호 검색어). */
+  search?: string;
 }
 
 /** page.tsx의 searchParams와 동일한 형태. */

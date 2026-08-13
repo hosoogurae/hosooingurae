@@ -205,6 +205,38 @@ async function fetchImagesByListingId(
   return grouped;
 }
 
+/**
+ * 검색어(단지명·동·매물번호)에 매칭되는 매물 id 목록을 DB 쿼리로 찾습니다.
+ * 세 조건을 각각 별도의 안전한(파라미터화된) 쿼리로 찾은 뒤 합칩니다 —
+ * PostgREST .or() 문자열에 사용자 입력을 그대로 끼워 넣으면 쉼표/괄호로
+ * 필터 구문 자체가 깨지거나 의도치 않은 조건이 섞일 위험이 있어 피합니다.
+ */
+async function resolveSearchListingIds(
+  supabase: SupabaseClient,
+  query: string,
+): Promise<string[]> {
+  // %, _는 ilike 와일드카드라서 검색어에 그대로 있으면 리터럴로 이스케이프합니다.
+  const pattern = `%${query.replace(/[%_]/g, "\\$&")}%`;
+
+  const [complexMatches, buildingMatches, idMatches] = await Promise.all([
+    supabase.from("complexes").select("id").ilike("name", pattern),
+    supabase.from("listings").select("id").ilike("building", pattern),
+    supabase.from("listings").select("id").ilike("id", pattern),
+  ]);
+
+  const matchedComplexIds = (complexMatches.data ?? []).map((row) => row.id);
+  const byComplexName = matchedComplexIds.length > 0
+    ? await supabase.from("listings").select("id").in("complex_id", matchedComplexIds)
+    : { data: [] as { id: string }[] };
+
+  const ids = new Set<string>();
+  for (const row of byComplexName.data ?? []) ids.add(row.id);
+  for (const row of buildingMatches.data ?? []) ids.add(row.id);
+  for (const row of idMatches.data ?? []) ids.add(row.id);
+
+  return Array.from(ids);
+}
+
 function attachComplexes(
   listings: Listing[],
   complexes: Complex[],
@@ -239,10 +271,25 @@ export async function getAllListings(
     return [];
   }
 
-  const { column, ascending } = getListingSortColumn(
+  const filters = options.filters;
+
+  // 검색어가 있는데 매칭되는 매물이 하나도 없으면, 메인 쿼리를 보낼 필요 없이
+  // 바로 빈 배열을 돌려줍니다.
+  let searchMatchedIds: string[] | null = null;
+  if (filters?.search && filters.search.trim() !== "") {
+    searchMatchedIds = await resolveSearchListingIds(supabase, filters.search.trim());
+    if (searchMatchedIds.length === 0) {
+      return [];
+    }
+  }
+
+  const { column, ascending, nullsFirst } = getListingSortColumn(
     options.sort ?? DEFAULT_LISTING_SORT,
   );
-  let query = supabase.from("listings").select("*").order(column, { ascending });
+  let query = supabase
+    .from("listings")
+    .select("*")
+    .order(column, { ascending, nullsFirst });
 
   if (!options.includeDrafts) {
     // completed/hold는 status(공개 여부)와 무관하게 항상 공개 조회에서 제외 —
@@ -254,7 +301,6 @@ export async function getAllListings(
     ]);
   }
 
-  const filters = options.filters;
   if (filters?.propertyType) {
     query = query.eq("property_type", filters.propertyType);
   }
@@ -272,6 +318,14 @@ export async function getAllListings(
   }
   if (filters?.maxPrice !== undefined) {
     query = query.lte("price", filters.maxPrice);
+  }
+  // 관리자 전용(공개/비공개 필터) — includeDrafts로 draft를 보이게 한 뒤,
+  // 이 필터로 공개중/비공개 중 하나만 더 좁힙니다.
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  }
+  if (searchMatchedIds) {
+    query = query.in("id", searchMatchedIds);
   }
 
   const [{ data: rows, error }, complexes] = await Promise.all([

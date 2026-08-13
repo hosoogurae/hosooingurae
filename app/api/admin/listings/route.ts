@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import type { ListingStatus, TransactionType } from "../../../data/listings";
 import { getAllListings } from "../../../lib/listings";
+import { parseListingSortKey } from "../../../lib/listingSort";
 
 /**
  * 관리자 매물 관리 화면(/admin/listings) 전용 조회 API입니다. 임시저장(draft)
@@ -10,7 +12,31 @@ import { getAllListings } from "../../../lib/listings";
  * 보이는 화면"에서는 관리자 화면을 거치지 않는 한 이 데이터가 나오지
  * 않도록 합니다.
  */
-export async function GET() {
-  const listings = await getAllListings({ includeDrafts: true });
+const LISTING_STATUSES: ListingStatus[] = ["draft", "published"];
+const TRANSACTION_TYPES: TransactionType[] = ["매매", "전세", "월세"];
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const sort = parseListingSortKey(searchParams.get("sort"));
+
+  const statusParam = searchParams.get("status");
+  const status = LISTING_STATUSES.includes(statusParam as ListingStatus)
+    ? (statusParam as ListingStatus)
+    : undefined;
+
+  const transactionTypeParam = searchParams.get("transactionType");
+  const transactionType = TRANSACTION_TYPES.includes(
+    transactionTypeParam as TransactionType,
+  )
+    ? (transactionTypeParam as TransactionType)
+    : undefined;
+
+  const search = searchParams.get("q")?.trim() || undefined;
+
+  const listings = await getAllListings({
+    includeDrafts: true,
+    sort,
+    filters: { status, transactionType, search },
+  });
   return NextResponse.json({ listings });
 }

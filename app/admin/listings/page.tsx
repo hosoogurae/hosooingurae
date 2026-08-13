@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { DealStatus, Listing } from "../../data/listings";
 import type { ListingStats, ListingWithComplex } from "../../lib/listings";
 import { getVerificationUrgency } from "../../lib/listingUrgency";
+import { ADMIN_LISTING_SORT_OPTIONS } from "../../lib/listingSort";
 import {
   describeLowInfoReason,
   INSPECTION_CATEGORIES,
@@ -15,6 +16,21 @@ import {
 } from "../../lib/listingInspection";
 import { DEAL_STATUS_BADGE_CLASS, DEAL_STATUS_LABELS } from "../ListingFields";
 import { patchListingFields } from "../quickListingActions";
+import ListingSortSelect from "../../components/ListingSortSelect";
+
+const selectClass =
+  "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500";
+
+function formatUpdatedAt(iso: string | undefined): string {
+  if (!iso) return "-";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(
+    date.getDate(),
+  ).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes(),
+  ).padStart(2, "0")}`;
+}
 
 function formatLastVerified(iso: string | undefined): string {
   if (!iso) return "확인 기록 없음";
@@ -81,6 +97,8 @@ function StatCard({
 }
 
 function AdminListingsView() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   // urgent=1은 이전에 배포된 대시보드 카드 링크와의 하위 호환을 위해 남겨두고,
   // 새 필터는 전부 ?filter=<InspectionCategory>로 받습니다.
@@ -92,6 +110,10 @@ function AdminListingsView() {
         ? (filterParam as InspectionCategory)
         : null;
 
+  const statusFilter = searchParams.get("status") ?? "";
+  const transactionTypeFilter = searchParams.get("transactionType") ?? "";
+  const searchQuery = searchParams.get("q") ?? "";
+
   const [listings, setListings] = useState<ListingWithComplex[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -101,13 +123,45 @@ function AdminListingsView() {
   const [unitTypesByComplex, setUnitTypesByComplex] = useState<
     Record<string, string[]>
   >({});
+  const [searchInput, setSearchInput] = useState(searchQuery);
+
+  /** 정렬/공개여부/거래유형/검색 등 DB 쿼리 단계 조건을 바꿀 때 쓰는 공용 헬퍼 — 나머지 쿼리는 그대로 두고 하나만 갱신합니다. */
+  function updateSearchParam(key: string, value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  }
+
+  function handleSearchSubmit(event: FormEvent) {
+    event.preventDefault();
+    updateSearchParam("q", searchInput.trim());
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadListings() {
       try {
-        const response = await fetch("/api/admin/listings");
+        // 정렬·공개여부·거래유형·검색은 DB 쿼리 단계에서 처리되도록 그대로
+        // API에 넘깁니다(?filter=<InspectionCategory>는 여기 포함하지 않고
+        // 아래에서 클라이언트 쪽에서만 추가로 걸러냅니다 — 기존 6종 필터는
+        // 이번 변경 범위 밖이라 그대로 둡니다).
+        const params = new URLSearchParams();
+        const sort = searchParams.get("sort");
+        if (sort) params.set("sort", sort);
+        if (statusFilter) params.set("status", statusFilter);
+        if (transactionTypeFilter) params.set("transactionType", transactionTypeFilter);
+        if (searchQuery) params.set("q", searchQuery);
+        const query = params.toString();
+
+        const response = await fetch(
+          query ? `/api/admin/listings?${query}` : "/api/admin/listings",
+        );
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error ?? "매물 목록을 불러오지 못했습니다.");
@@ -125,6 +179,16 @@ function AdminListingsView() {
       }
     }
 
+    loadListings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, statusFilter, transactionTypeFilter, searchQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function refreshStats() {
       const result = await loadStats();
       if (!cancelled && result) {
@@ -132,7 +196,6 @@ function AdminListingsView() {
       }
     }
 
-    loadListings();
     refreshStats();
 
     return () => {
@@ -292,6 +355,59 @@ function AdminListingsView() {
         </div>
       )}
 
+      <div className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-navy-900/10 p-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-navy-800/60">공개여부</span>
+          <select
+            value={statusFilter}
+            onChange={(event) => updateSearchParam("status", event.target.value)}
+            className={selectClass}
+          >
+            <option value="">전체</option>
+            <option value="published">공개중</option>
+            <option value="draft">비공개</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-navy-800/60">거래유형</span>
+          <select
+            value={transactionTypeFilter}
+            onChange={(event) => updateSearchParam("transactionType", event.target.value)}
+            className={selectClass}
+          >
+            <option value="">전체</option>
+            <option value="매매">매매</option>
+            <option value="전세">전세</option>
+            <option value="월세">월세</option>
+          </select>
+        </label>
+
+        <form onSubmit={handleSearchSubmit} className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-navy-800/60">
+            단지명·동·매물번호 검색
+          </span>
+          <div className="flex gap-2">
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="예: 호수마을, 201동, 26385..."
+              className={`${selectClass} w-56`}
+            />
+            <button
+              type="submit"
+              className="rounded-md border border-navy-900/15 px-4 py-2 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+            >
+              검색
+            </button>
+          </div>
+        </form>
+
+        <div className="ml-auto">
+          <ListingSortSelect options={ADMIN_LISTING_SORT_OPTIONS} />
+        </div>
+      </div>
+
       {visibleListings === null ? (
         <p className="mt-8 text-sm text-navy-800/50">불러오는 중...</p>
       ) : visibleListings.length === 0 ? (
@@ -359,10 +475,14 @@ function AdminListingsView() {
                   </p>
                   <p className="mt-1 font-bold text-navy-950">
                     {listing.priceLabel}
+                    <span className="ml-2 font-normal text-navy-800/50">
+                      {listing.floor}층/{listing.totalFloors}층
+                    </span>
                   </p>
                   <p className="mt-0.5 text-xs text-navy-800/50">{listing.id}</p>
                   <p className="mt-1 text-xs text-navy-800/50">
-                    {formatLastVerified(listing.lastVerifiedAt)}
+                    {formatLastVerified(listing.lastVerifiedAt)} · 최근 수정{" "}
+                    {formatUpdatedAt(listing.updatedAt)}
                   </p>
 
                   <div className="mt-2 flex flex-wrap gap-1.5">
