@@ -26,6 +26,8 @@ const EXISTING: Listing = {
   direction: "남동향",
   moveInDate: "즉시입주 가능",
   maintenanceFee: "27만원",
+  hasLoan: true,
+  loanAmount: "1억 5,000만원",
   shortDescription: "기존 설명",
   features: ["기존특징1", "기존특징2"],
   naverUrl: "https://new.land.naver.com/complexes/1?articleNo=1111111111",
@@ -128,6 +130,36 @@ describe("mergeParsedIntoExisting — 기존 매물 업데이트 병합 규칙",
     expect(merged.complexId).toBe(EXISTING.complexId);
     expect(merged.isFeatured).toBe(EXISTING.isFeatured);
   });
+
+  it("융자금: 새로 확정된 값(hasLoan 있음)이면 덮어쓴다", () => {
+    const parsed: ParsedNaverListing = { hasLoan: false, loanAmount: null };
+    const merged = mergeParsedIntoExisting(EXISTING, parsed, source());
+    expect(merged.hasLoan).toBe(false);
+    expect(merged.loanAmount).toBeNull();
+  });
+
+  it("융자금: 라벨을 못 찾아 hasLoan이 undefined면 기존 값을 유지한다", () => {
+    const parsed: ParsedNaverListing = {};
+    const merged = mergeParsedIntoExisting(EXISTING, parsed, source());
+    expect(merged.hasLoan).toBe(EXISTING.hasLoan);
+    expect(merged.loanAmount).toBe(EXISTING.loanAmount);
+  });
+
+  it("URL: 직접 입력한 URL이 있으면 naver.me 자동 인식 링크보다 우선한다", () => {
+    const parsed: ParsedNaverListing = { naverMeLink: "https://naver.me/abcd123" };
+    const merged = mergeParsedIntoExisting(
+      EXISTING,
+      parsed,
+      source({ url: "https://new.land.naver.com/x?articleNo=9999" }),
+    );
+    expect(merged.naverUrl).toBe("https://new.land.naver.com/x?articleNo=9999");
+  });
+
+  it("URL: 직접 입력한 URL이 없으면 naver.me 자동 인식 링크를 쓴다", () => {
+    const parsed: ParsedNaverListing = { naverMeLink: "https://naver.me/abcd123" };
+    const merged = mergeParsedIntoExisting(EXISTING, parsed, source());
+    expect(merged.naverUrl).toBe("https://naver.me/abcd123");
+  });
 });
 
 describe("transformToDraftListing — 신규 등록 기본값", () => {
@@ -161,5 +193,36 @@ describe("transformToDraftListing — 신규 등록 기본값", () => {
       { rawSourceText: "원문" },
     );
     expect(draft.articleNumber).toBe("2640683107");
+  });
+
+  it("융자금: 파서가 못 찾으면(hasLoan undefined) 기본값 false/null로 채운다", async () => {
+    const draft = await transformToDraftListing({}, { rawSourceText: "원문" });
+    expect(draft.hasLoan).toBe(false);
+    expect(draft.loanAmount).toBeNull();
+  });
+
+  it("융자금: 파서가 찾은 값을 그대로 반영한다", async () => {
+    const draft = await transformToDraftListing(
+      { hasLoan: true, loanAmount: "1억 5,000만원" },
+      { rawSourceText: "원문" },
+    );
+    expect(draft.hasLoan).toBe(true);
+    expect(draft.loanAmount).toBe("1억 5,000만원");
+  });
+
+  it("URL: 직접 입력한 URL이 없으면 텍스트에서 찾은 naver.me 링크를 쓴다", async () => {
+    const draft = await transformToDraftListing(
+      { naverMeLink: "https://naver.me/abcd123" },
+      { rawSourceText: "원문" },
+    );
+    expect(draft.naverUrl).toBe("https://naver.me/abcd123");
+  });
+
+  it("URL: 직접 입력한 URL이 있으면 naver.me 자동 인식 링크보다 우선한다", async () => {
+    const draft = await transformToDraftListing(
+      { naverMeLink: "https://naver.me/abcd123" },
+      { url: "https://new.land.naver.com/x?articleNo=1234", rawSourceText: "원문" },
+    );
+    expect(draft.naverUrl).toBe("https://new.land.naver.com/x?articleNo=1234");
   });
 });

@@ -453,6 +453,36 @@ export function ListingFormFields({
           />
         </Field>
 
+        <Field label="융자금">
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 text-sm text-navy-800">
+              <input
+                type="checkbox"
+                checked={draft.hasLoan}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  onChangeField("hasLoan", checked);
+                  if (!checked) onChangeField("loanAmount", null);
+                }}
+              />
+              융자 있음
+            </label>
+            <input
+              value={draft.loanAmount ?? ""}
+              disabled={!draft.hasLoan}
+              onChange={(event) =>
+                onChangeField("loanAmount", event.target.value)
+              }
+              placeholder="예: 1억 5,000만원"
+              className={
+                draft.hasLoan
+                  ? inputClass
+                  : `${inputClass} cursor-not-allowed bg-navy-900/5 text-navy-800/50`
+              }
+            />
+          </div>
+        </Field>
+
         <Field label="대표매물 노출">
           <label className="flex items-center gap-2 text-sm text-navy-800">
             <input

@@ -42,6 +42,10 @@ export interface Listing {
   direction: string;
   moveInDate: string;
   maintenanceFee?: string;
+  /** 융자 유무. */
+  hasLoan: boolean;
+  /** 융자금 원문 문자열 그대로(숫자 변환 없음 — 표기가 다양해 파싱 실패 위험이 커서). hasLoan이 false면 null. */
+  loanAmount: string | null;
   shortDescription: string;
   features: string[];
   /** 평형 타입("84A" 등). 값이 있으면 같은 단지·같은 타입의 평면도를 상세페이지에 자동으로 보여줍니다. */
@@ -83,6 +87,8 @@ export const listings: Listing[] = [
     direction: "거실 기준 남향",
     moveInDate: "협의 가능",
     maintenanceFee: "약 28만원",
+    hasLoan: false,
+    loanAmount: null,
     shortDescription:
       "남향의 탁 트인 전망과 우수한 관리 상태가 돋보이는 84A 타입",
     features: [

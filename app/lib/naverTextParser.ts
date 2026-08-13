@@ -27,6 +27,14 @@ export interface ParsedNaverListing {
   bathroomCount?: number;
   /** 값이 확인될 때만 채움. */
   maintenanceFee?: string;
+  /** "융자금" 라벨을 아예 못 찾았으면 undefined(미확인). 라벨을 찾았으면 항상 채워짐. */
+  hasLoan?: boolean;
+  /**
+   * hasLoan이 true일 때만 원문 문자열 그대로(숫자 변환 안 함 — 표기가 다양해
+   * 파싱 실패 위험이 큼). hasLoan이 false로 확정되면 null, 라벨 자체를 못
+   * 찾아 hasLoan이 undefined면 이 값도 항상 undefined.
+   */
+  loanAmount?: string | null;
   /** 값이 확인될 때만 채움. */
   moveInDate?: string;
   /** "매물특징" 라벨 뒤 문구를 항목별로 나눈 배열. 원문 표현 그대로. */
@@ -38,6 +46,8 @@ export interface ParsedNaverListing {
   shortDescription?: string;
   /** "매물번호" 라벨 뒤 숫자. naverUrl의 articleNo와 같은 식별 개념으로 취급합니다. */
   articleNumber?: string;
+  /** 붙여넣은 텍스트 안에서 발견된 naver.me 단축링크. 관리자가 URL 입력칸에 직접 넣은 값이 우선이며, 이 값은 그게 비어있을 때만 대체로 씁니다. */
+  naverMeLink?: string;
   /**
    * "집주인확인매물 2026. 07. 29." 같은 문구에서 추출한 날짜(YYYY-MM-DD).
    * 마지막 확인일의 기본값 후보로만 쓰이며, 값이 없으면 오늘 날짜로
@@ -74,6 +84,7 @@ const FIELD_LABELS: Partial<Record<keyof ParsedNaverListing, string>> = {
   roomCount: "방/욕실 수",
   bathroomCount: "방/욕실 수",
   maintenanceFee: "관리비",
+  hasLoan: "융자금",
   moveInDate: "입주가능일",
   features: "특징",
   shortDescription: "매물 설명",
@@ -147,6 +158,65 @@ function parsePriceSection(text: string): {
       if (amount !== null && amount > 0) {
         return { transactionType: type, price: amount, priceLabel: formatPriceFull(amount) };
       }
+    }
+  }
+
+  return {};
+}
+
+/**
+ * 네이버 매물 상세 화면 상단에는 요약용 가격이 한 번 더 나오고(구형 화면
+ * 등에서 parsePriceSection이 잡던 부분), "기본 정보" 표 안에도 같은 값이
+ * 라벨(매매가/전세가/보증금)과 함께 다시 나옵니다. 이 함수는 "기본 정보"
+ * 문자열 이후 구간만 보고 그 라벨들을 찾아 값을 읽습니다 — 상단 요약 줄은
+ * 애초에 검색 범위 밖이라 파싱 대상에서 자연히 제외됩니다.
+ *
+ * 라벨과 값이 같은 줄에 있든("매매가 4억 2,000") 다른 줄로 분리돼 있든
+ * ("매매가\n4억 2,000") \s*가 줄바꿈도 공백으로 취급하므로 둘 다 인식됩니다.
+ *
+ * 전월세 실제 표 구조는 아직 샘플이 없어 확정하지 못했습니다 — 보증금/월세가
+ * 둘 다 잡힐 때만 결과를 반환하고, 하나만 잡히면 추측하지 않고 빈 값으로
+ * 남겨 uncertainFields로 안내합니다(전월세 샘플이 오면 이 함수만 조정하면
+ * 됩니다).
+ */
+function parsePriceFromBasicInfo(text: string): {
+  transactionType?: TransactionType;
+  price?: number;
+  priceLabel?: string;
+} {
+  const boundaryIndex = text.search(/기본\s*정보/);
+  if (boundaryIndex === -1) return {};
+  const section = text.slice(boundaryIndex);
+
+  const AMOUNT_PATTERN = "([0-9,]+(?:\\s*억\\s*[0-9,]*)?)";
+
+  const saleMatch = section.match(new RegExp(`매매가\\s*[:：]?\\s*${AMOUNT_PATTERN}`));
+  if (saleMatch) {
+    const amount = parseKoreanAmountToManwon(saleMatch[1]);
+    if (amount !== null && amount > 0) {
+      return { transactionType: "매매", price: amount, priceLabel: formatPriceFull(amount) };
+    }
+  }
+
+  const jeonseMatch = section.match(new RegExp(`전세가\\s*[:：]?\\s*${AMOUNT_PATTERN}`));
+  if (jeonseMatch) {
+    const amount = parseKoreanAmountToManwon(jeonseMatch[1]);
+    if (amount !== null && amount > 0) {
+      return { transactionType: "전세", price: amount, priceLabel: formatPriceFull(amount) };
+    }
+  }
+
+  const depositMatch = section.match(new RegExp(`보증금\\s*[:：]?\\s*${AMOUNT_PATTERN}`));
+  const rentMatch = section.match(new RegExp(`월세\\s*[:：]?\\s*${AMOUNT_PATTERN}`));
+  if (depositMatch && rentMatch) {
+    const deposit = parseKoreanAmountToManwon(depositMatch[1]);
+    const rent = parseKoreanAmountToManwon(rentMatch[1]);
+    if (deposit !== null && rent !== null) {
+      return {
+        transactionType: "월세",
+        price: deposit,
+        priceLabel: `보증금 ${formatPriceFull(deposit)} / 월세 ${formatPriceFull(rent)}`,
+      };
     }
   }
 
@@ -255,6 +325,27 @@ function parseMaintenanceFee(text: string): string | undefined {
   if (!/^\d/.test(raw)) return raw;
 
   return undefined;
+}
+
+/** 네이버 UI에서 값 뒤에 붙는 링크성 문구. 융자금 값이 아니므로 제거합니다. */
+const LOAN_UI_NOISE = /상세보기|도움말/g;
+
+/**
+ * "융자금" 라벨 자체를 못 찾으면 undefined(미확인 — uncertainFields로 안내).
+ * 라벨을 찾았는데 값이 "없음"/"무"/빈 값이면 융자가 없다고 확정(hasLoan:
+ * false, loanAmount: null). 그 외에는 hasLoan: true, loanAmount에 원문을
+ * 그대로 담습니다(숫자로 변환하지 않음 — 표기가 다양해 변환 시 파싱 실패
+ * 위험이 큽니다).
+ */
+function parseLoan(text: string): { hasLoan?: boolean; loanAmount?: string | null } {
+  const labelMatch = text.match(/융자금\s*[:：]?\s*([^\n]{1,30})/);
+  if (!labelMatch) return {};
+
+  const raw = labelMatch[1].replace(LOAN_UI_NOISE, "").trim();
+  if (!raw || /^(없음|무)/.test(raw)) {
+    return { hasLoan: false, loanAmount: null };
+  }
+  return { hasLoan: true, loanAmount: raw };
 }
 
 function parseMoveInDate(text: string): string | undefined {
@@ -486,6 +577,12 @@ function parseArticleNumber(text: string): string | undefined {
   return match ? match[1] : undefined;
 }
 
+/** 붙여넣은 텍스트 안에 있는 naver.me 단축 링크를 찾습니다(첫 번째로 발견된 것만). */
+function parseNaverMeLink(text: string): string | undefined {
+  const match = text.match(/https:\/\/naver\.me\/[A-Za-z0-9]+/);
+  return match ? match[0] : undefined;
+}
+
 /**
  * "집주인확인매물 2026. 07. 29.", "집주인 확인매물 2026.07.29", "확인매물
  * 2026. 7. 29." 처럼 공백·마침표 표기가 제각각인 문구에서 날짜를 추출해
@@ -529,12 +626,17 @@ function parseBuilding(text: string): string | undefined {
 export function parseNaverListingText(rawText: string): ParsedNaverListing {
   const text = rawText.replace(/\r\n/g, "\n");
 
-  const { transactionType, price, priceLabel } = parsePriceSection(text);
+  // "기본 정보" 구간 안의 라벨(매매가/전세가/보증금+월세)을 우선 신뢰하고,
+  // 거기서 못 찾으면(구형 화면 등) 기존 전체 텍스트 검색으로 대체합니다.
+  const basicInfoPrice = parsePriceFromBasicInfo(text);
+  const { transactionType, price, priceLabel } =
+    basicInfoPrice.transactionType !== undefined ? basicInfoPrice : parsePriceSection(text);
   const { supplyArea, exclusiveArea } = parseAreas(text);
   const { floor, totalFloors } = parseFloors(text);
   const { roomCount, bathroomCount } = parseRoomsBathrooms(text);
   const featureResult = parseFeatureResult(text);
   const agentDescription = parseAgentDescription(text);
+  const { hasLoan, loanAmount } = parseLoan(text);
 
   return {
     complexName: parseComplexName(text),
@@ -551,6 +653,8 @@ export function parseNaverListingText(rawText: string): ParsedNaverListing {
     roomCount,
     bathroomCount,
     maintenanceFee: parseMaintenanceFee(text),
+    hasLoan,
+    loanAmount,
     moveInDate: parseMoveInDate(text),
     features: featureResult?.tags,
     // 공백형(자연어 문장)일 때는 원문을 그대로 쓰고, 그 외(라벨형/쉼표형)는
@@ -560,6 +664,7 @@ export function parseNaverListingText(rawText: string): ParsedNaverListing {
       featureResult?.naturalSentence ??
       (featureResult?.tags ? featureResult.tags.join(" ") : undefined),
     articleNumber: parseArticleNumber(text),
+    naverMeLink: parseNaverMeLink(text),
     verifiedOwnerConfirmationDate: parseVerifiedOwnerConfirmationDate(text),
   };
 }

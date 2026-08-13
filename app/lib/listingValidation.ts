@@ -158,6 +158,11 @@ export function parseListingPayload(input: unknown): {
     direction: data.direction as string,
     moveInDate: data.moveInDate as string,
     maintenanceFee: data.maintenanceFee as string,
+    hasLoan: Boolean(data.hasLoan),
+    loanAmount:
+      Boolean(data.hasLoan) && typeof data.loanAmount === "string" && data.loanAmount.trim() !== ""
+        ? data.loanAmount
+        : null,
     shortDescription: data.shortDescription as string,
     features: Array.isArray(data.features)
       ? (data.features as string[]).filter(

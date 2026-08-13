@@ -57,6 +57,8 @@ const EMPTY_DRAFT: Listing = {
   direction: "",
   moveInDate: "",
   maintenanceFee: "",
+  hasLoan: false,
+  loanAmount: null,
   shortDescription: "",
   features: [],
   isFeatured: false,
@@ -111,6 +113,13 @@ export default function AdminRegisterPage() {
     setComplexOptions(options);
     setDraft(naverDraft);
     setFeaturesInput(naverDraft.features.join(", "));
+
+    // URL 입력칸에 직접 입력한 값이 없었는데 붙여넣은 텍스트 안의 naver.me
+    // 링크가 자동으로 인식됐다면, 입력칸에도 그대로 보여줘 관리자가 확인할
+    // 수 있게 합니다. 직접 입력한 값이 있었다면 이 분기 자체를 타지 않습니다.
+    if (!naverUrl.trim() && naverDraft.naverUrl) {
+      setNaverUrl(naverDraft.naverUrl);
+    }
 
     if (naverDraft.complexId) {
       setComplexMode("existing");

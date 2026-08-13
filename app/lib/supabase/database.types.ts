@@ -90,6 +90,8 @@ export interface Database {
           direction: string;
           move_in_date: string;
           maintenance_fee: string | null;
+          has_loan: boolean;
+          loan_amount: string | null;
           short_description: string;
           features: string[];
           naver_url: string | null;
@@ -123,6 +125,8 @@ export interface Database {
           direction: string;
           move_in_date: string;
           maintenance_fee?: string | null;
+          has_loan?: boolean;
+          loan_amount?: string | null;
           short_description: string;
           features?: string[];
           naver_url?: string | null;

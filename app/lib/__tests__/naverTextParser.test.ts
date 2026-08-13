@@ -60,8 +60,8 @@ describe("parseNaverListingText — 구형 샘플(반드시 계속 통과해야 
     );
   });
 
-  it("인식 실패 필드가 없다(모두 채워짐)", () => {
-    expect(getUncertainFieldLabels(parsed)).toEqual([]);
+  it("융자금 라벨을 제외하면 인식 실패 필드가 없다(이 샘플엔 융자금 정보가 없음)", () => {
+    expect(getUncertainFieldLabels(parsed)).toEqual(["융자금"]);
   });
 });
 
@@ -119,8 +119,8 @@ describe("parseNaverListingText — 신형 샘플(이번에 새로 지원)", () 
     );
   });
 
-  it("인식 실패 필드가 없다(모두 채워짐)", () => {
-    expect(getUncertainFieldLabels(parsed)).toEqual([]);
+  it("융자금 라벨을 제외하면 인식 실패 필드가 없다(이 샘플엔 융자금 정보가 없음)", () => {
+    expect(getUncertainFieldLabels(parsed)).toEqual(["융자금"]);
   });
 });
 
@@ -163,8 +163,8 @@ describe("parseNaverListingText — 신형 샘플(쉼표 없는 공백형 특징
     expect(parsed.shortDescription).not.toContain("면적 단위 변경평");
   });
 
-  it("인식 실패 필드가 없다(모두 채워짐)", () => {
-    expect(getUncertainFieldLabels(parsed)).toEqual([]);
+  it("융자금 라벨을 제외하면 인식 실패 필드가 없다(이 샘플엔 융자금 정보가 없음)", () => {
+    expect(getUncertainFieldLabels(parsed)).toEqual(["융자금"]);
   });
 });
 
@@ -197,8 +197,8 @@ describe("parseNaverListingText — 신형 샘플(특징 문장에 숫자가 섞
     );
   });
 
-  it("인식 실패 필드가 없다(모두 채워짐)", () => {
-    expect(getUncertainFieldLabels(parsed)).toEqual([]);
+  it("융자금 라벨을 제외하면 인식 실패 필드가 없다(이 샘플엔 융자금 정보가 없음)", () => {
+    expect(getUncertainFieldLabels(parsed)).toEqual(["융자금"]);
   });
 });
 
@@ -370,6 +370,99 @@ describe("parseNaverListingText — 매물번호 추출", () => {
       "테스트단지 202동\n매매 3억\n아파트 남향\n채광좋음 즉시입주\n기본 정보",
     );
     expect(parsed.articleNumber).toBeUndefined();
+  });
+});
+
+describe("parseNaverListingText — 가격: '기본 정보' 이후 구간 우선", () => {
+  it("상단 요약 줄과 다른 값이 '기본 정보' 뒤에 있으면 그 값을 쓴다", () => {
+    const text = [
+      "테스트단지 202동",
+      "매매 9억", // 상단 요약 줄 — 이 값은 무시돼야 함
+      "아파트 남향",
+      "기본 정보",
+      "매매가",
+      "4억 2,000만원",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.transactionType).toBe("매매");
+    expect(parsed.price).toBe(42000);
+  });
+
+  it("전세가도 동일하게 '기본 정보' 이후 값을 우선한다", () => {
+    const text = [
+      "테스트단지 202동",
+      "전세 1억",
+      "아파트 남향",
+      "기본 정보",
+      "전세가",
+      "3억 5,000만원",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.transactionType).toBe("전세");
+    expect(parsed.price).toBe(35000);
+  });
+
+  it("월세는 '기본 정보' 이후 보증금/월세가 둘 다 있어야 인식한다", () => {
+    const text = [
+      "테스트단지 202동",
+      "아파트 남향",
+      "기본 정보",
+      "보증금",
+      "1,000만원",
+      "월세",
+      "50만원",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.transactionType).toBe("월세");
+    expect(parsed.price).toBe(1000);
+  });
+
+  it("'기본 정보' 마커가 없으면 기존 방식(전체 텍스트 검색)으로 대체된다", () => {
+    const text = "테스트단지 202동\n매매가\n4억 2,000만원\n아파트 남향";
+    const parsed = parseNaverListingText(text);
+    expect(parsed.transactionType).toBe("매매");
+    expect(parsed.price).toBe(42000);
+  });
+});
+
+describe("parseNaverListingText — 융자금 추출", () => {
+  it("금액이 있으면 hasLoan=true, 원문 그대로 loanAmount에 담는다(숫자 변환 없음)", () => {
+    const parsed = parseNaverListingText("융자금\n1억 5,000만원\n기본 정보");
+    expect(parsed.hasLoan).toBe(true);
+    expect(parsed.loanAmount).toBe("1억 5,000만원");
+  });
+
+  it("\"없음\"이면 hasLoan=false, loanAmount=null로 확정한다", () => {
+    const parsed = parseNaverListingText("융자금\n없음\n기본 정보");
+    expect(parsed.hasLoan).toBe(false);
+    expect(parsed.loanAmount).toBeNull();
+  });
+
+  it("\"무\"도 \"없음\"과 동일하게 처리한다", () => {
+    const parsed = parseNaverListingText("융자금 무\n기본 정보");
+    expect(parsed.hasLoan).toBe(false);
+    expect(parsed.loanAmount).toBeNull();
+  });
+
+  it("라벨 자체를 못 찾으면 미확인 상태(undefined)로 남기고 uncertainFields에 안내한다", () => {
+    const parsed = parseNaverListingText("테스트단지 202동\n매매 3억\n기본 정보");
+    expect(parsed.hasLoan).toBeUndefined();
+    expect(parsed.loanAmount).toBeUndefined();
+    expect(getUncertainFieldLabels(parsed)).toContain("융자금");
+  });
+});
+
+describe("parseNaverListingText — naver.me 링크 추출", () => {
+  it("텍스트 안의 naver.me 단축 링크를 인식한다", () => {
+    const parsed = parseNaverListingText(
+      "테스트단지 202동\nhttps://naver.me/xAbC123d\n기본 정보",
+    );
+    expect(parsed.naverMeLink).toBe("https://naver.me/xAbC123d");
+  });
+
+  it("naver.me 링크가 없으면 undefined다", () => {
+    const parsed = parseNaverListingText("테스트단지 202동\n기본 정보");
+    expect(parsed.naverMeLink).toBeUndefined();
   });
 });
 
