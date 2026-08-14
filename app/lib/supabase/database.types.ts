@@ -104,6 +104,7 @@ export interface Database {
           unit_type: string | null;
           created_at: string;
           updated_at: string;
+          suspected_match_acknowledged_at: string | null;
         };
         Insert: {
           id: string;
@@ -139,6 +140,7 @@ export interface Database {
           unit_type?: string | null;
           created_at?: string;
           updated_at?: string;
+          suspected_match_acknowledged_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["listings"]["Insert"]>;
         Relationships: [

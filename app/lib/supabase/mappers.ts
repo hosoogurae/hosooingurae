@@ -126,6 +126,7 @@ export function listingRowToListing(
       : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    suspectedMatchAcknowledgedAt: row.suspected_match_acknowledged_at ?? undefined,
   };
 }
 
@@ -163,6 +164,7 @@ export function listingToInsert(listing: Listing): ListingInsert {
     source_article_id: listing.sourceArticleId ?? null,
     raw_source_text: listing.rawSourceText ?? null,
     unit_type: listing.unitType ?? null,
+    suspected_match_acknowledged_at: listing.suspectedMatchAcknowledgedAt ?? null,
   };
 }
 

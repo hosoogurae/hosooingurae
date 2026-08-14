@@ -69,6 +69,13 @@ export interface Listing {
   createdAt?: string;
   /** DB 마지막 수정 시각(ISO) — DB 트리거가 UPDATE마다 자동 갱신합니다. "최신 업데이트순" 정렬 기본값으로 씁니다. */
   updatedAt?: string;
+  /**
+   * 관리자가 "거래 의심" 배지를 마지막으로 확인한 시각(ISO). 이 시각 이후
+   * 날짜의 실거래가 새로 나타나면 확인 상태가 풀리고 배지가 다시 뜹니다
+   * (app/lib/suspectedTransactionMatch.ts 참고). 매칭 결과 자체는 저장하지
+   * 않고 매번 국토부 API에서 다시 계산합니다.
+   */
+  suspectedMatchAcknowledgedAt?: string;
 }
 
 export const listings: Listing[] = [

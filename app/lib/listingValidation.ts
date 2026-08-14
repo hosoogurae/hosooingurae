@@ -188,6 +188,10 @@ export function parseListingPayload(input: unknown): {
       typeof data.unitType === "string" && data.unitType.trim() !== ""
         ? data.unitType.trim()
         : undefined,
+    suspectedMatchAcknowledgedAt:
+      typeof data.suspectedMatchAcknowledgedAt === "string"
+        ? data.suspectedMatchAcknowledgedAt
+        : undefined,
   };
 
   return { listing, errors: [] };

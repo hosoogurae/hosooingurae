@@ -9,7 +9,9 @@ import type { ListingWithComplex } from "../lib/listings";
  */
 export async function patchListingFields(
   listing: ListingWithComplex,
-  patch: Partial<Pick<Listing, "dealStatus" | "lastVerifiedAt">>,
+  patch: Partial<
+    Pick<Listing, "dealStatus" | "lastVerifiedAt" | "suspectedMatchAcknowledgedAt">
+  >,
 ): Promise<{ listing?: Listing; errors?: string[] }> {
   try {
     const response = await fetch(`/api/listings/${listing.id}`, {

@@ -17,6 +17,23 @@ import {
 import { DEAL_STATUS_BADGE_CLASS, DEAL_STATUS_LABELS } from "../ListingFields";
 import { patchListingFields } from "../quickListingActions";
 import ListingSortSelect from "../../components/ListingSortSelect";
+import type { SuspectedMatch } from "../../lib/suspectedTransactionMatch";
+
+function formatDealDate(dealDate: string): string {
+  const date = new Date(dealDate);
+  if (Number.isNaN(date.getTime())) return dealDate;
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function formatDealAmount(manwon: number): string {
+  const eok = Math.floor(manwon / 10000);
+  const rest = manwon % 10000;
+  if (eok === 0) return `${manwon.toLocaleString()}만원`;
+  if (rest === 0) return `${eok}억원`;
+  return `${eok}억 ${rest.toLocaleString()}만원`;
+}
 
 const selectClass =
   "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500";
@@ -124,6 +141,15 @@ function AdminListingsView() {
     Record<string, string[]>
   >({});
   const [searchInput, setSearchInput] = useState(searchQuery);
+  // null = 아직 로딩 중(백그라운드). 목록 자체를 막지 않고 준비되는 대로 배지가 나타납니다.
+  const [suspectedMatches, setSuspectedMatches] = useState<Map<
+    string,
+    SuspectedMatch
+  > | null>(null);
+  const [expandedMatchListingId, setExpandedMatchListingId] = useState<
+    string | null
+  >(null);
+  const [matchActionId, setMatchActionId] = useState<string | null>(null);
 
   /** 정렬/공개여부/거래유형/검색 등 DB 쿼리 단계 조건을 바꿀 때 쓰는 공용 헬퍼 — 나머지 쿼리는 그대로 두고 하나만 갱신합니다. */
   function updateSearchParam(key: string, value: string) {
@@ -197,6 +223,31 @@ function AdminListingsView() {
     }
 
     refreshStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 거래 의심 감지 — 매물 목록과 별개로 백그라운드에서 실행됩니다. 국토부
+  // API를 단지별로 호출해야 해서 시간이 좀 걸릴 수 있어, 이 결과를 기다리지
+  // 않고 목록부터 먼저 보여준 뒤 준비되는 대로 배지가 나타나게 합니다.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSuspectedMatches() {
+      try {
+        const response = await fetch("/api/admin/listings/suspected-matches");
+        const data = await response.json();
+        if (!response.ok || cancelled) return;
+        const matches = data.matches as SuspectedMatch[];
+        setSuspectedMatches(new Map(matches.map((match) => [match.listingId, match])));
+      } catch {
+        if (!cancelled) setSuspectedMatches(new Map());
+      }
+    }
+
+    loadSuspectedMatches();
 
     return () => {
       cancelled = true;
@@ -301,6 +352,32 @@ function AdminListingsView() {
     setQuickActionId(null);
   }
 
+  /** "확인함" — 이 시각 이후 날짜의 새 실거래가 나타나기 전까지는 배지를 다시 띄우지 않습니다. */
+  async function handleAcknowledgeMatch(listing: ListingWithComplex) {
+    setMatchActionId(listing.id);
+    const { listing: updated, errors } = await patchListingFields(listing, {
+      suspectedMatchAcknowledgedAt: new Date().toISOString(),
+    });
+    if (errors) {
+      alert(errors[0]);
+    } else if (updated) {
+      setSuspectedMatches((prev) => {
+        if (!prev) return prev;
+        const next = new Map(prev);
+        next.delete(listing.id);
+        return next;
+      });
+      setExpandedMatchListingId(null);
+    }
+    setMatchActionId(null);
+  }
+
+  /** "거래완료 처리" — 기존 거래상태 변경(handleQuickStatusChange)을 그대로 재사용합니다. */
+  async function handleMarkCompletedFromMatch(listing: ListingWithComplex) {
+    await handleQuickStatusChange(listing, "completed");
+    setExpandedMatchListingId(null);
+  }
+
   const visibleListings = activeFilter
     ? listings?.filter((listing) =>
         matchesInspectionCategory(listing, activeFilter, unitTypesByComplex),
@@ -339,6 +416,14 @@ function AdminListingsView() {
         />
         <StatCard label="상가" value={stats?.byPropertyType.상가 ?? null} compact />
       </div>
+
+      {suspectedMatches && suspectedMatches.size > 0 && (
+        <div className="mt-4 rounded-md border border-purple-300 bg-purple-50 px-3 py-2 text-sm text-purple-800">
+          <strong>거래 의심 매물 {suspectedMatches.size}건</strong> — 국토부
+          실거래와 조건이 비슷한 매물이 있습니다. 아직 확정된 건 아니니 배지를
+          눌러 실거래 내역을 직접 확인해주세요.
+        </div>
+      )}
 
       {error && (
         <p className="mt-6 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -422,6 +507,8 @@ function AdminListingsView() {
             const urgency = getVerificationUrgency(listing);
             const urgencyBadge = URGENCY_BADGE[urgency];
             const lowInfoReason = describeLowInfoReason(listing);
+            const suspectedMatch = suspectedMatches?.get(listing.id);
+            const isMatchExpanded = expandedMatchListingId === listing.id;
 
             return (
               <li
@@ -472,7 +559,53 @@ function AdminListingsView() {
                         {lowInfoReason}
                       </span>
                     )}
+                    {suspectedMatch && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedMatchListingId(isMatchExpanded ? null : listing.id)
+                        }
+                        className={`rounded-full px-2 py-0.5 font-bold transition-colors ${
+                          suspectedMatch.confidence === "high"
+                            ? "bg-purple-500/15 text-purple-800 hover:bg-purple-500/25"
+                            : "bg-purple-500/5 text-purple-600 hover:bg-purple-500/15"
+                        }`}
+                      >
+                        거래 의심{suspectedMatch.confidence === "high" ? "(확인필요)" : "(참고)"}
+                      </button>
+                    )}
                   </p>
+
+                  {suspectedMatch && isMatchExpanded && (
+                    <div className="mt-2 rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-900">
+                      <p className="font-semibold">
+                        확정된 거래가 아니라 조건이 비슷한 실거래를 찾은 것입니다 — 직접 확인해주세요.
+                      </p>
+                      <p className="mt-1">
+                        매칭된 실거래: {formatDealDate(suspectedMatch.dealDate)} ·{" "}
+                        {formatDealAmount(suspectedMatch.dealAmount)} · {suspectedMatch.floor}층
+                        {suspectedMatch.confidence === "low" && " (층은 다름, 면적만 일치)"}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleAcknowledgeMatch(listing)}
+                          disabled={matchActionId === listing.id}
+                          className="rounded-md border border-purple-300 bg-white px-3 py-1.5 font-bold text-purple-700 transition-colors hover:border-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {matchActionId === listing.id ? "처리 중..." : "확인함"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMarkCompletedFromMatch(listing)}
+                          disabled={matchActionId === listing.id || quickActionId === listing.id}
+                          className="rounded-md bg-purple-600 px-3 py-1.5 font-bold text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          거래완료 처리
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <p className="mt-1 font-bold text-navy-950">
                     {listing.priceLabel}
                     <span className="ml-2 font-normal text-navy-800/50">
