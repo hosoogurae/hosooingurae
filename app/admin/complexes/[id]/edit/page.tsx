@@ -96,6 +96,7 @@ export default function EditComplexPage({
               initial={complex}
               onSubmit={handleUpdate}
               submitLabel="저장"
+              allowNaverPaste
             />
           </div>
 

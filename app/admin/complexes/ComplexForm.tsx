@@ -4,6 +4,11 @@ import { useState } from "react";
 import type { Complex } from "../../data/complexes";
 import type { ComplexFieldsInput } from "../../lib/complexValidation";
 import type { MolitCheckSample } from "../../api/admin/molit-check/route";
+import {
+  getUncertainComplexFieldLabels,
+  parseNaverComplexText,
+  type ParsedNaverComplex,
+} from "../../lib/parseNaverComplex";
 
 const inputClass =
   "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-gold-500";
@@ -69,6 +74,47 @@ function toFormValues(complex?: Complex | null): ComplexFormValues {
     buses: complex?.transportation.buses?.join(", ") ?? "",
     molitLawdCode: complex?.molit?.lawdCode ?? "",
     molitAptSeq: complex?.molit?.aptSeq ?? "",
+  };
+}
+
+/**
+ * 파싱된 값이 있는 필드만 덮어쓰고, 못 찾은 필드는 화면에 이미 입력돼 있던
+ * 값을 그대로 유지합니다(파싱 실패로 기존 데이터가 지워지는 사고 방지).
+ */
+function mergeParsedComplex(
+  prev: ComplexFormValues,
+  parsed: ParsedNaverComplex,
+): ComplexFormValues {
+  return {
+    ...prev,
+    name: parsed.name ?? prev.name,
+    address: parsed.address ?? prev.address,
+    approvalDate: parsed.approvalDate ?? prev.approvalDate,
+    totalHouseholds:
+      parsed.totalHouseholds !== undefined
+        ? String(parsed.totalHouseholds)
+        : prev.totalHouseholds,
+    buildings:
+      parsed.buildings !== undefined ? String(parsed.buildings) : prev.buildings,
+    maxFloor: parsed.maxFloor !== undefined ? String(parsed.maxFloor) : prev.maxFloor,
+    heating: parsed.heating ?? prev.heating,
+    builder: parsed.builder ?? prev.builder,
+    parkingCount:
+      parsed.parkingCount !== undefined
+        ? String(parsed.parkingCount)
+        : prev.parkingCount,
+    parkingPerHousehold:
+      parsed.parkingPerHousehold !== undefined
+        ? String(parsed.parkingPerHousehold)
+        : prev.parkingPerHousehold,
+    floorAreaRatio:
+      parsed.floorAreaRatio !== undefined
+        ? String(parsed.floorAreaRatio)
+        : prev.floorAreaRatio,
+    buildingCoverageRatio:
+      parsed.buildingCoverageRatio !== undefined
+        ? String(parsed.buildingCoverageRatio)
+        : prev.buildingCoverageRatio,
   };
 }
 
@@ -182,18 +228,32 @@ export default function ComplexForm({
   initial,
   onSubmit,
   submitLabel,
+  allowNaverPaste = false,
 }: {
   initial?: Complex | null;
   onSubmit: (input: ComplexFieldsInput) => Promise<{ error?: string }>;
   submitLabel: string;
+  /** 단지 편집 화면에서만 true로 켭니다("새 단지 추가" 화면은 요청 범위 밖). */
+  allowNaverPaste?: boolean;
 }) {
   const [values, setValues] = useState<ComplexFormValues>(toFormValues(initial));
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [molitResult, setMolitResult] = useState<MolitCheckResult>({ status: "idle" });
+  const [naverPastedText, setNaverPastedText] = useState("");
+  const [naverUncertainFields, setNaverUncertainFields] = useState<string[] | null>(
+    null,
+  );
 
   function update<K extends keyof ComplexFormValues>(key: K, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleNaverAutoFill() {
+    if (!naverPastedText.trim()) return;
+    const parsed = parseNaverComplexText(naverPastedText);
+    setValues((prev) => mergeParsedComplex(prev, parsed));
+    setNaverUncertainFields(getUncertainComplexFieldLabels(parsed));
   }
 
   async function handleMolitCheck() {
@@ -254,6 +314,40 @@ export default function ComplexForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
+      {allowNaverPaste && (
+        <section className="rounded-xl border border-navy-900/10 p-6 sm:p-8">
+          <h2 className="text-base font-bold text-navy-950">네이버 단지정보 붙여넣기</h2>
+          <p className="mt-1 text-xs leading-relaxed text-navy-800/60">
+            네이버 부동산 단지정보 탭에서 복사한 텍스트를 붙여넣고 자동 채우기를
+            누르면 아래 항목이 채워집니다. 인식하지 못한 항목은 기존 값을 그대로
+            두니, 채워진 뒤 내용을 확인·수정하고 저장해주세요.
+          </p>
+          <div className="mt-4">
+            <textarea
+              value={naverPastedText}
+              onChange={(event) => setNaverPastedText(event.target.value)}
+              rows={8}
+              placeholder="네이버 부동산 단지정보 탭에서 복사한 텍스트 전체를 붙여넣어주세요."
+              className={`${inputClass} w-full resize-y`}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleNaverAutoFill}
+            disabled={!naverPastedText.trim()}
+            className="mt-3 rounded-md border border-gold-500 px-5 py-2 text-sm font-bold text-gold-600 transition-colors hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            자동 채우기
+          </button>
+          {naverUncertainFields && naverUncertainFields.length > 0 && (
+            <p className="mt-3 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">
+              자동으로 확인하지 못한 항목: {naverUncertainFields.join(", ")} — 아래
+              폼에서 직접 확인해주세요(기존 값이 있었다면 그대로 남아있습니다).
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="rounded-xl border border-navy-900/10 p-6 sm:p-8">
         <h2 className="text-base font-bold text-navy-950">기본 단지정보</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
