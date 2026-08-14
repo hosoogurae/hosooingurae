@@ -402,19 +402,18 @@ describe("parseNaverListingText — 가격: '기본 정보' 이후 구간 우선
     expect(parsed.price).toBe(35000);
   });
 
-  it("월세는 '기본 정보' 이후 보증금/월세가 둘 다 있어야 인식한다", () => {
+  it("월세는 '보증금/월세' 조합 라벨과 'N/N만원' 값으로 인식한다(실제 샘플 형식)", () => {
     const text = [
       "테스트단지 202동",
       "아파트 남향",
       "기본 정보",
-      "보증금",
-      "1,000만원",
-      "월세",
-      "50만원",
+      "보증금/월세",
+      "1,000/50만원",
     ].join("\n");
     const parsed = parseNaverListingText(text);
     expect(parsed.transactionType).toBe("월세");
     expect(parsed.price).toBe(1000);
+    expect(parsed.priceLabel).toBe("보증금 1,000만원 / 월세 50만원");
   });
 
   it("'기본 정보' 마커가 없으면 기존 방식(전체 텍스트 검색)으로 대체된다", () => {
@@ -422,6 +421,39 @@ describe("parseNaverListingText — 가격: '기본 정보' 이후 구간 우선
     const parsed = parseNaverListingText(text);
     expect(parsed.transactionType).toBe("매매");
     expect(parsed.price).toBe(42000);
+  });
+
+  it("월세 값 뒤에 붙은 마크다운 링크·버튼 문구를 제거하고 숫자만 추출한다(실제 원문)", () => {
+    const text = [
+      "테스트단지 202동",
+      "아파트 남향",
+      "기본 정보",
+      "보증금/월세",
+      "4,000/150만원[전/월세 계산기전세대출 이자 vs 월세 비교하기](https://land.naver.com/calc)",
+      "관리비",
+      "30만원상세보기",
+      "입주가능일",
+      "즉시입주 협의 가능",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.transactionType).toBe("월세");
+    expect(parsed.price).toBe(4000);
+    expect(parsed.priceLabel).toBe("보증금 4,000만원 / 월세 150만원");
+    expect(parsed.maintenanceFee).toBe("30만원");
+    expect(parsed.moveInDate).toBe("즉시입주 협의 가능");
+  });
+
+  it("'보증금'만 있고 '월세'가 없으면(전세대) 전세로 인식한다", () => {
+    const text = [
+      "테스트단지 202동",
+      "아파트 남향",
+      "기본 정보",
+      "보증금",
+      "3억 5,000만원",
+    ].join("\n");
+    const parsed = parseNaverListingText(text);
+    expect(parsed.transactionType).toBe("전세");
+    expect(parsed.price).toBe(35000);
   });
 });
 

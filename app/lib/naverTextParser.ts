@@ -165,6 +165,16 @@ function parsePriceSection(text: string): {
 }
 
 /**
+ * "[텍스트](URL)" 마크다운 링크와 "상세보기"/"도움말" 같은 버튼 문구를
+ * 제거합니다. 신형 화면에서 값 뒤에 안내 링크나 버튼 텍스트가 그대로 붙어
+ * 나오는 경우 대응(예: "150만원[전/월세 계산기...](https://...)",
+ * "30만원상세보기").
+ */
+function stripUiNoise(raw: string): string {
+  return raw.replace(/\[[^\]]*\]\([^)]*\)/g, "").replace(/상세보기|도움말/g, "");
+}
+
+/**
  * 네이버 매물 상세 화면 상단에는 요약용 가격이 한 번 더 나오고(구형 화면
  * 등에서 parsePriceSection이 잡던 부분), "기본 정보" 표 안에도 같은 값이
  * 라벨(매매가/전세가/보증금)과 함께 다시 나옵니다. 이 함수는 "기본 정보"
@@ -174,10 +184,9 @@ function parsePriceSection(text: string): {
  * 라벨과 값이 같은 줄에 있든("매매가 4억 2,000") 다른 줄로 분리돼 있든
  * ("매매가\n4억 2,000") \s*가 줄바꿈도 공백으로 취급하므로 둘 다 인식됩니다.
  *
- * 전월세 실제 표 구조는 아직 샘플이 없어 확정하지 못했습니다 — 보증금/월세가
- * 둘 다 잡힐 때만 결과를 반환하고, 하나만 잡히면 추측하지 않고 빈 값으로
- * 남겨 uncertainFields로 안내합니다(전월세 샘플이 오면 이 함수만 조정하면
- * 됩니다).
+ * 월세는 "보증금/월세" 라벨 하나에 "4,000/150만원" 형태로 값이 함께
+ * 나옵니다(실제 샘플로 확인됨). 전세는 "전세가" 라벨이 없으면 "보증금"
+ * 라벨 하나만(월세 없이) 쓰는 경우도 있어, 그 경우도 전세로 인식합니다.
  */
 function parsePriceFromBasicInfo(text: string): {
   transactionType?: TransactionType;
@@ -206,17 +215,36 @@ function parsePriceFromBasicInfo(text: string): {
     }
   }
 
-  const depositMatch = section.match(new RegExp(`보증금\\s*[:：]?\\s*${AMOUNT_PATTERN}`));
-  const rentMatch = section.match(new RegExp(`월세\\s*[:：]?\\s*${AMOUNT_PATTERN}`));
-  if (depositMatch && rentMatch) {
-    const deposit = parseKoreanAmountToManwon(depositMatch[1]);
-    const rent = parseKoreanAmountToManwon(rentMatch[1]);
-    if (deposit !== null && rent !== null) {
-      return {
-        transactionType: "월세",
-        price: deposit,
-        priceLabel: `보증금 ${formatPriceFull(deposit)} / 월세 ${formatPriceFull(rent)}`,
-      };
+  // "보증금/월세" 라벨 뒤에 "4,000/150만원[전/월세 계산기...](링크)"처럼 안내
+  // 링크·버튼 문구가 값에 바로 붙어 나올 수 있어, 그 구간만 떼어 노이즈를
+  // 제거한 뒤 숫자 패턴을 찾습니다.
+  const depositRentLabelMatch = section.match(/보증금\s*\/\s*월세\s*[:：]?\s*([\s\S]{1,80})/);
+  if (depositRentLabelMatch) {
+    const cleaned = stripUiNoise(depositRentLabelMatch[1]);
+    const valueMatch = cleaned.match(
+      new RegExp(`^\\s*${AMOUNT_PATTERN}\\s*\\/\\s*${AMOUNT_PATTERN}\\s*만?\\s*원?`),
+    );
+    if (valueMatch) {
+      const deposit = parseKoreanAmountToManwon(valueMatch[1]);
+      const rent = parseKoreanAmountToManwon(valueMatch[2]);
+      if (deposit !== null && rent !== null && deposit > 0) {
+        return {
+          transactionType: "월세",
+          price: deposit,
+          priceLabel: `보증금 ${formatPriceFull(deposit)} / 월세 ${formatPriceFull(rent)}`,
+        };
+      }
+    }
+  }
+
+  // "보증금/월세" 조합이 아니라 "보증금"만 단독으로 있으면 전세입니다(위에서
+  // 실패했을 때만 시도 — "보증금/월세" 뒤에는 숫자가 바로 오지 않고 "/월세"가
+  // 끼어있어서 이 패턴이 자연히 매칭되지 않습니다).
+  const depositOnlyMatch = section.match(new RegExp(`보증금\\s*[:：]?\\s*${AMOUNT_PATTERN}`));
+  if (depositOnlyMatch) {
+    const amount = parseKoreanAmountToManwon(depositOnlyMatch[1]);
+    if (amount !== null && amount > 0) {
+      return { transactionType: "전세", price: amount, priceLabel: formatPriceFull(amount) };
     }
   }
 
