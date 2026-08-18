@@ -32,6 +32,11 @@ export default function About() {
             오피스텔, 상가 매물을 전문적으로 중개합니다. 오랜 지역 경험을
             바탕으로 고객 한 분 한 분께 맞는 최적의 매물을 제안합니다.
           </p>
+          <p className="mt-4 max-w-lg text-sm leading-relaxed text-navy-800/70 sm:text-base">
+            저희 가족도 구래동에 10년째 살고 있습니다. 이편한세상 상가에서
+            매일 이웃을 만나는 동네 부동산으로, 살아본 사람만 아는 동네
+            정보까지 정직하게 말씀드립니다.
+          </p>
         </div>
 
         <dl className="grid gap-6 sm:grid-cols-1">
