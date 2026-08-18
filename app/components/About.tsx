@@ -27,12 +27,12 @@ export default function About() {
           <h2 className="text-2xl font-black text-navy-950 sm:text-3xl">
             호수공인중개사사무소를 소개합니다
           </h2>
-          <p className="mt-5 max-w-lg text-sm leading-relaxed text-navy-800/70 sm:text-base">
+          <p className="mt-5 max-w-lg text-sm leading-relaxed text-navy-800/70">
             호수공인중개사사무소는 김포 한강신도시 구래동을 중심으로 아파트,
             오피스텔, 상가 매물을 전문적으로 중개합니다. 오랜 지역 경험을
             바탕으로 고객 한 분 한 분께 맞는 최적의 매물을 제안합니다.
           </p>
-          <p className="mt-4 max-w-lg text-sm leading-relaxed text-navy-800/70 sm:text-base">
+          <p className="mt-4 max-w-lg border-l-2 border-gold-500/40 py-0.5 pl-4 text-xs italic leading-relaxed text-navy-800/60">
             저희 가족도 구래동에 10년째 살고 있습니다. 이편한세상 상가에서
             매일 이웃을 만나는 동네 부동산으로, 살아본 사람만 아는 동네
             정보까지 정직하게 말씀드립니다.
