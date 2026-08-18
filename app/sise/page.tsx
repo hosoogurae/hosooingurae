@@ -51,7 +51,7 @@ export default async function SisePage() {
     tradeCount: 0,
     averagePrice: null,
     highestTrade: null,
-    complexAreaSummaries: [],
+    complexGroups: [],
   };
   let loadError: string | null = null;
   let complexIdByAptSeq: Record<string, string> = {};
@@ -138,12 +138,12 @@ export default async function SisePage() {
             <div className="mt-10">
               <h2 className="text-lg font-bold text-navy-950">단지별 시세</h2>
               <p className="mt-1 text-sm text-navy-800/60">
-                거래 건수가 많은 순으로 정렬했습니다. 카드를 누르면 개별 거래
-                내역을 확인할 수 있습니다.
+                거래 건수가 많은 순으로 정렬했습니다. 단지를 누르면 평형별
+                시세가, 평형을 누르면 개별 거래 내역이 펼쳐집니다.
               </p>
               <div className="mt-4">
                 <SiseComplexList
-                  summaries={summary.complexAreaSummaries}
+                  complexGroups={summary.complexGroups}
                   complexIdByAptSeq={complexIdByAptSeq}
                 />
               </div>
