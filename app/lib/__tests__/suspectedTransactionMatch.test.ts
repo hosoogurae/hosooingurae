@@ -45,6 +45,7 @@ function makeTrade(overrides: Partial<MolitAptTradeItem> = {}): MolitAptTradeIte
     excluUseAr: 84.8,
     dealAmount: 43000,
     dealDate: "2026-06-01",
+    cdealType: "",
     ...overrides,
   };
 }

@@ -25,6 +25,8 @@ export interface MolitAptTradeItem {
   dealAmount: number;
   /** 계약일 (YYYY-MM-DD) */
   dealDate: string;
+  /** 해제여부. "O"면 해제(취소)된 신고 — 시세 집계 시 제외해야 합니다. 정상 거래는 빈 문자열. */
+  cdealType: string;
 }
 
 const xmlParser = new XMLParser({
@@ -163,8 +165,14 @@ export async function fetchAptTrades(
       excluUseAr: toNumber(record.excluUseAr),
       dealAmount: toNumber(record.dealAmount),
       dealDate: `${record.dealYear}-${pad2(record.dealMonth)}-${pad2(record.dealDay)}`,
+      cdealType: String(record.cdealType ?? "").trim(),
     };
   });
+}
+
+/** cdealType이 "O"인(해제/취소 신고된) 거래인지 확인합니다. */
+export function isCanceledTrade(trade: MolitAptTradeItem): boolean {
+  return trade.cdealType === "O";
 }
 
 /**
