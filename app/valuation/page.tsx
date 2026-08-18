@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { ComplexOption } from "../lib/naverImport";
 import type { ComplexTransaction } from "../data/complexTransactions";
 import type { FloorPlanImage } from "../data/floorPlans";
@@ -76,7 +77,12 @@ function buildSellHref(complexName: string, area: SelectedArea | null): string {
   return `/sell?${params.toString()}`;
 }
 
-export default function ValuationPage() {
+function ValuationView() {
+  // /sise의 단지 카드에서 "평형별 상세 시세 보기"로 넘어온 경우, 이 값이 있으면
+  // 1단계(단지 선택)를 건너뛰고 2단계(평형 선택)부터 시작합니다.
+  const searchParams = useSearchParams();
+  const preselectComplexId = searchParams.get("complexId");
+
   const [step, setStep] = useState<Step>("complex");
 
   const [complexOptions, setComplexOptions] = useState<ComplexOption[]>([]);
@@ -158,7 +164,7 @@ export default function ValuationPage() {
     usingFloorPlanTypes ||
     (fallbackSource === "molit" && (fallbackAreaGroups?.length ?? 0) > 0);
 
-  async function handleSelectComplex(option: ComplexOption) {
+  const handleSelectComplex = useCallback(async (option: ComplexOption) => {
     setSelectedComplex(option);
     setStep("area");
     setSelectedArea(null);
@@ -212,7 +218,22 @@ export default function ValuationPage() {
     } finally {
       setLoadingAreaOptions(false);
     }
-  }
+  }, []);
+
+  // complexOptions가 로드된 뒤, URL의 complexId와 일치하는 단지가 있으면 자동으로
+  // 선택해 2단계로 건너뜁니다. 일치하는 게 없으면(잘못된 id 등) 조용히 무시하고
+  // 평소대로 1단계(단지 선택)에 남습니다 — 추측해서 아무 단지나 선택하지 않습니다.
+  useEffect(() => {
+    if (!preselectComplexId || selectedComplex || complexOptions.length === 0) {
+      return;
+    }
+    const match = complexOptions.find((option) => option.id === preselectComplexId);
+    if (!match) return;
+    // handleSelectComplex는 맨 처음에 setState를 동기 호출합니다 — 효과 본문에서
+    // 곧장 부르면 "effect 안에서 setState 동기 호출" 경고 대상이라, 다음
+    // 마이크로태스크로 미뤄서 호출합니다.
+    queueMicrotask(() => handleSelectComplex(match));
+  }, [complexOptions, preselectComplexId, selectedComplex, handleSelectComplex]);
 
   function handleSelectUnitType(option: UnitTypeOption) {
     const overlapCount = (unitTypeOptions ?? []).filter(
@@ -658,5 +679,13 @@ export default function ValuationPage() {
         )}
       </section>
     </>
+  );
+}
+
+export default function ValuationPage() {
+  return (
+    <Suspense fallback={null}>
+      <ValuationView />
+    </Suspense>
   );
 }

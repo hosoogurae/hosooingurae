@@ -9,7 +9,7 @@ import { ChevronDownIcon, PhoneIcon } from "./icons";
 const SIMPLE_NAV_ITEMS = [
   { label: "오피스텔", href: "/listings?propertyType=officetel" },
   { label: "상가", href: "/listings?propertyType=commercial" },
-  { label: "우리 집 시세", href: "/valuation" },
+  { label: "우리 집 시세", href: "/sise" },
   { label: "매물 내놓기", href: "/sell" },
 ];
 

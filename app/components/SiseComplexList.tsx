@@ -1,14 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { ComplexAreaSummary } from "../lib/sise";
 import { formatContractDate, formatPriceFull } from "../lib/transactions";
 
-/** /sise 전용 — 단지·평형별 요약 카드 목록. 카드를 누르면 그 그룹의 개별 거래 내역이 펼쳐집니다. */
+/**
+ * /sise 전용 — 단지·평형별 요약 카드 목록. 카드를 누르면 그 그룹의 개별
+ * 거래 내역이 펼쳐집니다. complexIdByAptSeq에 매핑이 있는 단지는 "평형별
+ * 상세 시세 보기" 링크로 /valuation(그 단지의 2단계부터 시작)까지 이어집니다
+ * — 매핑이 없는(우리 DB 미등록 또는 molit 미연동) 단지는 이 링크가 자연히
+ * 빠집니다.
+ */
 export default function SiseComplexList({
   summaries,
+  complexIdByAptSeq,
 }: {
   summaries: ComplexAreaSummary[];
+  complexIdByAptSeq: Record<string, string>;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -17,6 +26,7 @@ export default function SiseComplexList({
       {summaries.map((summary) => {
         const key = `${summary.aptSeq}-${summary.representativeArea}`;
         const isExpanded = expandedKey === key;
+        const complexId = complexIdByAptSeq[summary.aptSeq];
 
         return (
           <li
@@ -60,6 +70,20 @@ export default function SiseComplexList({
                 </div>
               </div>
             </button>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-navy-900/10 bg-navy-900/[0.02] px-4 py-2 sm:px-5">
+              <span className="text-xs text-navy-800/40">
+                카드를 누르면 개별 거래 내역이 펼쳐집니다
+              </span>
+              {complexId && (
+                <Link
+                  href={`/valuation?complexId=${encodeURIComponent(complexId)}`}
+                  className="shrink-0 text-xs font-bold text-gold-600 hover:underline"
+                >
+                  평형별 상세 시세 보기 →
+                </Link>
+              )}
+            </div>
 
             {isExpanded && (
               <div className="border-t border-navy-900/10 bg-navy-900/[0.02] px-4 py-3 sm:px-5">
