@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { FloorPlanImage } from "../data/floorPlans";
 import { getComplexById } from "../lib/complexes";
+import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getAllListings } from "../lib/listings";
 import {
@@ -45,14 +46,15 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
   // 매물마다 평면도를 따로 조회하면 카드 개수만큼 쿼리가 나가므로(N+1),
   // 목록에 나온 단지 id별로 한 번씩만 조회해 매물의 unitType으로 찾아 씁니다.
   const distinctComplexIds = [...new Set(listings.map((l) => l.complexId))];
-  const floorPlansByComplex = new Map<string, FloorPlanImage[]>(
-    await Promise.all(
+  const [floorPlansByComplex, complexImagesByComplex] = await Promise.all([
+    Promise.all(
       distinctComplexIds.map(
         async (complexId) =>
           [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
       ),
-    ),
-  );
+    ).then((entries) => new Map<string, FloorPlanImage[]>(entries)),
+    getComplexRepresentativeImages(distinctComplexIds),
+  ]);
 
   function getFloorPlanForListing(
     complexId: string,
@@ -122,6 +124,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
                     listing.complexId,
                     listing.unitType,
                   )}
+                  complexImageUrl={complexImagesByComplex.get(listing.complexId)}
                 />
                 <CompareToggle listingId={listing.id} />
               </div>

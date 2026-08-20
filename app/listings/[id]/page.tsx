@@ -41,7 +41,7 @@ import {
   formatComplexAndBuilding,
 } from "../../lib/listingInquiry";
 import { getTransactionsByComplexId } from "../../lib/transactions";
-import ListingMediaPlaceholder from "../../components/ListingMediaPlaceholder";
+import ListingBrandPlaceholder from "../../components/ListingBrandPlaceholder";
 import ListingGallery from "../../components/ListingGallery";
 import ListingInquiryMessage from "../../components/ListingInquiryMessage";
 import TransactionPriceChart from "../../components/TransactionPriceChart";
@@ -143,9 +143,10 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
     unitTypeImages: unitTypeImages.map((image) => image.url),
     complexImages: complexImages.map((image) => image.url),
   });
-  // 히어로 대표 이미지는 매물 개별 사진만 후보로 삼습니다(타입/단지
-  // 공통사진은 대표사진으로 쓰지 않음). 없으면 아래에서 평면도로,
-  // 그것도 없으면 플레이스홀더로 대체합니다.
+  // 히어로 대표 이미지는 매물 개별 사진만 후보로 삼습니다(타입 공통사진은
+  // 대표사진으로 쓰지 않음). 없으면 아래에서 평면도로, 그것도 없으면 단지
+  // 대표 사진(complexImages[0])으로, 그것도 없으면 브랜드 플레이스홀더로
+  // 대체합니다.
   const heroImage = resolveListingHeroImage(listing);
 
   const requestHeaders = await headers();
@@ -268,8 +269,21 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                     className="rounded-xl"
                   />
                 </div>
+              ) : complexImages[0] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={complexImages[0].url}
+                  alt={`${complex.name} 단지 사진`}
+                  className="aspect-[4/3] w-full rounded-2xl object-cover"
+                />
               ) : (
-                <ListingMediaPlaceholder className="aspect-[4/3] w-full rounded-2xl" />
+                <ListingBrandPlaceholder
+                  complexId={complex.id}
+                  complexName={complex.name}
+                  propertyType={listing.propertyType}
+                  transactionType={listing.transactionType}
+                  className="aspect-[4/3] w-full rounded-2xl"
+                />
               )}
             </div>
           </div>
@@ -283,7 +297,13 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
         >
           <h2 className="text-lg font-bold text-navy-950">사진</h2>
           <div className="mt-6">
-            <ListingGallery images={galleryImages} />
+            <ListingGallery
+              images={galleryImages}
+              complexId={complex.id}
+              complexName={complex.name}
+              propertyType={listing.propertyType}
+              transactionType={listing.transactionType}
+            />
           </div>
         </div>
 
