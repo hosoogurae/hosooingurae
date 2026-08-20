@@ -130,6 +130,16 @@ describe("summarizeDongTrades", () => {
     expect(areaRows[1].tradeCount).toBe(1);
   });
 
+  it("단지의 latestDealDate는 대표 평형이 아니라도 전체 평형 중 가장 최근 날짜를 쓴다", () => {
+    const trades = [
+      makeTrade({ aptSeq: "A", excluUseAr: 84.8, dealDate: "2026-01-01" }),
+      makeTrade({ aptSeq: "A", excluUseAr: 84.8, dealDate: "2026-02-01" }),
+      makeTrade({ aptSeq: "A", excluUseAr: 59.9, dealDate: "2026-06-01" }),
+    ];
+    const summary = summarizeDongTrades(trades);
+    expect(summary.complexGroups[0].latestDealDate).toBe("2026-06-01");
+  });
+
   describe("단지명 정규화 통합(실제 사례: 호수마을e편한세상)", () => {
     it("\"이편한세상\"과 \"e편한세상\" 표기가 다른 같은 단지를(다른 aptSeq여도) 하나로 합친다", () => {
       const trades = [

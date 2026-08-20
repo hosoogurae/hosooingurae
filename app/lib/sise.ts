@@ -46,7 +46,13 @@ export interface ComplexGroup {
   aptNm: string;
   /** 단지 전체(모든 평형 합산) 거래건수. */
   tradeCount: number;
-  /** 거래건수 많은 순. */
+  /** 단지 전체(모든 평형 중) 가장 최근 계약일. */
+  latestDealDate: string;
+  /**
+   * 거래건수 많은 순 — areaRows[0]이 "대표 평형"입니다. 카드 요약에는 이
+   * 대표 평형의 평균가만 보여줍니다(전체 평형을 섞은 평균은 84㎡/59㎡처럼
+   * 서로 다른 시세를 뭉개서 오해를 부르므로 쓰지 않습니다).
+   */
   areaRows: ComplexAreaRow[];
 }
 
@@ -146,10 +152,15 @@ export function summarizeDongTrades(trades: MolitAptTradeItem[]): SiseSummary {
       .map((group) => summarizeAreaRow(group.trades, group.representativeArea))
       .sort((a, b) => b.tradeCount - a.tradeCount);
 
+    const latestDealDate = [...complexTrades].sort((a, b) =>
+      b.dealDate.localeCompare(a.dealDate),
+    )[0].dealDate;
+
     complexGroups.push({
       aptSeq: representativeAptSeq,
       aptNm: representativeAptNm,
       tradeCount: complexTrades.length,
+      latestDealDate,
       areaRows,
     });
   }

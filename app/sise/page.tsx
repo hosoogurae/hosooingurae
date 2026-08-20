@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getAllComplexes } from "../lib/complexes";
 import { fetchRecentAptTrades, MolitApiError } from "../lib/molit";
 import {
@@ -177,24 +176,15 @@ export default async function SisePage() {
           </div>
 
           <div className="mt-6 text-center">
-            <Link
-              href="/valuation"
-              className="text-sm font-semibold text-navy-800/70 underline-offset-4 hover:text-gold-600 hover:underline"
-            >
-              단지를 직접 검색해서 찾기 →
-            </Link>
-          </div>
-
-          <p className="mt-8 text-center text-xs text-navy-800/40">
             <a
               href={MOLIT_PUBLIC_SYSTEM_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-navy-800/60 hover:underline"
+              className="text-sm font-semibold text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
             >
-              국토교통부 실거래가 공개시스템 (rt.molit.go.kr)
+              국토교통부 실거래가 공개시스템에서 직접 찾아보기 (rt.molit.go.kr) →
             </a>
-          </p>
+          </div>
         </section>
       </section>
     </>
