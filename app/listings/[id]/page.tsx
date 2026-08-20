@@ -41,7 +41,6 @@ import {
   formatComplexAndBuilding,
 } from "../../lib/listingInquiry";
 import { getTransactionsByComplexId } from "../../lib/transactions";
-import ListingBrandPlaceholder from "../../components/ListingBrandPlaceholder";
 import ListingGallery from "../../components/ListingGallery";
 import ListingInquiryMessage from "../../components/ListingInquiryMessage";
 import TransactionPriceChart from "../../components/TransactionPriceChart";
@@ -145,9 +144,11 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   });
   // 히어로 대표 이미지는 매물 개별 사진만 후보로 삼습니다(타입 공통사진은
   // 대표사진으로 쓰지 않음). 없으면 아래에서 평면도로, 그것도 없으면 단지
-  // 대표 사진(complexImages[0])으로, 그것도 없으면 브랜드 플레이스홀더로
-  // 대체합니다.
+  // 대표 사진(complexImages[0])으로 대체합니다. 셋 다 없으면 플레이스홀더로
+  // 억지로 채우지 않고 이미지 영역 자체를 생략합니다 — 빈 공간을 채운
+  // 게 오히려 "사진 없음"을 부각시켜서입니다.
   const heroImage = resolveListingHeroImage(listing);
+  const hasHeroVisual = Boolean(heroImage || floorPlanImages[0] || complexImages[0]);
 
   const requestHeaders = await headers();
   const host = requestHeaders.get("host");
@@ -178,7 +179,11 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             ← 전체 매물로 돌아가기
           </Link>
 
-          <div className="mt-6 grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+          <div
+            className={`mt-6 grid gap-8 ${
+              hasHeroVisual ? "lg:grid-cols-[1.1fr_1fr] lg:items-center" : ""
+            }`}
+          >
             <div
               className="animate-fade-in-up"
               style={{ animationDelay: "0ms" }}
@@ -249,63 +254,55 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               </div>
             </div>
 
-            <div
-              className="animate-fade-in-up"
-              style={{ animationDelay: "120ms" }}
-            >
-              {heroImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={heroImage}
-                  alt={`${complex.name} 대표 이미지`}
-                  className="aspect-[4/3] w-full rounded-2xl object-cover"
-                />
-              ) : heroFloorPlan ? (
-                <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl border border-navy-900/10 bg-white p-1.5 sm:p-2">
-                  <FloorPlanImage
-                    url={heroFloorPlan.url}
-                    previewUrl={heroFloorPlan.previewUrl}
-                    unitType={listing.unitType ?? ""}
-                    className="rounded-xl"
+            {hasHeroVisual && (
+              <div
+                className="animate-fade-in-up"
+                style={{ animationDelay: "120ms" }}
+              >
+                {heroImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={heroImage}
+                    alt={`${complex.name} 대표 이미지`}
+                    className="aspect-[4/3] w-full rounded-2xl object-cover"
                   />
-                </div>
-              ) : complexImages[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={complexImages[0].url}
-                  alt={`${complex.name} 단지 사진`}
-                  className="aspect-[4/3] w-full rounded-2xl object-cover"
-                />
-              ) : (
-                <ListingBrandPlaceholder
-                  complexId={complex.id}
-                  complexName={complex.name}
-                  propertyType={listing.propertyType}
-                  transactionType={listing.transactionType}
-                  className="aspect-[4/3] w-full rounded-2xl"
-                />
-              )}
-            </div>
+                ) : heroFloorPlan ? (
+                  <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl border border-navy-900/10 bg-white p-1.5 sm:p-2">
+                    <FloorPlanImage
+                      url={heroFloorPlan.url}
+                      previewUrl={heroFloorPlan.previewUrl}
+                      unitType={listing.unitType ?? ""}
+                      className="rounded-xl"
+                    />
+                  </div>
+                ) : (
+                  complexImages[0] && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={complexImages[0].url}
+                      alt={`${complex.name} 단지 사진`}
+                      className="aspect-[4/3] w-full rounded-2xl object-cover"
+                    />
+                  )
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-5xl px-6 py-16">
-        <div
-          className="animate-fade-in-up"
-          style={{ animationDelay: "0ms" }}
-        >
-          <h2 className="text-lg font-bold text-navy-950">사진</h2>
-          <div className="mt-6">
-            <ListingGallery
-              images={galleryImages}
-              complexId={complex.id}
-              complexName={complex.name}
-              propertyType={listing.propertyType}
-              transactionType={listing.transactionType}
-            />
+        {galleryImages.length > 0 && (
+          <div
+            className="animate-fade-in-up"
+            style={{ animationDelay: "0ms" }}
+          >
+            <h2 className="text-lg font-bold text-navy-950">사진</h2>
+            <div className="mt-6">
+              <ListingGallery images={galleryImages} />
+            </div>
           </div>
-        </div>
+        )}
 
         <div
           className="animate-fade-in-up mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8"

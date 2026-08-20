@@ -2,8 +2,12 @@
  * 매물 사진도, 평면도도, 단지 공통 사진도 없을 때 마지막으로 쓰는
  * 브랜드 카드형 대체 이미지입니다("사진 없음" 회색 박스 대신). 단지명
  * /매물종류·거래유형을 텍스트로 보여줘 목록에서 여러 장이 나란히 있어도
- * 정보값이 있도록 하고, complexId를 해시해 몇 가지 골드/베이지 톤 중
- * 하나를 고정 배정해 단조로움을 줄입니다(같은 단지는 항상 같은 톤).
+ * 정보값이 있도록 하고, complexId를 해시해 몇 가지 톤 중 하나를 고정
+ * 배정해 단조로움을 줄입니다(같은 단지는 항상 같은 톤).
+ *
+ * muted는 목록 카드(/listings) 전용입니다 — 카드가 여러 장 나란히 있을 때
+ * 골드 톤이 강조되면 "사진 없음"이 오히려 부각돼서, 채도를 낮춘 베이지
+ * 계열만 쓰고 원형 마크도 더 작게 줄입니다.
  */
 const TONE_VARIANTS = [
   "from-beige-100 to-beige-300",
@@ -13,12 +17,21 @@ const TONE_VARIANTS = [
   "from-beige-100 via-beige-200 to-gold-500/20",
 ];
 
-function pickTone(seed: string): string {
+const MUTED_TONE_VARIANTS = [
+  "from-beige-100 to-beige-200",
+  "from-beige-200 to-beige-100",
+  "from-beige-100 to-beige-300",
+  "from-beige-300 to-beige-100",
+  "from-beige-200 to-beige-300",
+];
+
+function pickTone(seed: string, muted: boolean): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
   }
-  return TONE_VARIANTS[hash % TONE_VARIANTS.length];
+  const variants = muted ? MUTED_TONE_VARIANTS : TONE_VARIANTS;
+  return variants[hash % variants.length];
 }
 
 export default function ListingBrandPlaceholder({
@@ -28,6 +41,7 @@ export default function ListingBrandPlaceholder({
   transactionType,
   className = "",
   compact = false,
+  muted = false,
 }: {
   complexId: string;
   complexName: string;
@@ -35,8 +49,9 @@ export default function ListingBrandPlaceholder({
   transactionType: string;
   className?: string;
   compact?: boolean;
+  muted?: boolean;
 }) {
-  const tone = pickTone(complexId || complexName);
+  const tone = pickTone(complexId || complexName, muted);
 
   return (
     <div
@@ -48,7 +63,11 @@ export default function ListingBrandPlaceholder({
       />
 
       <div className="relative flex flex-col items-center gap-2 px-4 text-center">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold-600/30 bg-white/60 text-xs font-black tracking-tight text-navy-900 backdrop-blur">
+        <span
+          className={`flex shrink-0 items-center justify-center rounded-full border border-gold-600/30 bg-white/60 font-black tracking-tight text-navy-900 backdrop-blur ${
+            muted ? "h-5 w-5 text-[8px]" : "h-9 w-9 text-xs"
+          }`}
+        >
           호수
         </span>
         {!compact && (

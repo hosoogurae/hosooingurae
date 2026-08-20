@@ -78,6 +78,7 @@ export default function ListingCard({
             propertyType={listing.propertyType}
             transactionType={listing.transactionType}
             className="h-full w-full"
+            muted
           />
         )}
         {listing.verifiedDate && (
