@@ -1,29 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
+import ListingMediaPlaceholder from "./ListingMediaPlaceholder";
 
 const PLACEHOLDER_THUMBNAIL_COUNT = 5;
 
-/**
- * complexId 등은 images가 비어 있을 때(매물/타입/단지 사진이 전부
- * 없을 때)만 브랜드 플레이스홀더에 씁니다 — resolveListingGallery가 이미
- * 단지 공통 사진까지 합쳐서 넘기므로, 여기 도달하는 건 정말 사진이
- * 하나도 없는 경우뿐입니다.
- */
-export default function ListingGallery({
-  images = [],
-  complexId,
-  complexName,
-  propertyType,
-  transactionType,
-}: {
-  images?: string[];
-  complexId?: string;
-  complexName?: string;
-  propertyType?: string;
-  transactionType?: string;
-}) {
+export default function ListingGallery({ images = [] }: { images?: string[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const hasImages = images.length > 0;
   const thumbnailSlots = hasImages
@@ -41,13 +23,7 @@ export default function ListingGallery({
             className="h-full w-full object-cover"
           />
         ) : (
-          <ListingBrandPlaceholder
-            complexId={complexId ?? ""}
-            complexName={complexName ?? ""}
-            propertyType={propertyType ?? ""}
-            transactionType={transactionType ?? ""}
-            className="h-full w-full"
-          />
+          <ListingMediaPlaceholder className="h-full w-full" />
         )}
       </div>
 
@@ -73,14 +49,7 @@ export default function ListingGallery({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <ListingBrandPlaceholder
-                complexId={complexId ?? ""}
-                complexName={complexName ?? ""}
-                propertyType={propertyType ?? ""}
-                transactionType={transactionType ?? ""}
-                className="h-full w-full"
-                compact
-              />
+              <ListingMediaPlaceholder className="h-full w-full" compact />
             )}
           </button>
         ))}

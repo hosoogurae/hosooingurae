@@ -4,7 +4,6 @@ import type { FloorPlanImage } from "../data/floorPlans";
 import RecommendSearchBox from "../components/RecommendSearchBox";
 import ListingCard from "../components/ListingCard";
 import CompareToggle from "../components/CompareToggle";
-import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getAllListings } from "../lib/listings";
 import { ruleBasedQueryParser } from "../lib/recommend/queryParser";
@@ -42,15 +41,14 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
   const distinctComplexIds = [
     ...new Set((recommendation?.results ?? []).map((r) => r.listing.complexId)),
   ];
-  const [floorPlansByComplex, complexImagesByComplex] = await Promise.all([
-    Promise.all(
+  const floorPlansByComplex = new Map<string, FloorPlanImage[]>(
+    await Promise.all(
       distinctComplexIds.map(
         async (complexId) =>
           [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
       ),
-    ).then((entries) => new Map<string, FloorPlanImage[]>(entries)),
-    getComplexRepresentativeImages(distinctComplexIds),
-  ]);
+    ),
+  );
 
   function getFloorPlanForListing(
     complexId: string,
@@ -198,9 +196,6 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                       floorPlanImage={getFloorPlanForListing(
                         ranked.listing.complexId,
                         ranked.listing.unitType,
-                      )}
-                      complexImageUrl={complexImagesByComplex.get(
-                        ranked.listing.complexId,
                       )}
                     />
                     {ranked.reasons.length > 0 && (

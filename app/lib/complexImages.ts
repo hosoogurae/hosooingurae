@@ -46,40 +46,6 @@ export async function getComplexImages(complexId: string): Promise<ComplexImage[
   return data.map(rowToComplexImage);
 }
 
-/**
- * 공개 조회: 여러 단지의 "대표 이미지"(단지별 공통 사진 중 sort_order가
- * 가장 작은 것)를 한 번에 조회합니다. 매물 목록처럼 여러 단지가 섞인
- * 화면에서 단지 수만큼 쿼리를 보내지 않기 위한 배치 조회입니다
- * (app/lib/floorPlans.ts의 단지별 평면도 배치 조회와 같은 패턴).
- */
-export async function getComplexRepresentativeImages(
-  complexIds: string[],
-): Promise<Map<string, string>> {
-  const uniqueIds = [...new Set(complexIds)];
-  const supabase = getSupabaseClient();
-  if (!supabase || uniqueIds.length === 0) return new Map();
-
-  const { data, error } = await supabase
-    .from("complex_images")
-    .select("complex_id, url, sort_order")
-    .in("complex_id", uniqueIds)
-    .order("complex_id", { ascending: true })
-    .order("sort_order", { ascending: true });
-
-  if (error || !data) {
-    console.error("[complexImages] 단지 대표 이미지 일괄 조회 실패", error);
-    return new Map();
-  }
-
-  const result = new Map<string, string>();
-  for (const row of data) {
-    if (!result.has(row.complex_id)) {
-      result.set(row.complex_id, row.url);
-    }
-  }
-  return result;
-}
-
 export interface UploadComplexImageInput {
   complexId: string;
   category: ComplexImageCategory;

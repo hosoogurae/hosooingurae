@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { FloorPlanImage } from "../data/floorPlans";
-import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getFeaturedListings } from "../lib/listings";
 import ListingCard from "./ListingCard";
@@ -13,15 +12,14 @@ export default async function FeaturedProperties() {
   // 목록에 나온 단지 id별로 한 번씩만 조회해 매물의 unitType으로 찾아 씁니다.
   // (app/listings/page.tsx와 동일한 패턴)
   const distinctComplexIds = [...new Set(featuredListings.map((l) => l.complexId))];
-  const [floorPlansByComplex, complexImagesByComplex] = await Promise.all([
-    Promise.all(
+  const floorPlansByComplex = new Map<string, FloorPlanImage[]>(
+    await Promise.all(
       distinctComplexIds.map(
         async (complexId) =>
           [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
       ),
-    ).then((entries) => new Map<string, FloorPlanImage[]>(entries)),
-    getComplexRepresentativeImages(distinctComplexIds),
-  ]);
+    ),
+  );
 
   function getFloorPlanForListing(
     complexId: string,
@@ -57,7 +55,6 @@ export default async function FeaturedProperties() {
               listing.complexId,
               listing.unitType,
             )}
-            complexImageUrl={complexImagesByComplex.get(listing.complexId)}
           />
         ))}
       </div>
