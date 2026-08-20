@@ -5,9 +5,10 @@ import { headers } from "next/headers";
 import type { ListingWithComplex } from "../lib/listings";
 import { getListingById } from "../lib/listings";
 import { buildCompareInquiryMessage } from "../lib/listingInquiry";
+import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 import InquirySmsButton from "../components/InquirySmsButton";
-import ListingImagePlaceholder from "../components/ListingImagePlaceholder";
+import ListingBrandPlaceholder from "../components/ListingBrandPlaceholder";
 import ClearCompareSelectionButton from "./ClearCompareSelectionButton";
 import RemoveFromCompareButton from "./RemoveFromCompareButton";
 import { MAX_COMPARE_SELECTION } from "../lib/compareConstants";
@@ -35,70 +36,97 @@ interface AttributeRow {
   render: (listing: ListingWithComplex) => React.ReactNode;
 }
 
-const ATTRIBUTE_ROWS: AttributeRow[] = [
-  {
-    label: "대표 사진",
-    hideOnMobile: true,
-    render: (l) => {
-      const src = l.images?.[0] ?? l.image;
-      return src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt={`${l.complex.name} 대표 이미지`}
-          className="h-28 w-full rounded-md object-cover"
-        />
-      ) : (
-        <ListingImagePlaceholder className="h-28 w-full rounded-md" />
-      );
+/**
+ * "대표 사진" 행만 단지별 대표 이미지 맵이 필요해서, 이 배열 전체를
+ * 컴포넌트 안에서 그 맵을 받아 만드는 함수로 뺐습니다(나머지 행은 맵과
+ * 무관하지만 하나의 배열로 같이 순회해야 해서 통째로 함수화).
+ */
+function buildAttributeRows(complexImagesByComplex: Map<string, string>): AttributeRow[] {
+  return [
+    {
+      label: "대표 사진",
+      hideOnMobile: true,
+      render: (l) => {
+        const src = l.images?.[0] ?? l.image;
+        const complexImageUrl = complexImagesByComplex.get(l.complexId);
+        if (src) {
+          return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={src}
+              alt={`${l.complex.name} 대표 이미지`}
+              className="h-28 w-full rounded-md object-cover"
+            />
+          );
+        }
+        if (complexImageUrl) {
+          return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={complexImageUrl}
+              alt={`${l.complex.name} 단지 사진`}
+              className="h-28 w-full rounded-md object-cover"
+            />
+          );
+        }
+        return (
+          <ListingBrandPlaceholder
+            complexId={l.complexId}
+            complexName={l.complex.name}
+            propertyType={l.propertyType}
+            transactionType={l.transactionType}
+            className="h-28 w-full rounded-md"
+          />
+        );
+      },
     },
-  },
-  {
-    label: "단지명",
-    render: (l) => <span className="font-bold text-navy-950">{l.complex.name}</span>,
-  },
-  { label: "거래유형", render: (l) => l.transactionType },
-  {
-    label: "가격",
-    render: (l) => <span className="font-bold text-gold-600">{l.priceLabel}</span>,
-  },
-  { label: "동", render: (l) => (l.building?.trim() ? l.building : "동 정보 미등록") },
-  { label: "층", render: (l) => `${l.floor}/${l.totalFloors}층` },
-  { label: "공급면적", render: (l) => `${l.supplyArea}㎡` },
-  { label: "전용면적", render: (l) => `${l.exclusiveArea}㎡` },
-  { label: "방 / 욕실", render: (l) => `방 ${l.roomCount} · 욕실 ${l.bathroomCount}` },
-  { label: "방향", render: (l) => l.direction },
-  { label: "입주 가능일", render: (l) => l.moveInDate },
-  {
-    label: "주요 특징",
-    render: (l) =>
-      l.features.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {l.features.slice(0, 6).map((feature) => (
-            <span
-              key={feature}
-              className="rounded border border-gold-500/30 px-1.5 py-0.5 text-xs text-gold-600"
-            >
-              {feature}
-            </span>
-          ))}
-        </div>
-      ) : (
-        "-"
+    {
+      label: "단지명",
+      render: (l) => <span className="font-bold text-navy-950">{l.complex.name}</span>,
+    },
+    { label: "거래유형", render: (l) => l.transactionType },
+    {
+      label: "가격",
+      render: (l) => <span className="font-bold text-gold-600">{l.priceLabel}</span>,
+    },
+    { label: "동", render: (l) => (l.building?.trim() ? l.building : "동 정보 미등록") },
+    { label: "층", render: (l) => `${l.floor}/${l.totalFloors}층` },
+    { label: "공급면적", render: (l) => `${l.supplyArea}㎡` },
+    { label: "전용면적", render: (l) => `${l.exclusiveArea}㎡` },
+    { label: "방 / 욕실", render: (l) => `방 ${l.roomCount} · 욕실 ${l.bathroomCount}` },
+    { label: "방향", render: (l) => l.direction },
+    { label: "입주 가능일", render: (l) => l.moveInDate },
+    {
+      label: "주요 특징",
+      render: (l) =>
+        l.features.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {l.features.slice(0, 6).map((feature) => (
+              <span
+                key={feature}
+                className="rounded border border-gold-500/30 px-1.5 py-0.5 text-xs text-gold-600"
+              >
+                {feature}
+              </span>
+            ))}
+          </div>
+        ) : (
+          "-"
+        ),
+    },
+    {
+      label: "상세보기",
+      render: (l) => (
+        <Link
+          href={`/listings/${l.id}`}
+          className="inline-block rounded-md border border-navy-900/15 px-3 py-1.5 text-xs font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+        >
+          상세보기 →
+        </Link>
       ),
-  },
-  {
-    label: "상세보기",
-    render: (l) => (
-      <Link
-        href={`/listings/${l.id}`}
-        className="inline-block rounded-md border border-navy-900/15 px-3 py-1.5 text-xs font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
-      >
-        상세보기 →
-      </Link>
-    ),
-  },
-];
+    },
+  ];
+}
 
 export default async function ComparePage({ searchParams }: ComparePageProps) {
   const resolvedSearchParams = await searchParams;
@@ -119,6 +147,10 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
     (listing): listing is ListingWithComplex => listing !== undefined,
   );
   const someExcluded = validListings.length < requestedIds.length;
+  const complexImagesByComplex = await getComplexRepresentativeImages(
+    validListings.map((l) => l.complexId),
+  );
+  const attributeRows = buildAttributeRows(complexImagesByComplex);
 
   const requestHeaders = await headers();
   const host = requestHeaders.get("host");
@@ -230,7 +262,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                   </div>
                 ))}
 
-                {ATTRIBUTE_ROWS.map((row) => (
+                {attributeRows.map((row) => (
                   <Fragment key={row.label}>
                     <div className="sticky left-0 z-10 border-b border-r border-navy-900/10 bg-white p-3 text-xs font-bold text-navy-800/60">
                       {row.label}
@@ -253,6 +285,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
               <div className="flex flex-col gap-3">
                 {validListings.map((listing, index) => {
                   const src = listing.images?.[0] ?? listing.image;
+                  const complexImageUrl = complexImagesByComplex.get(listing.complexId);
                   return (
                     <div
                       key={listing.id}
@@ -268,8 +301,22 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                           alt=""
                           className="h-14 w-14 shrink-0 rounded-md object-cover"
                         />
+                      ) : complexImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={complexImageUrl}
+                          alt=""
+                          className="h-14 w-14 shrink-0 rounded-md object-cover"
+                        />
                       ) : (
-                        <ListingImagePlaceholder className="h-14 w-14 shrink-0 rounded-md" />
+                        <ListingBrandPlaceholder
+                          complexId={listing.complexId}
+                          complexName={listing.complex.name}
+                          propertyType={listing.propertyType}
+                          transactionType={listing.transactionType}
+                          className="h-14 w-14 shrink-0 rounded-md"
+                          compact
+                        />
                       )}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-navy-950">
@@ -290,7 +337,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                 })}
               </div>
 
-              {ATTRIBUTE_ROWS.filter((row) => !row.hideOnMobile).map((row) => (
+              {attributeRows.filter((row) => !row.hideOnMobile).map((row) => (
                 <div key={row.label} className="rounded-xl border border-navy-900/10 p-4">
                   <p className="text-xs font-bold text-gold-600">{row.label}</p>
                   <ul className="mt-2 flex flex-col gap-2">

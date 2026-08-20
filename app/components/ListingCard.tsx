@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { FloorPlanImage } from "../data/floorPlans";
 import { resolveListingHeroImage } from "../lib/listingGalleryImages";
 import type { ListingWithComplex } from "../lib/listings";
-import ListingImagePlaceholder from "./ListingImagePlaceholder";
+import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
 
 function formatVerifiedDate(dateStr: string) {
   return dateStr.replaceAll("-", ".");
@@ -27,9 +27,12 @@ function formatBuildingFloor(listing: ListingWithComplex): string | undefined {
 export default function ListingCard({
   listing,
   floorPlanImage,
+  complexImageUrl,
 }: {
   listing: ListingWithComplex;
   floorPlanImage?: FloorPlanImage;
+  /** 매물 사진·평면도가 모두 없을 때 세 번째로 시도할 단지 대표 이미지. */
+  complexImageUrl?: string;
 }) {
   const heroImage = resolveListingHeroImage(listing);
   const floorPlanThumbnail =
@@ -61,8 +64,21 @@ export default function ListingCard({
               {listing.unitType} 평면도
             </span>
           </div>
+        ) : complexImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={complexImageUrl}
+            alt={`${listing.complex.name} 단지 사진`}
+            className="h-full w-full object-cover"
+          />
         ) : (
-          <ListingImagePlaceholder className="h-full w-full" />
+          <ListingBrandPlaceholder
+            complexId={listing.complexId}
+            complexName={listing.complex.name}
+            propertyType={listing.propertyType}
+            transactionType={listing.transactionType}
+            className="h-full w-full"
+          />
         )}
         {listing.verifiedDate && (
           <span className="absolute left-3 top-3 rounded-full bg-navy-950/90 px-3 py-1 text-xs font-semibold text-gold-400">
