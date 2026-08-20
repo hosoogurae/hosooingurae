@@ -10,10 +10,19 @@ const nextConfig: NextConfig = {
   // sharp-*"로 확인된 실제 장애 — 로컬 next start에서는 전체 node_modules를
   // 그대로 쓰기 때문에 재현되지 않고 Vercel 배포에서만 발생). sharp를
   // import하는 모듈(floorPlans/complexImages/unitTypeImages/listingPhotos)이
-  // 대부분의 공개 페이지에서 쓰이므로, 모든 라우트에 sharp 전체를 명시적으로
-  // 포함시켜 트레이싱 누락을 원천 차단합니다.
+  // 대부분의 공개 페이지에서 쓰이므로, 모든 라우트에 명시적으로 포함시켜
+  // 트레이싱 누락을 원천 차단합니다.
+  //
+  // node_modules/sharp/**/*만으로는 부족합니다 — sharp의 실제 네이티브
+  // .node 바이너리는 sharp 패키지 내부가 아니라 @img/sharp-<platform>-
+  // <arch>, @img/sharp-libvips-<platform>-<arch>라는 별도 scoped 패키지
+  // (node_modules/@img/*)에 들어있습니다. 1차 수정 때 이걸 놓쳐서 로컬
+  // 트레이스에 바이너리가 보였던 건 이 include 설정이 아니라 Next 기본
+  // 트레이싱이 로컬(win32)에서는 우연히 따라간 것이었고, Vercel(Linux)
+  // 빌드에서는 그 기본 트레이싱이 못 따라가 바이너리가 통째로 빠졌던
+  // 것으로 보입니다.
   outputFileTracingIncludes: {
-    "/*": ["node_modules/sharp/**/*"],
+    "/*": ["node_modules/sharp/**/*", "node_modules/@img/**/*"],
   },
 };
 
