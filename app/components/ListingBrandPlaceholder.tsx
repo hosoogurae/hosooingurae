@@ -34,6 +34,87 @@ function pickTone(seed: string, muted: boolean): string {
   return variants[hash % variants.length];
 }
 
+/** 실사진이 아님을 명확히 하기 위한 단색 라인아트 — 매물종류별로 실루엣만 다르게. */
+function ApartmentIcon({ className }: { className?: string }) {
+  const cols = [20, 29, 38];
+  const rows = [13, 23, 33, 43, 53, 63];
+  return (
+    <svg
+      viewBox="0 0 64 80"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <rect x="14" y="6" width="36" height="70" rx="1" />
+      {rows.map((y) =>
+        cols.map((x) => <rect key={`${x}-${y}`} x={x} y={y} width="5" height="6" />),
+      )}
+    </svg>
+  );
+}
+
+function OfficetelIcon({ className }: { className?: string }) {
+  const bands = [14, 23, 32, 41, 50, 59, 68];
+  return (
+    <svg
+      viewBox="0 0 64 80"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <rect x="18" y="4" width="28" height="72" rx="1" />
+      <line x1="32" y1="4" x2="32" y2="76" />
+      {bands.map((y) => (
+        <line key={y} x1="18" y1={y} x2="46" y2={y} />
+      ))}
+    </svg>
+  );
+}
+
+function CommercialIcon({ className }: { className?: string }) {
+  const storefronts = [12, 27, 42];
+  const upperWindows = [11, 22, 33, 44];
+  return (
+    <svg
+      viewBox="0 0 64 80"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <rect x="6" y="32" width="52" height="40" rx="1" />
+      <line x1="6" y1="46" x2="58" y2="46" />
+      {upperWindows.map((x) => (
+        <rect key={x} x={x} y="37" width="6" height="6" />
+      ))}
+      {storefronts.map((x) => (
+        <rect key={x} x={x} y="52" width="11" height="16" />
+      ))}
+    </svg>
+  );
+}
+
+function PropertyTypeIcon({
+  propertyType,
+  className,
+}: {
+  propertyType: string;
+  className?: string;
+}) {
+  if (propertyType === "오피스텔") {
+    return <OfficetelIcon className={className} />;
+  }
+  if (propertyType === "상가") {
+    return <CommercialIcon className={className} />;
+  }
+  return <ApartmentIcon className={className} />;
+}
+
 export default function ListingBrandPlaceholder({
   complexId,
   complexName,
@@ -60,6 +141,13 @@ export default function ListingBrandPlaceholder({
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(rgba(11,26,51,0.08)_1px,transparent_1px)] [background-size:14px_14px]"
+      />
+
+      <PropertyTypeIcon
+        propertyType={propertyType}
+        className={`pointer-events-none absolute text-navy-900/[0.14] ${
+          compact ? "h-10 w-10" : "h-24 w-24"
+        }`}
       />
 
       <div className="relative flex flex-col items-center gap-2 px-4 text-center">
