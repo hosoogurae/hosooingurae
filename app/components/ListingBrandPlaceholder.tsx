@@ -6,9 +6,13 @@
  * 카드와 나란히 있어도 톤이 튀지 않도록, 단지별 색상 변화도 주지
  * 않고 항상 같은 옅은 배경을 씁니다.
  */
+/** 아파트는 동 하나가 아니라 단지처럼 높이가 다른 동 여러 개가 나란히 있어야 알아보기 쉽습니다. */
 function ApartmentIcon({ className }: { className?: string }) {
-  const cols = [20, 29, 38];
-  const rows = [13, 23, 33, 43, 53, 63];
+  const towers = [
+    { x: 4, y: 28, w: 14, h: 48, cols: [7, 13], rows: [34, 42, 50, 58, 66] },
+    { x: 23, y: 6, w: 16, h: 70, cols: [27, 34], rows: [12, 21, 30, 39, 48, 57, 66] },
+    { x: 45, y: 20, w: 14, h: 56, cols: [48, 54], rows: [26, 34, 42, 50, 58, 66] },
+  ];
   return (
     <svg
       viewBox="0 0 64 80"
@@ -18,10 +22,17 @@ function ApartmentIcon({ className }: { className?: string }) {
       strokeWidth="1.5"
       strokeLinejoin="round"
     >
-      <rect x="14" y="6" width="36" height="70" rx="1" />
-      {rows.map((y) =>
-        cols.map((x) => <rect key={`${x}-${y}`} x={x} y={y} width="5" height="6" />),
-      )}
+      <line x1="2" y1="76" x2="62" y2="76" />
+      {towers.map((tower) => (
+        <g key={tower.x}>
+          <rect x={tower.x} y={tower.y} width={tower.w} height={tower.h} rx="1" />
+          {tower.rows.map((y) =>
+            tower.cols.map((x) => (
+              <rect key={`${x}-${y}`} x={x} y={y} width="3" height="4" />
+            )),
+          )}
+        </g>
+      ))}
     </svg>
   );
 }
