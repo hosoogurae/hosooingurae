@@ -264,6 +264,7 @@ export async function getAllListings(
     includeDrafts?: boolean;
     filters?: ListingSearchFilters;
     sort?: ListingSortKey;
+    limit?: number;
   } = {},
 ): Promise<ListingWithComplex[]> {
   const supabase = getSupabaseClient();
@@ -327,6 +328,9 @@ export async function getAllListings(
   if (searchMatchedIds) {
     query = query.in("id", searchMatchedIds);
   }
+  if (options.limit !== undefined) {
+    query = query.limit(options.limit);
+  }
 
   const [{ data: rows, error }, complexes] = await Promise.all([
     query,
@@ -347,11 +351,6 @@ export async function getAllListings(
   );
 
   return attachComplexes(listings, complexes);
-}
-
-export async function getFeaturedListings(): Promise<ListingWithComplex[]> {
-  const all = await getAllListings();
-  return all.filter((listing) => listing.isFeatured);
 }
 
 export interface ApartmentComplexOption {
