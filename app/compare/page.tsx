@@ -71,10 +71,7 @@ function buildAttributeRows(complexImagesByComplex: Map<string, string>): Attrib
         }
         return (
           <ListingBrandPlaceholder
-            complexId={l.complexId}
-            complexName={l.complex.name}
             propertyType={l.propertyType}
-            transactionType={l.transactionType}
             className="h-28 w-full rounded-md"
           />
         );
@@ -310,12 +307,8 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                         />
                       ) : (
                         <ListingBrandPlaceholder
-                          complexId={listing.complexId}
-                          complexName={listing.complex.name}
                           propertyType={listing.propertyType}
-                          transactionType={listing.transactionType}
                           className="h-14 w-14 shrink-0 rounded-md"
-                          compact
                         />
                       )}
                       <div className="min-w-0 flex-1">

@@ -73,12 +73,8 @@ export default function ListingCard({
           />
         ) : (
           <ListingBrandPlaceholder
-            complexId={listing.complexId}
-            complexName={listing.complex.name}
             propertyType={listing.propertyType}
-            transactionType={listing.transactionType}
             className="h-full w-full"
-            muted
           />
         )}
         {listing.verifiedDate && (
