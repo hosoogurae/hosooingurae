@@ -2,6 +2,12 @@ import Link from "next/link";
 import type { FloorPlanImage } from "../data/floorPlans";
 import { resolveListingHeroImage } from "../lib/listingGalleryImages";
 import type { ListingWithComplex } from "../lib/listings";
+import {
+  formatBathroomCount,
+  formatExclusiveArea,
+  formatFloorInfo,
+  formatRoomCount,
+} from "../lib/listingDisplayFallback";
 import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
 
 function formatVerifiedDate(dateStr: string) {
@@ -17,7 +23,7 @@ function formatBuildingFloor(listing: ListingWithComplex): string | undefined {
   if (listing.floor !== undefined && listing.floor !== null) {
     parts.push(
       listing.totalFloors !== undefined && listing.totalFloors !== null
-        ? `${listing.floor}층 / ${listing.totalFloors}층`
+        ? formatFloorInfo(listing.floor, listing.totalFloors)
         : `${listing.floor}층`,
     );
   }
@@ -110,12 +116,13 @@ export default function ListingCard({
 
         <dl className="grid grid-cols-2 gap-y-1 text-sm text-navy-800/80">
           <dt className="text-navy-800/50">전용면적</dt>
-          <dd>전용 {listing.exclusiveArea}㎡</dd>
+          <dd>{formatExclusiveArea(listing.exclusiveArea, "전용 ")}</dd>
           <dt className="text-navy-800/50">방향</dt>
           <dd>{listing.direction}</dd>
           <dt className="text-navy-800/50">방/욕실</dt>
           <dd>
-            방 {listing.roomCount} / 욕실 {listing.bathroomCount}
+            방 {formatRoomCount(listing.roomCount)} / 욕실{" "}
+            {formatBathroomCount(listing.bathroomCount)}
           </dd>
         </dl>
 

@@ -34,6 +34,12 @@ import {
   resolveListingHeroImage,
 } from "../../lib/listingGalleryImages";
 import { getListingById } from "../../lib/listings";
+import {
+  formatBathroomCount,
+  formatExclusiveArea,
+  formatFloorInfo,
+  formatRoomCount,
+} from "../../lib/listingDisplayFallback";
 import { getUnitTypeImages } from "../../lib/unitTypeImages";
 import {
   BUILDING_UNKNOWN_LABEL,
@@ -190,7 +196,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 {formatComplexAndBuilding(complex.name, listing.building)}
               </p>
               <p className="mt-1 text-sm font-medium text-white/70">
-                {listing.floor}층 / {listing.totalFloors}층
+                {formatFloorInfo(listing.floor, listing.totalFloors)}
               </p>
               <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">
                 {listing.transactionType} {listing.priceLabel}
@@ -321,12 +327,12 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             <InfoItem
               icon={Home}
               label="전용면적"
-              value={`${listing.exclusiveArea}㎡`}
+              value={formatExclusiveArea(listing.exclusiveArea)}
             />
             <InfoItem
               icon={Layers}
               label="층수"
-              value={`${listing.floor}층 / ${listing.totalFloors}층`}
+              value={formatFloorInfo(listing.floor, listing.totalFloors)}
             />
             <InfoItem
               icon={Compass}
@@ -336,12 +342,12 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             <InfoItem
               icon={BedDouble}
               label="방"
-              value={`${listing.roomCount}개`}
+              value={formatRoomCount(listing.roomCount)}
             />
             <InfoItem
               icon={Bath}
               label="욕실"
-              value={`${listing.bathroomCount}개`}
+              value={formatBathroomCount(listing.bathroomCount)}
             />
             <InfoItem
               icon={CalendarCheck}

@@ -101,6 +101,7 @@ export function ListingFormFields({
   onChangeNewComplex,
   onPhotosChange,
   onPendingPhotoFilesChange,
+  uncertainFields,
 }: {
   draft: Listing;
   complexOptions: ComplexOption[];
@@ -121,7 +122,17 @@ export function ListingFormFields({
   onPhotosChange?: (photos: ListingPhoto[]) => void;
   /** 아직 저장 전(신규 등록)일 때, 선택된 파일 목록이 바뀔 때마다 알려줍니다. */
   onPendingPhotoFilesChange?: (files: File[]) => void;
+  /**
+   * 네이버 붙여넣기에서 텍스트로 확인하지 못해 0으로 채워진 숫자 필드의
+   * 라벨 목록(getUncertainFieldLabels 결과, 예: "층수"/"전용면적"). 저장되는
+   * draft 값 자체(0)는 그대로 두고, 이 라벨에 해당하는 입력칸만 화면에서
+   * 빈 칸으로 보여줍니다 — 0이 실제 확인된 값처럼 보이지 않게 하기 위함이라,
+   * 새 매물 수동 등록·기존 매물 수정 화면(이 prop을 넘기지 않음)은 그대로
+   * 0을 보여줍니다.
+   */
+  uncertainFields?: string[];
 }) {
+  const isUncertain = (label: string) => uncertainFields?.includes(label) ?? false;
   const selectedComplex = complexOptions.find(
     (option) => option.id === draft.complexId,
   );
@@ -323,7 +334,8 @@ export function ListingFormFields({
           <div className="flex items-center gap-2">
             <input
               type="number"
-              value={draft.floor}
+              value={isUncertain("층수") ? "" : draft.floor}
+              placeholder={isUncertain("층수") ? "확인 필요" : undefined}
               onChange={(event) =>
                 onChangeField("floor", Number(event.target.value))
               }
@@ -332,7 +344,8 @@ export function ListingFormFields({
             <span className="text-sm text-navy-800/40">/</span>
             <input
               type="number"
-              value={draft.totalFloors}
+              value={isUncertain("층수") ? "" : draft.totalFloors}
+              placeholder={isUncertain("층수") ? "확인 필요" : undefined}
               onChange={(event) =>
                 onChangeField("totalFloors", Number(event.target.value))
               }
@@ -345,7 +358,8 @@ export function ListingFormFields({
           <input
             type="number"
             step="0.01"
-            value={draft.exclusiveArea}
+            value={isUncertain("전용면적") ? "" : draft.exclusiveArea}
+            placeholder={isUncertain("전용면적") ? "확인 필요" : undefined}
             onChange={(event) =>
               onChangeField("exclusiveArea", Number(event.target.value))
             }
@@ -357,7 +371,8 @@ export function ListingFormFields({
           <input
             type="number"
             step="0.01"
-            value={draft.supplyArea}
+            value={isUncertain("공급면적") ? "" : draft.supplyArea}
+            placeholder={isUncertain("공급면적") ? "확인 필요" : undefined}
             onChange={(event) =>
               onChangeField("supplyArea", Number(event.target.value))
             }
@@ -403,7 +418,8 @@ export function ListingFormFields({
         <Field label="방 개수">
           <input
             type="number"
-            value={draft.roomCount}
+            value={isUncertain("방/욕실 수") ? "" : draft.roomCount}
+            placeholder={isUncertain("방/욕실 수") ? "확인 필요" : undefined}
             onChange={(event) =>
               onChangeField("roomCount", Number(event.target.value))
             }
@@ -414,7 +430,8 @@ export function ListingFormFields({
         <Field label="욕실 개수">
           <input
             type="number"
-            value={draft.bathroomCount}
+            value={isUncertain("방/욕실 수") ? "" : draft.bathroomCount}
+            placeholder={isUncertain("방/욕실 수") ? "확인 필요" : undefined}
             onChange={(event) =>
               onChangeField("bathroomCount", Number(event.target.value))
             }

@@ -65,8 +65,24 @@ export default function AdminImportPage() {
     }
   }, []);
 
+  /** 숫자 입력칸을 빈 칸으로 보여주는 근거가 된 uncertainFields 라벨과 대응하는 draft 필드. */
+  const UNCERTAIN_LABEL_BY_FIELD: Partial<Record<keyof Listing, string>> = {
+    floor: "층수",
+    totalFloors: "층수",
+    exclusiveArea: "전용면적",
+    supplyArea: "공급면적",
+    roomCount: "방/욕실 수",
+    bathroomCount: "방/욕실 수",
+  };
+
   function updateDraft<K extends keyof Listing>(key: K, value: Listing[K]) {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+    // 빈 칸으로 보여주던 필드를 관리자가 직접 채우면, 다시 빈 칸으로
+    // 돌아가지 않도록 "확인 못함" 표시를 지웁니다.
+    const label = UNCERTAIN_LABEL_BY_FIELD[key];
+    if (label) {
+      setUncertainFields((prev) => prev.filter((item) => item !== label));
+    }
   }
 
   async function handleImport(event: FormEvent) {
@@ -453,6 +469,7 @@ export default function AdminImportPage() {
             featuresInput={featuresInput}
             onChangeField={updateDraft}
             onChangeFeaturesInput={setFeaturesInput}
+            uncertainFields={uncertainFields}
           />
 
           <details className="mt-4 rounded-md border border-navy-900/10 p-3 text-sm">
