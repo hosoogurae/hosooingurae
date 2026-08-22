@@ -8,7 +8,8 @@ import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getAllListings } from "../lib/listings";
 import { ruleBasedQueryParser } from "../lib/recommend/queryParser";
-import { NEAR_MISS_HIDE_THRESHOLD, rankListings } from "../lib/recommend/scoring";
+import { rankListings } from "../lib/recommend/scoring";
+import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 
 export const metadata: Metadata = {
   title: "AI 매물 추천 | 호수공인중개사사무소",
@@ -188,7 +189,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
               )}
             </div>
 
-            {recommendation.results.length === 0 && (
+            {recommendation.results.length === 0 && recommendation.nearMisses.length === 0 && (
               <p className="mt-8 rounded-xl border border-navy-900/10 px-6 py-16 text-center text-sm text-navy-800/50">
                 현재 등록된 매물이 없습니다.
               </p>
@@ -257,8 +258,53 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
               </ul>
             )}
 
-            {recommendation.nearMisses.length > 0 &&
-              recommendation.results.length < NEAR_MISS_HIDE_THRESHOLD && (
+            {/* results가 0건인데 예산만 벗어난 매물이 있는 경우 — 빈 화면 대신
+                초과 사실을 분명히 밝히고 가장 가까운 매물을 보여줍니다. 허용오차를
+                적용하지 않은 결과라 위 "예산이 조금 넘지만" 섹션과는 톤을
+                구분합니다(뱃지에 예산 초과 금액을 그대로 노출). */}
+            {recommendation.results.length === 0 && recommendation.nearMisses.length > 0 && (
+              <div className="mt-8">
+                <p className="rounded-md border border-navy-900/10 bg-navy-900/[0.02] px-4 py-3 text-sm font-medium text-navy-900">
+                  조건에 맞는 매물이 없어 가장 가까운 매물을 보여드립니다.
+                </p>
+                <ul className="mt-6 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                  {recommendation.nearMisses.map((nearMiss) => (
+                    <li key={nearMiss.listing.id} className="relative flex flex-col">
+                      <span className="absolute right-3 top-3 z-10 rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white">
+                        {nearMiss.violation.detail}
+                      </span>
+                      <ListingCard
+                        listing={nearMiss.listing}
+                        floorPlanImage={getFloorPlanForListing(
+                          nearMiss.listing.complexId,
+                          nearMiss.listing.unitType,
+                        )}
+                        complexImageUrl={complexImagesByComplex.get(
+                          nearMiss.listing.complexId,
+                        )}
+                      />
+                      <CompareToggle listingId={nearMiss.listing.id} />
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-6 rounded-xl border border-navy-900/10 bg-navy-900/[0.02] px-6 py-6 text-center">
+                  <p className="text-sm text-navy-800/70">
+                    조건을 조금 넓혀서 다시 검색해보시거나, 전화로 문의해주시면
+                    맞춤 매물을 안내해드립니다.
+                  </p>
+                  <a
+                    href={PHONE_HREF}
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-6 py-3 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.03]"
+                  >
+                    전화 상담 {PHONE_NUMBER}
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {recommendation.results.length > 0 &&
+              !recommendation.resultsAreFull &&
+              recommendation.nearMisses.length > 0 && (
                 <div className="mt-12">
                   <p className="text-sm font-semibold text-navy-950">
                     예산이 조금 넘지만 참고할 만한 매물

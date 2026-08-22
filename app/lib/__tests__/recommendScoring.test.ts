@@ -77,15 +77,20 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
     expect(result.nearMisses[0].violation.direction).toBe("over");
   });
 
-  it("허용오차를 넘는 매물은 nearMisses에도 없다(완전 제외)", () => {
+  it("results가 있을 때는 허용오차를 넘는 매물이 nearMisses에도 없다(완전 제외)", () => {
+    // results가 0건이면 허용오차 없이 초과 매물을 전부 nearMisses로 채우는
+    // 폴백이 작동하므로, 이 테스트는 그 폴백이 아니라 "정상적으로 예산 안의
+    // 매물이 있는" 경로에서 허용오차가 실제로 걸러내는지를 확인해야 한다.
+    const withinBudget = buildListing({ id: "within-budget", price: 38000 });
     const farOver = buildListing({ id: "over-4500", price: 45000 }); // 초과 5000만원 > 2000만원 허용오차
 
     const query = buildQuery({
       price: { min: 0, max: 40000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
     });
 
-    const result = rankListings([farOver], query);
+    const result = rankListings([withinBudget, farOver], query);
 
+    expect(result.results.length).toBeGreaterThan(0);
     expect(ids(result.results)).not.toContain("over-4500");
     expect(ids(result.nearMisses)).not.toContain("over-4500");
   });
@@ -106,6 +111,59 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
     for (const id of nearMissIds) {
       expect(resultIds.has(id)).toBe(false);
     }
+  });
+
+  it("results가 0건이고 거래유형이 맞는 매물이 있으면(허용오차 밖이어도) nearMisses가 비어 있지 않다", () => {
+    // 전세 매물 3건이 전부 3억 하드 상한(허용오차 1500만원)을 크게 넘는
+    // 실제 사고 사례(3.2억/3.5억/3.5억)를 재현한다 — 빈 화면을 보여주느니
+    // 초과 사실을 밝히고 가장 가까운 매물을 보여줘야 한다.
+    const jeonse1 = buildListing({ id: "jeonse-32", transactionType: "전세", price: 32000 });
+    const jeonse2 = buildListing({ id: "jeonse-35a", transactionType: "전세", price: 35000 });
+    const jeonse3 = buildListing({ id: "jeonse-35b", transactionType: "전세", price: 35000 });
+
+    const query = buildQuery({
+      transactionType: "전세",
+      price: { min: 0, max: 30000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
+    });
+
+    const result = rankListings([jeonse1, jeonse2, jeonse3], query);
+
+    expect(result.results.length).toBe(0);
+    expect(result.nearMisses.length).toBeGreaterThan(0);
+    // 가장 예산에 가까운(3.2억) 매물이 1순위로 온다.
+    expect(result.nearMisses[0].listing.id).toBe("jeonse-32");
+  });
+
+  it("results가 0건일 때 nearMisses의 각 항목에 violation.detail이 채워져 있다", () => {
+    const jeonse = buildListing({ id: "jeonse-32", transactionType: "전세", price: 32000 });
+
+    const query = buildQuery({
+      transactionType: "전세",
+      price: { min: 0, max: 30000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
+    });
+
+    const result = rankListings([jeonse], query);
+
+    expect(result.results.length).toBe(0);
+    expect(result.nearMisses.length).toBeGreaterThan(0);
+    for (const nearMiss of result.nearMisses) {
+      expect(nearMiss.violation.detail).toBeTruthy();
+      expect(nearMiss.violation.amountManwon).toBeGreaterThan(0);
+    }
+  });
+
+  it("results가 0건이어도 거래유형이 다른 매물은 nearMisses 폴백에도 들어가지 않는다", () => {
+    const wrongType = buildListing({ id: "wrong-type", transactionType: "매매", price: 30000 });
+
+    const query = buildQuery({
+      transactionType: "전세",
+      price: { min: 0, max: 30000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
+    });
+
+    const result = rankListings([wrongType], query);
+
+    expect(result.results.length).toBe(0);
+    expect(ids(result.nearMisses)).not.toContain("wrong-type");
   });
 
   it("'3억 초반'(하한 padding·상한 3.3억 constraint)으로 검색 시 3.5억 매물이 results에 없다", () => {
@@ -144,6 +202,38 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
     const result = rankListings([expensive], query);
 
     expect(ids(result.results)).toContain("listing-65");
+  });
+});
+
+describe("rankListings — resultsAreFull은 고정 상수가 아니라 실제 limit에 연동된다", () => {
+  it("results가 limit만큼 꽉 차면 resultsAreFull이 true다", () => {
+    const listings = [
+      buildListing({ id: "l1", price: 38000 }),
+      buildListing({ id: "l2", price: 38500 }),
+    ];
+    const query = buildQuery({
+      price: { min: 0, max: 40000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
+    });
+
+    const result = rankListings(listings, query, 2, 3);
+
+    expect(result.results.length).toBe(2);
+    expect(result.resultsAreFull).toBe(true);
+  });
+
+  it("같은 매물 수라도 limit이 더 크면 resultsAreFull이 false다", () => {
+    const listings = [
+      buildListing({ id: "l1", price: 38000 }),
+      buildListing({ id: "l2", price: 38500 }),
+    ];
+    const query = buildQuery({
+      price: { min: 0, max: 40000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
+    });
+
+    const result = rankListings(listings, query, 10, 3);
+
+    expect(result.results.length).toBe(2);
+    expect(result.resultsAreFull).toBe(false);
   });
 });
 

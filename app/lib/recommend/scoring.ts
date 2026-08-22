@@ -74,12 +74,25 @@ export interface NearMissListing extends RankedListing {
 export interface RecommendationResult {
   results: RankedListing[];
   /**
-   * 예산을 살짝 벗어났지만 참고할 만한 매물(별도 섹션 전용, 메인 results와
-   * 절대 섞이지 않습니다). 항상 채워서 반환하되, 메인 결과가 충분하면
-   * (NEAR_MISS_HIDE_THRESHOLD건 이상) 화면에서 숨길지는 호출부(recommend/page.tsx)가
-   * 결정합니다.
+   * 예산 조건을 벗어나 메인 results에서 빠진 매물(별도 섹션 전용, 메인
+   * results와 절대 섞이지 않습니다). 두 가지 경우로 채워집니다.
+   * - results가 1건 이상일 때: 허용오차(상한 대비 5%, 최대 3,000만원) 이내로
+   *   "살짝 넘는" 매물만 참고용으로 담습니다. 화면은 resultsAreFull이면
+   *   보여주지 않습니다(조건에 맞는 매물이 이미 충분하므로).
+   * - results가 0건일 때: 허용오차를 적용하지 않고, 거래유형·매물종류만
+   *   맞으면 예산 초과/부족분이 적은 순으로 채웁니다 — 빈 화면을 보여주느니
+   *   초과 사실을 밝히고 가장 가까운 매물을 보여주는 게 낫습니다. 이 경우
+   *   recommend/page.tsx는 별도 문구("조건에 맞는 매물이 없어...")로
+   *   구분해서 보여줍니다.
    */
   nearMisses: NearMissListing[];
+  /**
+   * results가 이번 호출의 limit만큼 꽉 찼는지. 꽉 찼으면 조건에 맞는 매물이
+   * 이미 충분하다는 뜻이라 nearMisses(허용오차 이내 참고 매물)를 화면에
+   * 보여줄 이유가 없습니다. 고정 상수 대신 실제 사용된 limit으로 계산해서,
+   * limit을 바꿔도 "결과가 꽉 찼다"는 의미가 어긋나지 않게 합니다.
+   */
+  resultsAreFull: boolean;
   /** 인식된 조건이 하나도 없어 추천 자체를 시도하지 않은 경우. */
   noCriteriaRecognized: boolean;
   /** 1위가 인식된 소프트 조건을 전부(satisfiedCount === totalCount) 만족하는 경우. */
@@ -606,13 +619,18 @@ function compareScored(
 
 type PriceHardFilterOutcome =
   | { kind: "pass" }
-  | { kind: "reject" }
-  | { kind: "nearMiss"; violation: PriceViolation };
+  | { kind: "violation"; violation: PriceViolation; withinTolerance: boolean };
 
 /**
  * minSource/maxSource가 "constraint"인 경계만 하드필터 대상입니다. "padding"인
  * 경계(파서가 계산 편의로 채운 값)는 하드필터에서 완전히 무시합니다 —
  * queryParser.ts의 PriceCondition 주석 참고.
+ *
+ * 범위를 벗어난 매물은 허용오차 안팎을 가리지 않고 항상 violation을
+ * 반환합니다(예전엔 허용오차 밖이면 그냥 버렸는데, 그러면 후보가 전부
+ * 허용오차 밖일 때 nearMisses까지 0건이 되어 손님을 빈 화면으로
+ * 돌려보내게 됩니다). 허용오차 적용 여부는 호출부(rankListings)가
+ * results 건수를 보고 결정합니다.
  */
 function evaluatePriceHardFilter(
   condition: PriceCondition,
@@ -624,17 +642,15 @@ function evaluatePriceHardFilter(
       condition.max * NEAR_MISS_PRICE_TOLERANCE_RATIO,
       NEAR_MISS_PRICE_TOLERANCE_CAP_MANWON,
     );
-    if (amountManwon <= tolerance) {
-      return {
-        kind: "nearMiss",
-        violation: {
-          direction: "over",
-          amountManwon,
-          detail: `예산 ${formatPriceFull(amountManwon)} 초과`,
-        },
-      };
-    }
-    return { kind: "reject" };
+    return {
+      kind: "violation",
+      violation: {
+        direction: "over",
+        amountManwon,
+        detail: `예산 ${formatPriceFull(amountManwon)} 초과`,
+      },
+      withinTolerance: amountManwon <= tolerance,
+    };
   }
 
   if (condition.minSource === "constraint" && price < condition.min) {
@@ -643,17 +659,15 @@ function evaluatePriceHardFilter(
       condition.min * NEAR_MISS_PRICE_TOLERANCE_RATIO,
       NEAR_MISS_PRICE_TOLERANCE_CAP_MANWON,
     );
-    if (amountManwon <= tolerance) {
-      return {
-        kind: "nearMiss",
-        violation: {
-          direction: "under",
-          amountManwon,
-          detail: `예산 ${formatPriceFull(amountManwon)} 부족`,
-        },
-      };
-    }
-    return { kind: "reject" };
+    return {
+      kind: "violation",
+      violation: {
+        direction: "under",
+        amountManwon,
+        detail: `예산 ${formatPriceFull(amountManwon)} 부족`,
+      },
+      withinTolerance: amountManwon <= tolerance,
+    };
   }
 
   return { kind: "pass" };
@@ -661,13 +675,6 @@ function evaluatePriceHardFilter(
 
 const DEFAULT_LIMIT = 5;
 const DEFAULT_NEAR_MISS_LIMIT = 3;
-
-/**
- * 메인 results가 이 건수 이상이면 nearMisses를 화면에서 숨깁니다(데이터는
- * 항상 반환 — 표시 여부만 recommend/page.tsx가 이 값을 기준으로 결정).
- * 조건에 맞는 매물이 넉넉한데 예산 초과 매물을 권할 이유가 없습니다.
- */
-export const NEAR_MISS_HIDE_THRESHOLD = 5;
 
 export function rankListings(
   listings: ListingWithComplex[],
@@ -690,15 +697,27 @@ export function rankListings(
     query.wantsLowerPrice === true;
 
   if (!hasCriteria) {
-    return { results: [], nearMisses: [], noCriteriaRecognized: true, hasExactMatch: false };
+    return {
+      results: [],
+      nearMisses: [],
+      resultsAreFull: false,
+      noCriteriaRecognized: true,
+      hasExactMatch: false,
+    };
   }
 
   // 1) 하드필터. propertyType/거래유형 불일치는 완전 제외(참고용에도 노출
-  // 안 함). 예산은 통과/근접초과 후보/완전제외 세 갈래로 나뉩니다. 월세는
-  // listing.price(보증금)와 query.price(사용자가 보증금/월세 중 뭘 말했는지
-  // 구분 못 함)의 스케일이 다를 수 있어 예산 하드필터를 아예 건너뜁니다.
+  // 안 함). 예산을 벗어난 매물은 허용오차 안팎을 가리지 않고 일단 전부
+  // priceViolations에 모아둡니다 — 허용오차 적용 여부는 아래 2)에서 results
+  // 건수를 보고 결정합니다. 월세는 listing.price(보증금)와 query.price
+  // (사용자가 보증금/월세 중 뭘 말했는지 구분 못 함)의 스케일이 다를 수
+  // 있어 예산 하드필터를 아예 건너뜁니다.
   const passed: ListingWithComplex[] = [];
-  const nearMissCandidates: { listing: ListingWithComplex; violation: PriceViolation }[] = [];
+  const priceViolations: {
+    listing: ListingWithComplex;
+    violation: PriceViolation;
+    withinTolerance: boolean;
+  }[] = [];
 
   for (const listing of listings) {
     if (query.propertyType && listing.propertyType !== query.propertyType) continue;
@@ -706,9 +725,12 @@ export function rankListings(
 
     if (query.price && listing.transactionType !== "월세") {
       const outcome = evaluatePriceHardFilter(query.price, listing.price);
-      if (outcome.kind === "reject") continue;
-      if (outcome.kind === "nearMiss") {
-        nearMissCandidates.push({ listing, violation: outcome.violation });
+      if (outcome.kind === "violation") {
+        priceViolations.push({
+          listing,
+          violation: outcome.violation,
+          withinTolerance: outcome.withinTolerance,
+        });
         continue;
       }
     }
@@ -730,8 +752,19 @@ export function rankListings(
   });
   scored.sort(compareScored);
   const results = scored.slice(0, limit).map((s) => s.ranked);
+  const resultsAreFull = results.length >= limit;
 
-  const scoredNearMisses = nearMissCandidates.map(({ listing, violation }) => {
+  // 2) nearMisses. results가 있으면(정상 케이스) 허용오차 이내로 "살짝
+  // 넘는" 매물만 참고용으로 보여줍니다. results가 0건이면(예: DB에 실제로
+  // 그 예산 안의 매물이 없는 경우) 허용오차를 적용하지 않고, 거래유형·
+  // 매물종류만 맞으면 초과/부족분이 적은 순으로 채웁니다 — 빈 화면보다
+  // "이 정도까지 벗어난 매물이라도 있다"고 보여주는 쪽이 손님에게 낫습니다.
+  const nearMissPool =
+    results.length === 0
+      ? priceViolations
+      : priceViolations.filter((v) => v.withinTolerance);
+
+  const scoredNearMisses = nearMissPool.map(({ listing, violation }) => {
     const { criteria } = scoreOne(listing, query, priceRange);
     const { ranked } = buildRankedListing(listing, criteria);
     return { ...ranked, violation };
@@ -744,5 +777,5 @@ export function rankListings(
   const top = results[0];
   const hasExactMatch = top !== undefined && top.satisfiedCount === top.totalCount;
 
-  return { results, nearMisses, noCriteriaRecognized: false, hasExactMatch };
+  return { results, nearMisses, resultsAreFull, noCriteriaRecognized: false, hasExactMatch };
 }
