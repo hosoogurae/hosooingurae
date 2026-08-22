@@ -16,10 +16,17 @@ const UNKNOWN_FLOOR = "층 정보 문의";
 const UNKNOWN_AREA = "면적 문의";
 const UNKNOWN_COUNT = "문의";
 
-/** NOT NULL 컬럼 전용 판정: 0은 "확인 안 됨" 신호이므로 null/undefined와 같게 본다. */
-function isUnset(value: number | null | undefined): boolean {
+/**
+ * NOT NULL 컬럼 전용 판정: 0은 "확인 안 됨" 신호이므로 null/undefined와
+ * 같게 본다. 이 모듈의 포맷터 대신 원시 값으로 직접 조건 분기해야 하는
+ * 곳(예: 광고문구의 문장 구조 자체가 값 유무에 따라 달라지는 경우)에서
+ * 쓰도록 공개돼 있다 — 이 판정 자체를 각 파일에서 다시 구현하지 않는다.
+ */
+export function isUnknownListingNumber(value: number | null | undefined): boolean {
   return value === null || value === undefined || value === 0;
 }
+
+const isUnset = isUnknownListingNumber;
 
 export function formatFloor(value: number | null | undefined): string {
   return isUnset(value) ? UNKNOWN_FLOOR : `${value}층`;
@@ -76,4 +83,20 @@ export function formatParking(value: number | null | undefined): string {
  */
 export function formatFloorForSentence(value: number | null | undefined): string | null {
   return isUnset(value) ? null : `${value}층`;
+}
+
+/** 면적의 문장용 버전. prefix는 값이 있을 때만 붙습니다. 모르면 null. */
+export function formatAreaForSentence(
+  value: number | null | undefined,
+  prefix = "",
+): string | null {
+  return isUnset(value) ? null : `${prefix}${value}㎡`;
+}
+
+/** 방/욕실 수의 문장용 버전. prefix는 값이 있을 때만 붙습니다. 모르면 null. */
+export function formatRoomsForSentence(
+  value: number | null | undefined,
+  prefix = "",
+): string | null {
+  return isUnset(value) ? null : `${prefix}${value}개`;
 }

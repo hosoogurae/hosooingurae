@@ -5,10 +5,12 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { DealStatus, Listing } from "../../data/listings";
 import type { ListingStats, ListingWithComplex } from "../../lib/listings";
+import { isUnknownListingNumber } from "../../lib/format/listingFields";
 import { getVerificationUrgency } from "../../lib/listingUrgency";
 import { ADMIN_LISTING_SORT_OPTIONS } from "../../lib/listingSort";
 import {
   describeLowInfoReason,
+  describeMissingFieldsReason,
   INSPECTION_CATEGORIES,
   INSPECTION_CATEGORY_LABELS,
   matchesInspectionCategory,
@@ -507,6 +509,10 @@ function AdminListingsView() {
             const urgency = getVerificationUrgency(listing);
             const urgencyBadge = URGENCY_BADGE[urgency];
             const lowInfoReason = describeLowInfoReason(listing);
+            const missingFieldsReason = describeMissingFieldsReason(listing);
+            const isFloorMissing =
+              isUnknownListingNumber(listing.floor) ||
+              isUnknownListingNumber(listing.totalFloors);
             const suspectedMatch = suspectedMatches?.get(listing.id);
             const isMatchExpanded = expandedMatchListingId === listing.id;
 
@@ -559,6 +565,14 @@ function AdminListingsView() {
                         {lowInfoReason}
                       </span>
                     )}
+                    {missingFieldsReason && (
+                      <span
+                        className="rounded-full bg-amber-500/10 px-2 py-0.5 font-bold text-amber-700"
+                        title={missingFieldsReason}
+                      >
+                        정보 미입력
+                      </span>
+                    )}
                     {suspectedMatch && (
                       <button
                         type="button"
@@ -608,9 +622,15 @@ function AdminListingsView() {
                   )}
                   <p className="mt-1 font-bold text-navy-950">
                     {listing.priceLabel}
-                    <span className="ml-2 font-normal text-navy-800/50">
-                      {listing.floor}층/{listing.totalFloors}층
-                    </span>
+                    {isFloorMissing ? (
+                      <span className="ml-2 font-bold text-amber-600">
+                        층수 미입력
+                      </span>
+                    ) : (
+                      <span className="ml-2 font-normal text-navy-800/50">
+                        {listing.floor}층/{listing.totalFloors}층
+                      </span>
+                    )}
                   </p>
                   <p className="mt-0.5 text-xs text-navy-800/50">{listing.id}</p>
                   <p className="mt-1 text-xs text-navy-800/50">

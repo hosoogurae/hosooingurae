@@ -1,4 +1,5 @@
 import type { Listing } from "../data/listings";
+import { isUnknownListingNumber } from "./format/listingFields";
 import { getVerificationUrgency } from "./listingUrgency";
 
 /**
@@ -11,6 +12,7 @@ export type InspectionCategory =
   | "urgent"
   | "no-photo"
   | "low-info"
+  | "missing-fields"
   | "no-floorplan"
   | "draft"
   | "negotiating";
@@ -19,6 +21,7 @@ export const INSPECTION_CATEGORY_LABELS: Record<InspectionCategory, string> = {
   urgent: "재확인이 필요한 매물",
   "no-photo": "사진이 없는 공개 매물",
   "low-info": "설명·특징 정보가 부족한 매물",
+  "missing-fields": "층수·면적·방 수 미입력 매물",
   "no-floorplan": "평형타입 또는 평면도 연결이 부족한 매물",
   draft: "비공개 매물",
   negotiating: "계약 진행중 매물",
@@ -34,6 +37,7 @@ export const INSPECTION_CATEGORIES: InspectionCategory[] = [
   "no-photo",
   "urgent",
   "low-info",
+  "missing-fields",
   "no-floorplan",
   "draft",
   "negotiating",
@@ -60,6 +64,15 @@ export function matchesInspectionCategory(
       return (
         listing.shortDescription.trim().length < MIN_DESCRIPTION_LENGTH ||
         listing.features.length < MIN_FEATURES_COUNT
+      );
+    case "missing-fields":
+      return (
+        isUnknownListingNumber(listing.floor) ||
+        isUnknownListingNumber(listing.totalFloors) ||
+        isUnknownListingNumber(listing.exclusiveArea) ||
+        isUnknownListingNumber(listing.supplyArea) ||
+        isUnknownListingNumber(listing.roomCount) ||
+        isUnknownListingNumber(listing.bathroomCount)
       );
     case "no-floorplan":
       return (
@@ -99,6 +112,36 @@ export function describeLowInfoReason(listing: Listing): string {
   }
   if (listing.features.length < MIN_FEATURES_COUNT) {
     reasons.push(`특징 ${listing.features.length}개`);
+  }
+  return reasons.join(" · ");
+}
+
+/**
+ * floor/totalFloors/exclusiveArea/supplyArea/roomCount/bathroomCount는 DB가
+ * NOT NULL이라 원문에서 못 읽으면 0으로 저장됩니다(app/lib/format/listingFields.ts
+ * 참고). 손님 화면은 "층 정보 문의" 같은 안내 문구로 처리하지만, 관리자는
+ * 반대로 "값이 없다"는 사실을 정확히 알아야 채울 수 있으므로 어떤 항목이
+ * 비어있는지 그대로 알려줍니다.
+ */
+export function describeMissingFieldsReason(listing: Listing): string {
+  const reasons: string[] = [];
+  if (
+    isUnknownListingNumber(listing.floor) ||
+    isUnknownListingNumber(listing.totalFloors)
+  ) {
+    reasons.push("층수 미입력");
+  }
+  if (
+    isUnknownListingNumber(listing.exclusiveArea) ||
+    isUnknownListingNumber(listing.supplyArea)
+  ) {
+    reasons.push("면적 미입력");
+  }
+  if (
+    isUnknownListingNumber(listing.roomCount) ||
+    isUnknownListingNumber(listing.bathroomCount)
+  ) {
+    reasons.push("방/욕실 수 미입력");
   }
   return reasons.join(" · ");
 }
