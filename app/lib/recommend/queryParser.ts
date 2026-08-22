@@ -6,12 +6,23 @@ import { normalizeIntent, type MatchedSynonymGroup } from "./intentNormalizer";
 export type FloorTier = "high" | "low";
 export type SchoolLevel = "초등학교" | "중학교" | "고등학교" | "학교";
 
+/**
+ * "constraint" = 손님이 직접 그은 경계(하드필터 대상).
+ * "padding" = 파서가 계산 편의로 채운 값(하드필터에서 무시, 소프트로도 안 씀).
+ * 예: "3억 초반"의 3.3억(max)은 손님이 "3.3억"이라 말한 적은 없지만 상한이
+ * 있다는 의도 자체는 손님이 표현한 것이라 constraint, 3.0억(min)은 파서가
+ * 만든 하한이라 padding입니다. scoring.ts의 하드필터는 constraint만 봅니다.
+ */
+export type PriceBoundarySource = "constraint" | "padding";
+
 export interface PriceCondition {
   /** 만원 단위. */
   min: number;
   /** 만원 단위. openEnded면 점수 계산에서만 쓰고 화면에는 상한을 보여주지 않습니다. */
   max: number;
   openEnded: boolean;
+  minSource: PriceBoundarySource;
+  maxSource: PriceBoundarySource;
   /** 사용자에게 그대로 보여줄 해석 결과 문구. */
   interpretation: string;
 }
@@ -55,7 +66,14 @@ export interface QueryParser {
   parse(query: string, context: QueryParserContext): ParsedQuery;
 }
 
-const PROPERTY_TYPES: PropertyType[] = ["아파트", "오피스텔", "상가", "단독주택", "기타"];
+/**
+ * propertyType은 하드필터 대상입니다(scoring.ts). 아래 목록은 리터럴 매치
+ * 전용이라 항상 손님이 직접 쓴 단어만 걸립니다 — intentNormalizer.ts에
+ * propertyType 계열 동의어(예: "원룸"→"오피스텔")가 추가되면 이 전제가
+ * 깨지므로 하드필터를 재검토해야 합니다(tripwire 테스트:
+ * app/lib/__tests__/recommendQueryParser.test.ts).
+ */
+export const PROPERTY_TYPES: PropertyType[] = ["아파트", "오피스텔", "상가", "단독주택", "기타"];
 const TRANSACTION_TYPES: TransactionType[] = ["매매", "전세", "월세"];
 
 const STOPWORDS = new Set([
@@ -262,6 +280,35 @@ function parsePriceCondition(text: string): {
 } {
   let consumedText = text;
 
+  // "3억~4억"/"3~4억"/"3억에서 4억까지" 등 손님이 양쪽 경계를 직접 말한
+  // 경우를 최우선으로 확인합니다 — 아래 다른 분기보다 먼저 시도해야
+  // "3억"만 bare-eok 분기에 잘못 걸리고 "~4억"이 미인식 문구로 남는 걸
+  // 막을 수 있습니다. 앞쪽 숫자의 "억"은 생략 가능("3~4억")하되 뒤쪽
+  // 숫자의 "억"은 단위 확정을 위해 필수로 요구합니다.
+  const rangeMatch = text.match(
+    /(\d+)\s*(?:억\s*([0-9,]*))?\s*(?:~|-|부터|에서)\s*(\d+)\s*억\s*([0-9,]*)\s*(?:까지|사이)?/,
+  );
+  if (rangeMatch) {
+    const firstAmount = parseKoreanAmountToManwon(`${rangeMatch[1]}억${rangeMatch[2] ?? ""}`);
+    const secondAmount = parseKoreanAmountToManwon(`${rangeMatch[3]}억${rangeMatch[4] ?? ""}`);
+    if (firstAmount !== null && secondAmount !== null) {
+      const min = Math.min(firstAmount, secondAmount);
+      const max = Math.max(firstAmount, secondAmount);
+      consumedText = consume(consumedText, new RegExp(escapeRegExp(rangeMatch[0])));
+      return {
+        condition: {
+          min,
+          max,
+          openEnded: false,
+          minSource: "constraint",
+          maxSource: "constraint",
+          interpretation: `"${rangeMatch[0].trim()}" → ${formatPriceFull(min)}~${formatPriceFull(max)}으로 검색했습니다.`,
+        },
+        consumedText,
+      };
+    }
+  }
+
   const thresholdMatch = text.match(
     /([0-9,]+\s*억\s*[0-9,]*|[0-9,]+\s*만?\s*원?)\s*(이하|이내|미만|이상|초과)/,
   );
@@ -271,21 +318,29 @@ function parsePriceCondition(text: string): {
       const isUpperBound = ["이하", "이내", "미만"].includes(thresholdMatch[2]);
       consumedText = consume(consumedText, new RegExp(escapeRegExp(thresholdMatch[0])));
       if (isUpperBound) {
+        // 상한만 말했을 때 min=0은 실제 하한이 아니라 자리채움값입니다.
         return {
           condition: {
             min: 0,
             max: amount,
             openEnded: false,
+            minSource: "padding",
+            maxSource: "constraint",
             interpretation: `"${thresholdMatch[0].trim()}" → ${formatPriceFull(amount)} 이하로 검색했습니다.`,
           },
           consumedText,
         };
       }
+      // 하한만 말했을 때 max(amount*2)는 상한 의도를 전혀 담고 있지 않은
+      // 순수 계산값이라 padding입니다(다른 분기의 "패딩된 상한"과 달리
+      // 이 경우엔 상한에 대한 어떤 암묵적 의도도 없습니다).
       return {
         condition: {
           min: amount,
           max: amount * 2,
           openEnded: true,
+          minSource: "constraint",
+          maxSource: "padding",
           interpretation: `"${thresholdMatch[0].trim()}" → ${formatPriceFull(amount)} 이상으로 검색했습니다.`,
         },
         consumedText,
@@ -309,11 +364,16 @@ function parsePriceCondition(text: string): {
     const min = base + minOffset;
     const max = base + maxOffset;
     consumedText = consume(consumedText, new RegExp(escapeRegExp(bandMatch[0])));
+    // "3억 초반"의 3.3억(max)이라는 숫자 자체는 파서가 만들었지만, 상한이
+    // 있다는 의도는 손님이 "초반"이라고 말한 데서 나온 것이라 constraint로
+    // 봅니다. 3.0억(min)은 그 의도가 없는 계산상 하한이라 padding입니다.
     return {
       condition: {
         min,
         max,
         openEnded: false,
+        minSource: "padding",
+        maxSource: "constraint",
         interpretation: `"${bandMatch[0]}" → 약 ${formatPriceFull(min)}~${formatPriceFull(max)}으로 검색했습니다.`,
       },
       consumedText,
@@ -325,11 +385,16 @@ function parsePriceCondition(text: string): {
     const amount = parseKoreanAmountToManwon(`${exactMatch[1]}억${exactMatch[2]}`);
     if (amount !== null) {
       consumedText = consume(consumedText, new RegExp(escapeRegExp(exactMatch[0])));
+      // 숫자 하나("3억5000")를 던진 것도 "이 정도까지"라는 상한 의도로
+      // 보고 +1000만원 패딩된 상한을 constraint로 봅니다. 하한은 그런
+      // 의도가 없어 padding입니다.
       return {
         condition: {
           min: amount - 1000,
           max: amount + 1000,
           openEnded: false,
+          minSource: "padding",
+          maxSource: "constraint",
           interpretation: `"${exactMatch[0]}" → ${formatPriceFull(amount)} 근처로 검색했습니다.`,
         },
         consumedText,
@@ -342,11 +407,15 @@ function parsePriceCondition(text: string): {
     const eok = Number(bareEokMatch[1]);
     const base = eok * 10000;
     consumedText = consume(consumedText, new RegExp(escapeRegExp(bareEokMatch[0])));
+    // "3억"도 마찬가지로 "이 정도까지"라는 상한 의도로 보고 +9000만원
+    // 패딩된 상한을 constraint로 봅니다. 하한은 padding입니다.
     return {
       condition: {
         min: base,
         max: base + 9000,
         openEnded: false,
+        minSource: "padding",
+        maxSource: "constraint",
         interpretation: `"${bareEokMatch[0]}" → 약 ${formatPriceFull(base)}~${formatPriceFull(base + 9000)}으로 검색했습니다.`,
       },
       consumedText,

@@ -8,7 +8,7 @@ import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getAllListings } from "../lib/listings";
 import { ruleBasedQueryParser } from "../lib/recommend/queryParser";
-import { rankListings } from "../lib/recommend/scoring";
+import { NEAR_MISS_HIDE_THRESHOLD, rankListings } from "../lib/recommend/scoring";
 
 export const metadata: Metadata = {
   title: "AI 매물 추천 | 호수공인중개사사무소",
@@ -26,6 +26,17 @@ function firstValue(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
 }
 
+/**
+ * "5개 조건 중 4개 충족 · 1개 확인 불가"처럼 문장으로 보여줍니다. 주 고객층이
+ * 30~50대라 "4/5" 같은 기호보다 문장이 더 읽기 쉽습니다. 소프트 조건이
+ * 하나도 없으면(totalCount 0) 아예 표시하지 않습니다.
+ */
+function formatMatchSummary(satisfiedCount: number, totalCount: number, unknownCount: number) {
+  if (totalCount === 0) return undefined;
+  const base = `${totalCount}개 조건 중 ${satisfiedCount}개 충족`;
+  return unknownCount > 0 ? `${base} · ${unknownCount}개 확인 불가` : base;
+}
+
 export default async function RecommendPage({ searchParams }: RecommendPageProps) {
   const resolvedSearchParams = await searchParams;
   const query = firstValue(resolvedSearchParams.q).trim();
@@ -38,9 +49,13 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
   const recommendation = parsedQuery ? rankListings(listings, parsedQuery) : null;
 
   // 매물마다 평면도를 따로 조회하면 카드 개수만큼 쿼리가 나가므로(N+1),
-  // 결과에 나온 단지 id별로 한 번씩만 조회합니다.
+  // 결과+근접초과 목록에 나온 단지 id별로 한 번씩만 조회합니다.
   const distinctComplexIds = [
-    ...new Set((recommendation?.results ?? []).map((r) => r.listing.complexId)),
+    ...new Set(
+      [...(recommendation?.results ?? []), ...(recommendation?.nearMisses ?? [])].map(
+        (r) => r.listing.complexId,
+      ),
+    ),
   ];
   const [floorPlansByComplex, complexImagesByComplex] = await Promise.all([
     Promise.all(
@@ -188,41 +203,92 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
 
             {recommendation.results.length > 0 && (
               <ul className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                {recommendation.results.map((ranked, index) => (
-                  <li key={ranked.listing.id} className="relative flex flex-col">
-                    <span className="absolute right-3 top-3 z-10 rounded-full bg-navy-950/90 px-3 py-1 text-xs font-bold text-gold-400">
-                      {index + 1}위 · {ranked.score}% 일치
-                    </span>
-                    <ListingCard
-                      listing={ranked.listing}
-                      floorPlanImage={getFloorPlanForListing(
-                        ranked.listing.complexId,
-                        ranked.listing.unitType,
+                {recommendation.results.map((ranked, index) => {
+                  const summary = formatMatchSummary(
+                    ranked.satisfiedCount,
+                    ranked.totalCount,
+                    ranked.unknownCount,
+                  );
+                  // 미충족 항목은 눈에 띄지 않게 작고 중립적인 톤으로만 보여줍니다
+                  // — 카드 자체가 부정적으로 보이면 안 됩니다.
+                  const unmetDetails = ranked.criteria
+                    .filter((c) => !c.satisfied && !c.unknown && c.unmetDetail)
+                    .map((c) => c.unmetDetail as string);
+
+                  return (
+                    <li key={ranked.listing.id} className="relative flex flex-col">
+                      <span className="absolute right-3 top-3 z-10 rounded-full bg-navy-950/90 px-3 py-1 text-xs font-bold text-gold-400">
+                        {index + 1}위{summary && ` · ${summary}`}
+                      </span>
+                      <ListingCard
+                        listing={ranked.listing}
+                        floorPlanImage={getFloorPlanForListing(
+                          ranked.listing.complexId,
+                          ranked.listing.unitType,
+                        )}
+                        complexImageUrl={complexImagesByComplex.get(
+                          ranked.listing.complexId,
+                        )}
+                      />
+                      {ranked.reasons.length > 0 && (
+                        <div className="mt-3 rounded-lg bg-navy-900/[0.03] p-3">
+                          <p className="text-xs font-semibold text-gold-600">
+                            추천 이유
+                          </p>
+                          <p className="mt-1 text-sm text-navy-800/70">
+                            {ranked.reasons.join(" ")}
+                          </p>
+                        </div>
                       )}
-                      complexImageUrl={complexImagesByComplex.get(
-                        ranked.listing.complexId,
+                      {ranked.notes.length > 0 && (
+                        <p className="mt-2 text-xs text-navy-800/40">
+                          {ranked.notes.join(" · ")}
+                        </p>
                       )}
-                    />
-                    {ranked.reasons.length > 0 && (
-                      <div className="mt-3 rounded-lg bg-navy-900/[0.03] p-3">
-                        <p className="text-xs font-semibold text-gold-600">
-                          추천 이유
+                      {unmetDetails.length > 0 && (
+                        <p className="mt-1 text-xs text-navy-800/30">
+                          {unmetDetails.join(" · ")}
                         </p>
-                        <p className="mt-1 text-sm text-navy-800/70">
-                          {ranked.reasons.join(" ")}
-                        </p>
-                      </div>
-                    )}
-                    {ranked.notes.length > 0 && (
-                      <p className="mt-2 text-xs text-navy-800/40">
-                        {ranked.notes.join(" · ")}
-                      </p>
-                    )}
-                    <CompareToggle listingId={ranked.listing.id} />
-                  </li>
-                ))}
+                      )}
+                      <CompareToggle listingId={ranked.listing.id} />
+                    </li>
+                  );
+                })}
               </ul>
             )}
+
+            {recommendation.nearMisses.length > 0 &&
+              recommendation.results.length < NEAR_MISS_HIDE_THRESHOLD && (
+                <div className="mt-12">
+                  <p className="text-sm font-semibold text-navy-950">
+                    예산이 조금 넘지만 참고할 만한 매물
+                  </p>
+                  <p className="mt-1 text-xs text-navy-800/50">
+                    아래 매물은 요청하신 예산 범위를 벗어나 위 추천 결과에는
+                    포함하지 않았습니다.
+                  </p>
+                  <ul className="mt-4 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                    {recommendation.nearMisses.map((nearMiss) => (
+                      <li key={nearMiss.listing.id} className="relative flex flex-col">
+                        <span className="absolute right-3 top-3 z-10 rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white">
+                          {nearMiss.violation.detail}
+                        </span>
+                        <ListingCard
+                          listing={nearMiss.listing}
+                          floorPlanImage={getFloorPlanForListing(
+                            nearMiss.listing.complexId,
+                            nearMiss.listing.unitType,
+                          )}
+                          complexImageUrl={complexImagesByComplex.get(
+                            nearMiss.listing.complexId,
+                          )}
+                        />
+                        <CompareToggle listingId={nearMiss.listing.id} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
           </>
         )}
 

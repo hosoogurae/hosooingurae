@@ -1,37 +1,99 @@
 import type { ComplexTransportation } from "../../data/complexes";
 import type { ListingWithComplex } from "../listings";
-import type { ParsedQuery } from "./queryParser";
+import { formatPriceFull } from "../transactions";
+import type { ParsedQuery, PriceCondition } from "./queryParser";
+
+/**
+ * 조건은 두 종류로 나뉩니다(CLAUDE.md "추천 로직" 절 참고).
+ * - 필수(hard): 예산 상한(손님이 직접 그은 경계만), 거래유형, 매물종류
+ *   → 하나라도 위반하면 결과에서 완전히 제외합니다. 가중치로 다루지 않습니다.
+ * - 선호(soft): 단지명, 역세권, 학교, 방 개수, 면적 등
+ *   → 하드필터를 통과한 매물끼리 순위를 매기는 데만 씁니다.
+ *
+ * 화면에는 백분율 점수를 노출하지 않습니다. 내부 가중치 점수는 동점 매물의
+ * 정렬 타이브레이커로만 쓰고, RankedListing/NearMissListing 어디에도 담지
+ * 않습니다.
+ */
+
+export type SoftCriterionKey =
+  | "complexName"
+  | "roomCount"
+  | "floorTier"
+  | "moveIn"
+  | "station"
+  | "school"
+  | "parking"
+  | "largeComplex"
+  | "priceLow"
+  | "price";
+
+export interface SoftCriterionResult {
+  key: SoftCriterionKey;
+  /** 화면에 보여줄 조건 이름. 예: "역세권". */
+  label: string;
+  /** "N개 조건 중 M개 충족" 카운트에 씁니다. unknown이면 이 값과 무관하게 분모에서 제외됩니다. */
+  satisfied: boolean;
+  /** 실제 매물 데이터를 인용한, 충족 시 보여줄 근거 문장. */
+  reason?: string;
+  /** 미충족 시 보여줄 구체적 사유(추측 없이 실제 값만). 화면에는 작고 중립적으로 표시합니다. */
+  unmetDetail?: string;
+  /** 이 단지에 판단할 데이터 자체가 없어 충족/미충족을 가릴 수 없는 경우. */
+  unknown?: boolean;
+  /** unknown일 때 보여줄 안내 문구. 예: "역 거리 정보 없음". */
+  note?: string;
+}
 
 export interface RankedListing {
   listing: ListingWithComplex;
-  /** 0~100. 사용자가 실제로 언급한 조건만 반영한 백분율입니다. */
-  score: number;
-  /** 실제 매물 데이터를 그대로 인용한 추천 이유 문장들. */
+  criteria: SoftCriterionResult[];
+  /** unknown을 제외한 조건 중 충족한 개수. */
+  satisfiedCount: number;
+  /** unknown을 제외한 조건 개수(분모). */
+  totalCount: number;
+  /** 판단할 데이터가 없어 분모에서 빠진 조건 개수. */
+  unknownCount: number;
+  /** criteria의 reason만 모은 것(카드 "추천 이유" 문단에 그대로 이어붙이는 용도). */
   reasons: string[];
-  /** "역 거리 정보 없음"처럼, 요청한 조건인데 단지에 그 데이터 자체가 없을 때 보여줄 안내. */
+  /** criteria의 note만 모은 것. */
   notes: string[];
+}
+
+/** "over" = 상한 초과, "under" = 하한 미달(양쪽 다 손님이 직접 그은 경계일 때만 발생). */
+export interface PriceViolation {
+  direction: "over" | "under";
+  /** 만원 단위 차액. */
+  amountManwon: number;
+  /** 화면에 그대로 쓸 문구. 예: "예산 2,500만원 초과". */
+  detail: string;
+}
+
+export interface NearMissListing extends RankedListing {
+  violation: PriceViolation;
 }
 
 export interface RecommendationResult {
   results: RankedListing[];
+  /**
+   * 예산을 살짝 벗어났지만 참고할 만한 매물(별도 섹션 전용, 메인 results와
+   * 절대 섞이지 않습니다). 항상 채워서 반환하되, 메인 결과가 충분하면
+   * (NEAR_MISS_HIDE_THRESHOLD건 이상) 화면에서 숨길지는 호출부(recommend/page.tsx)가
+   * 결정합니다.
+   */
+  nearMisses: NearMissListing[];
   /** 인식된 조건이 하나도 없어 추천 자체를 시도하지 않은 경우. */
   noCriteriaRecognized: boolean;
-  /** 1위가 요청한 조건을 전부(100%) 만족하는 경우. */
+  /** 1위가 인식된 소프트 조건을 전부(satisfiedCount === totalCount) 만족하는 경우. */
   hasExactMatch: boolean;
 }
 
-interface CriterionScore {
+interface SoftCriterionEvaluation extends SoftCriterionResult {
+  /** 내부 타이브레이커 전용 가중치. 화면에 노출되지 않습니다. */
   weight: number;
-  score: number; // 0~1
-  reason?: string;
-  /** 이 단지에 해당 조건을 판단할 데이터 자체가 없어("모름") 0점 처리된 경우. */
-  note?: string;
+  /** 0~1, 내부 타이브레이커 전용 연속 점수. 화면에 노출되지 않습니다. */
+  score: number;
 }
 
 const WEIGHTS = {
-  propertyType: 20,
-  transactionType: 20,
-  price: 25,
   complexName: 20,
   roomCount: 10,
   floorTier: 10,
@@ -43,6 +105,13 @@ const WEIGHTS = {
   priceLow: 15,
 } as const;
 
+/** 조건 충족 여부를 나눌 때 쓰는 연속 점수 기준(기존 "reason 표시" 기준과 동일하게 맞춤). */
+const SATISFIED_SCORE_THRESHOLD = 0.5;
+
+/** 예산 근접초과 허용오차: 상한(또는 하한) 대비 5%, 단 절대금액 3,000만원을 넘지 않습니다. */
+const NEAR_MISS_PRICE_TOLERANCE_RATIO = 0.05;
+const NEAR_MISS_PRICE_TOLERANCE_CAP_MANWON = 3000;
+
 /** 역 도보 시간 기준: 10분 이하 완전만족, 11~15분 부분만족, 16분 이상 불만족. */
 const STATION_WALK_FULL_MAX_MINUTES = 10;
 const STATION_WALK_PARTIAL_MAX_MINUTES = 15;
@@ -52,20 +121,6 @@ const LARGE_COMPLEX_PARTIAL_MIN_HOUSEHOLDS = 700;
 
 const AMPLE_PARKING_FULL_RATIO = 1.3;
 const AMPLE_PARKING_PARTIAL_MIN_RATIO = 1.1;
-
-function priceScore(
-  condition: NonNullable<ParsedQuery["price"]>,
-  price: number,
-): number {
-  if (price >= condition.min && (condition.openEnded || price <= condition.max)) {
-    return 1;
-  }
-  const bandWidth = condition.max - condition.min || 10000;
-  const distance =
-    price < condition.min ? condition.min - price : price - condition.max;
-  const decayRange = bandWidth * 1.5;
-  return Math.max(0, 1 - distance / decayRange);
-}
 
 function floorTierScore(
   tier: "high" | "low",
@@ -98,23 +153,23 @@ function roomCountScore(requested: number, actual: number): number {
 
 type StationEvaluation =
   | { kind: "unknown" }
-  | { kind: "mismatch" }
+  | { kind: "mismatch"; subway?: string }
   | { kind: "scored"; score: number; subway: string; walkMinutes: number };
 
 /**
  * 역 근접 여부를 판단합니다. 특정 역을 요청했는데 이 단지의 등록된 역이
  * 다르면(예: 요청 "구래역", 단지는 "마산역") "모름"이 아니라 명확한 불일치로
  * 처리합니다 — 실제로 알고 있는 정보이기 때문입니다. 역 자체가 없거나 도보
- * 시간이 입력되지 않은 단지만 "모름"입니다(0점 처리하되 사유는 만들지 않음).
+ * 시간이 입력되지 않은 단지만 "모름"입니다.
  */
-function evaluateStation(
+function evaluateStationTransport(
   transportation: ComplexTransportation,
   requestedStationName: string | undefined,
 ): StationEvaluation {
   const { subway, subwayWalkMinutes } = transportation;
 
   if (requestedStationName && subway && subway !== requestedStationName) {
-    return { kind: "mismatch" };
+    return { kind: "mismatch", subway };
   }
   if (!subway || subwayWalkMinutes === undefined) {
     return { kind: "unknown" };
@@ -169,8 +224,7 @@ function computePriceRange(listings: ListingWithComplex[]): { min: number; max: 
 
 /**
  * 가격이 낮을수록 1에 가깝게(후보군 내 상대적 위치). 구체적 금액을 지어내지
- * 않고 실제 값끼리만 비교합니다. range 밖의 값(예: 비교 범위와 다른
- * 거래유형이 섞여 들어온 경우)이 들어와도 0~1을 벗어나지 않게 clamp합니다.
+ * 않고 실제 값끼리만 비교합니다.
  */
 function lowerPriceScore(price: number, range: { min: number; max: number }): number {
   const raw = 1 - (price - range.min) / (range.max - range.min);
@@ -213,193 +267,413 @@ function largeComplexCriterion(
   return { score: 0, unknown: false };
 }
 
+// ── 소프트 조건 평가 함수들 ──────────────────────────────────────────────
+// 각 함수는 화면용 SoftCriterionResult와 내부 타이브레이커용 weight/score를
+// 한 번에 반환합니다. "충족" 여부는 연속 점수가 SATISFIED_SCORE_THRESHOLD
+// 이상인지로 판정합니다(기존 "reason 표시" 기준과 동일).
+
+function evaluateComplexName(
+  listing: ListingWithComplex,
+  requested: string,
+): SoftCriterionEvaluation {
+  const satisfied = listing.complex.name === requested;
+  return {
+    key: "complexName",
+    label: "단지명",
+    weight: WEIGHTS.complexName,
+    score: satisfied ? 1 : 0,
+    satisfied,
+    // 단지명은 카드 자체에 이미 크게 표시되므로 reason으로 다시 말하지 않습니다(기존과 동일).
+    unmetDetail: satisfied ? undefined : `${listing.complex.name}입니다(요청: ${requested}).`,
+  };
+}
+
+function evaluateRoomCount(
+  listing: ListingWithComplex,
+  requested: number,
+): SoftCriterionEvaluation {
+  const score = roomCountScore(requested, listing.roomCount);
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "roomCount",
+    label: "방 개수",
+    weight: WEIGHTS.roomCount,
+    score,
+    satisfied,
+    reason: satisfied ? `방 ${listing.roomCount}개입니다.` : undefined,
+    unmetDetail: satisfied ? undefined : `방 ${listing.roomCount}개입니다(요청 ${requested}개).`,
+  };
+}
+
+function evaluateFloorTier(
+  listing: ListingWithComplex,
+  tier: NonNullable<ParsedQuery["floorTier"]>,
+): SoftCriterionEvaluation {
+  const score = floorTierScore(tier, listing.floor, listing.totalFloors);
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "floorTier",
+    label: "층 선호",
+    weight: WEIGHTS.floorTier,
+    score,
+    satisfied,
+    reason: satisfied ? `총 ${listing.totalFloors}층 중 ${listing.floor}층 매물입니다.` : undefined,
+    unmetDetail: satisfied ? undefined : `총 ${listing.totalFloors}층 중 ${listing.floor}층입니다.`,
+  };
+}
+
+function evaluateMoveIn(listing: ListingWithComplex): SoftCriterionEvaluation {
+  const score = moveInScore(listing.moveInDate);
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "moveIn",
+    label: "입주 시기",
+    weight: WEIGHTS.moveIn,
+    score,
+    satisfied,
+    reason: satisfied ? `입주가능일: ${listing.moveInDate}` : undefined,
+    unmetDetail: satisfied ? undefined : `입주가능일: ${listing.moveInDate}`,
+  };
+}
+
+function evaluateStationCriterion(
+  listing: ListingWithComplex,
+  requestedStationName: string | undefined,
+): SoftCriterionEvaluation {
+  const evaluation = evaluateStationTransport(listing.complex.transportation, requestedStationName);
+
+  if (evaluation.kind === "unknown") {
+    return {
+      key: "station",
+      label: "역세권",
+      weight: WEIGHTS.station,
+      score: 0,
+      satisfied: false,
+      unknown: true,
+      note: "역 거리 정보 없음",
+    };
+  }
+  if (evaluation.kind === "mismatch") {
+    return {
+      key: "station",
+      label: "역세권",
+      weight: WEIGHTS.station,
+      score: 0,
+      satisfied: false,
+      unmetDetail: evaluation.subway
+        ? `등록된 역: ${evaluation.subway}(요청: ${requestedStationName}).`
+        : undefined,
+    };
+  }
+
+  const satisfied = evaluation.score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "station",
+    label: "역세권",
+    weight: WEIGHTS.station,
+    score: evaluation.score,
+    satisfied,
+    reason: satisfied
+      ? `${evaluation.subway} 도보 약 ${evaluation.walkMinutes}분 거리입니다.`
+      : undefined,
+    unmetDetail: satisfied
+      ? undefined
+      : `${evaluation.subway} 도보 약 ${evaluation.walkMinutes}분입니다.`,
+  };
+}
+
+function evaluateSchool(
+  listing: ListingWithComplex,
+  level: NonNullable<ParsedQuery["schoolLevel"]>,
+): SoftCriterionEvaluation {
+  const { score, matchedSchool, unknown } = schoolCriterion(listing.complex.nearbySchools, level);
+  if (unknown) {
+    return {
+      key: "school",
+      label: "학교",
+      weight: WEIGHTS.school,
+      score: 0,
+      satisfied: false,
+      unknown: true,
+      note: "학교 정보 없음",
+    };
+  }
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "school",
+    label: "학교",
+    weight: WEIGHTS.school,
+    score,
+    satisfied,
+    reason: matchedSchool ? `${matchedSchool}가 인근 학교로 등록되어 있습니다.` : undefined,
+    unmetDetail: satisfied
+      ? undefined
+      : `등록된 인근 학교: ${listing.complex.nearbySchools.join(", ")}.`,
+  };
+}
+
+function evaluateParking(listing: ListingWithComplex): SoftCriterionEvaluation {
+  const { score, unknown } = parkingCriterion(listing.complex.parkingPerHousehold);
+  if (unknown) {
+    return {
+      key: "parking",
+      label: "주차",
+      weight: WEIGHTS.parking,
+      score: 0,
+      satisfied: false,
+      unknown: true,
+      note: "주차 정보 없음",
+    };
+  }
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "parking",
+    label: "주차",
+    weight: WEIGHTS.parking,
+    score,
+    satisfied,
+    reason: satisfied
+      ? `세대당 주차 ${listing.complex.parkingPerHousehold}대입니다.`
+      : undefined,
+    unmetDetail: satisfied
+      ? undefined
+      : `세대당 주차 ${listing.complex.parkingPerHousehold}대입니다.`,
+  };
+}
+
+function evaluateLargeComplex(listing: ListingWithComplex): SoftCriterionEvaluation {
+  const { score, unknown } = largeComplexCriterion(listing.complex.totalHouseholds);
+  if (unknown) {
+    return {
+      key: "largeComplex",
+      label: "대단지",
+      weight: WEIGHTS.largeComplex,
+      score: 0,
+      satisfied: false,
+      unknown: true,
+      note: "세대수 정보 없음",
+    };
+  }
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "largeComplex",
+    label: "대단지",
+    weight: WEIGHTS.largeComplex,
+    score,
+    satisfied,
+    reason: satisfied
+      ? `${listing.complex.totalHouseholds?.toLocaleString()}세대 규모입니다.`
+      : undefined,
+    unmetDetail: satisfied
+      ? undefined
+      : `${listing.complex.totalHouseholds?.toLocaleString()}세대입니다.`,
+  };
+}
+
+function evaluateLowerPrice(
+  listing: ListingWithComplex,
+  priceRange: { min: number; max: number },
+): SoftCriterionEvaluation {
+  const score = lowerPriceScore(listing.price, priceRange);
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "priceLow",
+    label: "가격(저렴한 편)",
+    weight: WEIGHTS.priceLow,
+    score,
+    satisfied,
+    reason:
+      score >= 0.7
+        ? `비교한 매물들 중 가격이 낮은 편입니다(실거래가 ${listing.priceLabel}).`
+        : undefined,
+    unmetDetail: satisfied
+      ? undefined
+      : `비교한 매물들 중 가격이 높은 편입니다(실거래가 ${listing.priceLabel}).`,
+  };
+}
+
+/**
+ * 월세는 listing.price가 보증금만 담고 있고 query.price는 사용자가 보증금/
+ * 월세 중 무엇을 말했는지 구분하지 못합니다(queryParser.ts). 틀린 스케일로
+ * 비교해 틀린 순위를 매기느니 아예 판단을 포기하고 "확인 불가"로 집계합니다.
+ */
+function evaluateMonthlyRentPriceUnknown(): SoftCriterionEvaluation {
+  return {
+    key: "price",
+    label: "가격",
+    weight: 0,
+    score: 0,
+    satisfied: false,
+    unknown: true,
+    note: "월세는 보증금·월세 구분 전이라 가격 조건을 적용하지 못했습니다",
+  };
+}
+
 function scoreOne(
   listing: ListingWithComplex,
   query: ParsedQuery,
   priceRange: { min: number; max: number } | null,
-): { score: number; reasons: string[]; notes: string[]; unknownCount: number } {
-  const criteria: CriterionScore[] = [];
-  let unknownCount = 0;
-
-  if (query.propertyType) {
-    criteria.push({
-      weight: WEIGHTS.propertyType,
-      score: listing.propertyType === query.propertyType ? 1 : 0,
-    });
-  }
-
-  if (query.transactionType) {
-    criteria.push({
-      weight: WEIGHTS.transactionType,
-      score: listing.transactionType === query.transactionType ? 1 : 0,
-    });
-  }
-
-  if (query.price) {
-    const s = priceScore(query.price, listing.price);
-    criteria.push({
-      weight: WEIGHTS.price,
-      score: s,
-      reason:
-        s >= 0.8
-          ? `실거래가 ${listing.priceLabel}으로 예산 범위 안에 있습니다.`
-          : s >= 0.5
-            ? `실거래가 ${listing.priceLabel}으로 예산과 비교적 가깝습니다.`
-            : undefined,
-    });
-  }
+): { criteria: SoftCriterionEvaluation[] } {
+  const criteria: SoftCriterionEvaluation[] = [];
 
   if (query.complexName) {
-    criteria.push({
-      weight: WEIGHTS.complexName,
-      score: listing.complex.name === query.complexName ? 1 : 0,
-    });
+    criteria.push(evaluateComplexName(listing, query.complexName));
   }
-
   if (query.roomCount !== undefined) {
-    const s = roomCountScore(query.roomCount, listing.roomCount);
-    criteria.push({
-      weight: WEIGHTS.roomCount,
-      score: s,
-      reason: s >= 0.5 ? `방 ${listing.roomCount}개입니다.` : undefined,
-    });
+    criteria.push(evaluateRoomCount(listing, query.roomCount));
   }
-
   if (query.floorTier) {
-    const s = floorTierScore(query.floorTier, listing.floor, listing.totalFloors);
-    criteria.push({
-      weight: WEIGHTS.floorTier,
-      score: s,
-      reason:
-        s >= 0.5
-          ? `총 ${listing.totalFloors}층 중 ${listing.floor}층 매물입니다.`
-          : undefined,
-    });
+    criteria.push(evaluateFloorTier(listing, query.floorTier));
   }
-
   if (query.wantsImmediateMoveIn) {
-    const s = moveInScore(listing.moveInDate);
-    criteria.push({
-      weight: WEIGHTS.moveIn,
-      score: s,
-      reason: s > 0 ? `입주가능일: ${listing.moveInDate}` : undefined,
-    });
+    criteria.push(evaluateMoveIn(listing));
   }
-
   if (query.wantsStationProximity) {
-    const evaluation = evaluateStation(listing.complex.transportation, query.stationName);
-    if (evaluation.kind === "unknown") {
-      unknownCount += 1;
-      criteria.push({ weight: WEIGHTS.station, score: 0, note: "역 거리 정보 없음" });
-    } else if (evaluation.kind === "mismatch") {
-      criteria.push({ weight: WEIGHTS.station, score: 0 });
-    } else {
-      criteria.push({
-        weight: WEIGHTS.station,
-        score: evaluation.score,
-        reason:
-          evaluation.score >= 0.5
-            ? `${evaluation.subway} 도보 약 ${evaluation.walkMinutes}분 거리입니다.`
-            : undefined,
-      });
-    }
+    criteria.push(evaluateStationCriterion(listing, query.stationName));
   }
-
   if (query.schoolLevel) {
-    const { score, matchedSchool, unknown } = schoolCriterion(
-      listing.complex.nearbySchools,
-      query.schoolLevel,
-    );
-    if (unknown) unknownCount += 1;
-    criteria.push({
-      weight: WEIGHTS.school,
-      score,
-      reason: matchedSchool ? `${matchedSchool}가 인근 학교로 등록되어 있습니다.` : undefined,
-      note: unknown ? "학교 정보 없음" : undefined,
-    });
+    criteria.push(evaluateSchool(listing, query.schoolLevel));
   }
-
   if (query.wantsAmpleParking) {
-    const { score, unknown } = parkingCriterion(listing.complex.parkingPerHousehold);
-    if (unknown) unknownCount += 1;
-    criteria.push({
-      weight: WEIGHTS.parking,
-      score,
-      reason:
-        score >= 0.5
-          ? `세대당 주차 ${listing.complex.parkingPerHousehold}대입니다.`
-          : undefined,
-      note: unknown ? "주차 정보 없음" : undefined,
-    });
+    criteria.push(evaluateParking(listing));
   }
-
   if (query.wantsLargeComplex) {
-    const { score, unknown } = largeComplexCriterion(listing.complex.totalHouseholds);
-    if (unknown) unknownCount += 1;
-    criteria.push({
-      weight: WEIGHTS.largeComplex,
-      score,
-      reason:
-        score >= 0.5
-          ? `${listing.complex.totalHouseholds?.toLocaleString()}세대 규모입니다.`
-          : undefined,
-      note: unknown ? "세대수 정보 없음" : undefined,
-    });
+    criteria.push(evaluateLargeComplex(listing));
   }
 
   // "저렴한/싼/가성비" — 구체적 금액 조건(query.price)이 이미 있으면 그게
-  // 우선이라 이 기준은 건너뜁니다(모호한 선호로 명확한 조건을 덮어쓰지 않음).
-  // 임의의 가격 기준을 만들지 않고, 이번에 점수 매기는 후보 매물들의 실제
-  // 가격끼리만 비교합니다.
-  // 매매가/전세보증금/월세보증금은 성격이 달라(월세는 보증금 외에 월세도
-  // 따로 냄) priceRange가 특정 거래유형 기준으로 좁혀졌다면, 그 유형이 아닌
-  // 매물에는 이 기준을 아예 적용하지 않습니다 — 다른 잣대로 잰 값을 억지로
-  // 끼워 맞추면 순위가 왜곡됩니다(clamp만으로는 "가장 저렴함"으로 잘못
-  // 뽑히는 문제까지는 못 막음).
+  // 우선이라 이 기준은 건너뜁니다. 임의의 가격 기준을 만들지 않고, 이번에
+  // 순위 매기는 후보 매물들의 실제 가격끼리만 비교합니다. 거래유형이
+  // 다르면(매매/전세/월세는 금액 스케일이 달라) 비교 자체를 하지 않습니다.
   const priceComparisonApplies =
     !query.transactionType || listing.transactionType === query.transactionType;
-  if (query.wantsLowerPrice && !query.price && priceComparisonApplies) {
-    if (priceRange) {
-      const s = lowerPriceScore(listing.price, priceRange);
-      criteria.push({
-        weight: WEIGHTS.priceLow,
-        score: s,
-        reason:
-          s >= 0.7
-            ? `비교한 매물들 중 가격이 낮은 편입니다(실거래가 ${listing.priceLabel}).`
-            : undefined,
-      });
+  if (query.wantsLowerPrice && !query.price && priceComparisonApplies && priceRange) {
+    criteria.push(evaluateLowerPrice(listing, priceRange));
+  }
+
+  if (query.price && listing.transactionType === "월세") {
+    criteria.push(evaluateMonthlyRentPriceUnknown());
+  }
+
+  return { criteria };
+}
+
+function buildRankedListing(
+  listing: ListingWithComplex,
+  evaluations: SoftCriterionEvaluation[],
+): { ranked: RankedListing; internalScore: number } {
+  const totalWeight = evaluations.reduce((sum, e) => sum + e.weight, 0);
+  const earned = evaluations.reduce((sum, e) => sum + e.weight * e.score, 0);
+  const internalScore = totalWeight > 0 ? earned / totalWeight : 0;
+
+  const known = evaluations.filter((e) => !e.unknown);
+  const satisfiedCount = known.filter((e) => e.satisfied).length;
+  const totalCount = known.length;
+  const unknownCount = evaluations.length - known.length;
+
+  const criteria: SoftCriterionResult[] = evaluations.map((e) => ({
+    key: e.key,
+    label: e.label,
+    satisfied: e.satisfied,
+    reason: e.reason,
+    unmetDetail: e.unmetDetail,
+    unknown: e.unknown,
+    note: e.note,
+  }));
+  const reasons = criteria.map((c) => c.reason).filter((r): r is string => Boolean(r));
+  const notes = criteria.map((c) => c.note).filter((n): n is string => Boolean(n));
+
+  return {
+    ranked: { listing, criteria, satisfiedCount, totalCount, unknownCount, reasons, notes },
+    internalScore,
+  };
+}
+
+function compareScored(
+  a: { ranked: RankedListing; internalScore: number },
+  b: { ranked: RankedListing; internalScore: number },
+): number {
+  if (b.ranked.satisfiedCount !== a.ranked.satisfiedCount) {
+    return b.ranked.satisfiedCount - a.ranked.satisfiedCount;
+  }
+  if (b.internalScore !== a.internalScore) {
+    return b.internalScore - a.internalScore;
+  }
+  return a.ranked.unknownCount - b.ranked.unknownCount;
+}
+
+// ── 하드필터 ──────────────────────────────────────────────────────────
+
+type PriceHardFilterOutcome =
+  | { kind: "pass" }
+  | { kind: "reject" }
+  | { kind: "nearMiss"; violation: PriceViolation };
+
+/**
+ * minSource/maxSource가 "constraint"인 경계만 하드필터 대상입니다. "padding"인
+ * 경계(파서가 계산 편의로 채운 값)는 하드필터에서 완전히 무시합니다 —
+ * queryParser.ts의 PriceCondition 주석 참고.
+ */
+function evaluatePriceHardFilter(
+  condition: PriceCondition,
+  price: number,
+): PriceHardFilterOutcome {
+  if (condition.maxSource === "constraint" && price > condition.max) {
+    const amountManwon = price - condition.max;
+    const tolerance = Math.min(
+      condition.max * NEAR_MISS_PRICE_TOLERANCE_RATIO,
+      NEAR_MISS_PRICE_TOLERANCE_CAP_MANWON,
+    );
+    if (amountManwon <= tolerance) {
+      return {
+        kind: "nearMiss",
+        violation: {
+          direction: "over",
+          amountManwon,
+          detail: `예산 ${formatPriceFull(amountManwon)} 초과`,
+        },
+      };
     }
-    // priceRange가 null(후보가 1개뿐이거나 전부 같은 가격)이면 비교 자체가
-    // 의미 없으니 조건을 추가하지 않습니다(모름 처리도 하지 않음).
+    return { kind: "reject" };
   }
 
-  if (criteria.length === 0) {
-    return { score: 0, reasons: [], notes: [], unknownCount: 0 };
+  if (condition.minSource === "constraint" && price < condition.min) {
+    const amountManwon = condition.min - price;
+    const tolerance = Math.min(
+      condition.min * NEAR_MISS_PRICE_TOLERANCE_RATIO,
+      NEAR_MISS_PRICE_TOLERANCE_CAP_MANWON,
+    );
+    if (amountManwon <= tolerance) {
+      return {
+        kind: "nearMiss",
+        violation: {
+          direction: "under",
+          amountManwon,
+          detail: `예산 ${formatPriceFull(amountManwon)} 부족`,
+        },
+      };
+    }
+    return { kind: "reject" };
   }
 
-  // "모름"인 항목도 분모(totalWeight)에 그대로 포함합니다 — 데이터가 없다고 그
-  // 조건을 빼버리면 다른 조건만으로 매치율이 부풀려질 수 있기 때문입니다
-  // (예: 역 정보가 없는 매물이 가격만 맞아도 100%로 보이는 문제를 방지).
-  const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
-  const earned = criteria.reduce((sum, c) => sum + c.weight * c.score, 0);
-  const score = Math.round((earned / totalWeight) * 100);
-  const reasons = criteria
-    .map((c) => c.reason)
-    .filter((reason): reason is string => Boolean(reason));
-  const notes = criteria
-    .map((c) => c.note)
-    .filter((note): note is string => Boolean(note));
-
-  return { score, reasons, notes, unknownCount };
+  return { kind: "pass" };
 }
 
 const DEFAULT_LIMIT = 5;
+const DEFAULT_NEAR_MISS_LIMIT = 3;
+
+/**
+ * 메인 results가 이 건수 이상이면 nearMisses를 화면에서 숨깁니다(데이터는
+ * 항상 반환 — 표시 여부만 recommend/page.tsx가 이 값을 기준으로 결정).
+ * 조건에 맞는 매물이 넉넉한데 예산 초과 매물을 권할 이유가 없습니다.
+ */
+export const NEAR_MISS_HIDE_THRESHOLD = 5;
 
 export function rankListings(
   listings: ListingWithComplex[],
   query: ParsedQuery,
   limit = DEFAULT_LIMIT,
+  nearMissLimit = DEFAULT_NEAR_MISS_LIMIT,
 ): RecommendationResult {
   const hasCriteria =
     query.propertyType !== undefined ||
@@ -416,34 +690,59 @@ export function rankListings(
     query.wantsLowerPrice === true;
 
   if (!hasCriteria) {
-    return { results: [], noCriteriaRecognized: true, hasExactMatch: false };
+    return { results: [], nearMisses: [], noCriteriaRecognized: true, hasExactMatch: false };
   }
 
-  // 매매가/전세보증금/월세보증금은 성격이 달라(특히 월세 보증금은 매매·전세
-  // 가격대와 단위 자체가 다름) 그대로 섞어 비교하면 "저렴한 편"이 왜곡됩니다.
-  // 거래유형을 지정했으면 같은 유형끼리만, 안 정했으면(모호함은 사용자 몫) 전체끼리 비교합니다.
+  // 1) 하드필터. propertyType/거래유형 불일치는 완전 제외(참고용에도 노출
+  // 안 함). 예산은 통과/근접초과 후보/완전제외 세 갈래로 나뉩니다. 월세는
+  // listing.price(보증금)와 query.price(사용자가 보증금/월세 중 뭘 말했는지
+  // 구분 못 함)의 스케일이 다를 수 있어 예산 하드필터를 아예 건너뜁니다.
+  const passed: ListingWithComplex[] = [];
+  const nearMissCandidates: { listing: ListingWithComplex; violation: PriceViolation }[] = [];
+
+  for (const listing of listings) {
+    if (query.propertyType && listing.propertyType !== query.propertyType) continue;
+    if (query.transactionType && listing.transactionType !== query.transactionType) continue;
+
+    if (query.price && listing.transactionType !== "월세") {
+      const outcome = evaluatePriceHardFilter(query.price, listing.price);
+      if (outcome.kind === "reject") continue;
+      if (outcome.kind === "nearMiss") {
+        nearMissCandidates.push({ listing, violation: outcome.violation });
+        continue;
+      }
+    }
+
+    passed.push(listing);
+  }
+
+  // 매매가/전세보증금/월세보증금은 성격이 달라 그대로 섞어 비교하면 "저렴한
+  // 편"이 왜곡됩니다. 거래유형을 지정했으면 같은 유형끼리만, 안 정했으면
+  // (모호함은 사용자 몫) 통과한 전체끼리 비교합니다.
   const priceComparisonPool = query.transactionType
-    ? listings.filter((listing) => listing.transactionType === query.transactionType)
-    : listings;
+    ? passed.filter((listing) => listing.transactionType === query.transactionType)
+    : passed;
   const priceRange = computePriceRange(priceComparisonPool);
-  const scored = listings.map((listing) => {
-    const { score, reasons, notes, unknownCount } = scoreOne(listing, query, priceRange);
-    return { listing, score, reasons, notes, unknownCount };
+
+  const scored = passed.map((listing) => {
+    const { criteria } = scoreOne(listing, query, priceRange);
+    return buildRankedListing(listing, criteria);
   });
+  scored.sort(compareScored);
+  const results = scored.slice(0, limit).map((s) => s.ranked);
 
-  // 점수가 같으면(동점) 단지 정보가 더 많이 확인된(모름이 적은) 매물을 위로 올립니다.
-  scored.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.unknownCount - b.unknownCount;
+  const scoredNearMisses = nearMissCandidates.map(({ listing, violation }) => {
+    const { criteria } = scoreOne(listing, query, priceRange);
+    const { ranked } = buildRankedListing(listing, criteria);
+    return { ...ranked, violation };
   });
+  // "예산 초과/부족분이 적은 순" — nearMisses는 소프트 점수가 아니라 예산에
+  // 얼마나 가까운지로 정렬합니다(참고용 목록의 목적 자체가 그것이므로).
+  scoredNearMisses.sort((a, b) => a.violation.amountManwon - b.violation.amountManwon);
+  const nearMisses = scoredNearMisses.slice(0, nearMissLimit);
 
-  const results = scored
-    .slice(0, limit)
-    .map(({ listing, score, reasons, notes }) => ({ listing, score, reasons, notes }));
+  const top = results[0];
+  const hasExactMatch = top !== undefined && top.satisfiedCount === top.totalCount;
 
-  return {
-    results,
-    noCriteriaRecognized: false,
-    hasExactMatch: results.length > 0 && results[0].score === 100,
-  };
+  return { results, nearMisses, noCriteriaRecognized: false, hasExactMatch };
 }

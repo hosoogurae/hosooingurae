@@ -112,7 +112,12 @@ const PRICE_LOW_RULE: SynonymRule = {
   patterns: [/저렴한|저렴하게|싼\s|싸고|싸게|가성비/],
 };
 
-const SYNONYM_RULES: SynonymRule[] = [
+/**
+ * scoring.ts의 propertyType 하드필터는 이 배열에 propertyType 계열 규칙이
+ * 없다는 전제 위에 서 있습니다(queryParser.ts의 PROPERTY_TYPES 주석 참고).
+ * 테스트에서 이 전제를 검증할 수 있도록 export합니다.
+ */
+export const SYNONYM_RULES: SynonymRule[] = [
   ELEMENTARY_SCHOOL_RULE,
   GENERIC_SCHOOL_RULE,
   STATION_RULE,
