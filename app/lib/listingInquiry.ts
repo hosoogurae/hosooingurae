@@ -1,3 +1,5 @@
+import { formatFloorForSentence } from "./format/listingFields";
+
 /** 동 정보가 없을 때 임의로 채우지 않고 이 문구를 그대로 노출합니다. */
 export const BUILDING_UNKNOWN_LABEL = "동 정보 미등록";
 
@@ -28,8 +30,9 @@ export function buildInquiryMessage(params: {
   if (params.building && params.building.trim() !== "") {
     buildingFloorParts.push(params.building);
   }
-  if (params.floor !== undefined && params.floor !== null) {
-    buildingFloorParts.push(`${params.floor}층`);
+  const floorText = formatFloorForSentence(params.floor);
+  if (floorText) {
+    buildingFloorParts.push(floorText);
   }
 
   const lines = [
@@ -74,8 +77,9 @@ export function buildCompareInquiryMessage(params: {
     if (listing.building && listing.building.trim() !== "") {
       buildingFloorParts.push(listing.building);
     }
-    if (listing.floor !== undefined && listing.floor !== null) {
-      buildingFloorParts.push(`${listing.floor}층`);
+    const floorText = formatFloorForSentence(listing.floor);
+    if (floorText) {
+      buildingFloorParts.push(floorText);
     }
 
     lines.push(

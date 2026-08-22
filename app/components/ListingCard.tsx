@@ -3,11 +3,11 @@ import type { FloorPlanImage } from "../data/floorPlans";
 import { resolveListingHeroImage } from "../lib/listingGalleryImages";
 import type { ListingWithComplex } from "../lib/listings";
 import {
-  formatBathroomCount,
-  formatExclusiveArea,
-  formatFloorInfo,
-  formatRoomCount,
-} from "../lib/listingDisplayFallback";
+  formatArea,
+  formatFloor,
+  formatFloorRange,
+  formatRooms,
+} from "../lib/format/listingFields";
 import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
 
 function formatVerifiedDate(dateStr: string) {
@@ -23,8 +23,8 @@ function formatBuildingFloor(listing: ListingWithComplex): string | undefined {
   if (listing.floor !== undefined && listing.floor !== null) {
     parts.push(
       listing.totalFloors !== undefined && listing.totalFloors !== null
-        ? formatFloorInfo(listing.floor, listing.totalFloors)
-        : `${listing.floor}층`,
+        ? formatFloorRange(listing.floor, listing.totalFloors)
+        : formatFloor(listing.floor),
     );
   }
   return parts.length > 0 ? parts.join(" · ") : undefined;
@@ -116,13 +116,13 @@ export default function ListingCard({
 
         <dl className="grid grid-cols-2 gap-y-1 text-sm text-navy-800/80">
           <dt className="text-navy-800/50">전용면적</dt>
-          <dd>{formatExclusiveArea(listing.exclusiveArea, "전용 ")}</dd>
+          <dd>{formatArea(listing.exclusiveArea, "전용 ")}</dd>
           <dt className="text-navy-800/50">방향</dt>
           <dd>{listing.direction}</dd>
           <dt className="text-navy-800/50">방/욕실</dt>
           <dd>
-            방 {formatRoomCount(listing.roomCount)} / 욕실{" "}
-            {formatBathroomCount(listing.bathroomCount)}
+            방 {formatRooms(listing.roomCount)} / 욕실{" "}
+            {formatRooms(listing.bathroomCount)}
           </dd>
         </dl>
 
