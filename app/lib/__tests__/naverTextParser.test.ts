@@ -9,6 +9,7 @@ import { NAVER_OLD_SAMPLE } from "./naverOldSample.fixture";
 import { NAVER_NEW_SAMPLE } from "./naverNewSample.fixture";
 import { NAVER_NEW_SAMPLE_NO_COMMA } from "./naverNewSampleNoComma.fixture";
 import { NAVER_NEW_SAMPLE_WITH_DIGITS_IN_FEATURES } from "./naverNewSampleDigitsInFeatures.fixture";
+import { NAVER_FULL_DETAIL_PANEL_SAMPLE } from "./naverFullDetailPanelSample.fixture";
 
 describe("parseNaverListingText — 구형 샘플(반드시 계속 통과해야 함)", () => {
   const parsed = parseNaverListingText(NAVER_OLD_SAMPLE);
@@ -517,5 +518,76 @@ describe("parseNaverListingText — 집주인확인매물 날짜 추출", () => 
   it("날짜를 찾지 못하면 undefined다(오늘 날짜로 대체하지 않음)", () => {
     const parsed = parseNaverListingText(NAVER_OLD_SAMPLE);
     expect(parsed.verifiedOwnerConfirmationDate).toBeUndefined();
+  });
+});
+
+describe("parseNaverListingText — 상세보기 펼친 완전한 원문(203동 11층, 회귀 테스트)", () => {
+  // 같은 unit을 나중에 다시 붙여넣은 매물이 "관리비 25만원상세보기"에서
+  // 끊긴 원문(상세보기 미펼침)으로 저장돼 공급면적/전용면적/층수/방욕실/
+  // 입주가능일이 전부 인식 실패했던 사례의 회귀 테스트입니다. 조사 결과
+  // 파서 문제가 아니라 원문 자체가 불완전했던 것으로 확인됐고, 이 fixture는
+  // 그 원문이 상세보기까지 정상적으로 펼쳐졌을 때의 완전한 버전입니다.
+  const parsed = parseNaverListingText(NAVER_FULL_DETAIL_PANEL_SAMPLE);
+
+  it("동/공급면적/전용면적을 인식한다", () => {
+    expect(parsed.building).toBe("203동");
+    expect(parsed.supplyArea).toBe(109.87);
+    expect(parsed.exclusiveArea).toBe(84.97);
+  });
+
+  it("해당층/총층, 방수/욕실수를 인식한다", () => {
+    expect(parsed.floor).toBe(11);
+    expect(parsed.totalFloors).toBe(20);
+    expect(parsed.roomCount).toBe(3);
+    expect(parsed.bathroomCount).toBe(2);
+  });
+
+  it("방향/관리비/입주가능일을 인식한다", () => {
+    expect(parsed.direction).toBe("남동향");
+    expect(parsed.maintenanceFee).toBe("25만원");
+    expect(parsed.moveInDate).toBe("즉시입주 협의 가능");
+  });
+
+  it("매물특징을 인식한다(\"공원뷰굿\"의 \"원\"을 금액 단위로 오인하지 않음)", () => {
+    expect(parsed.features).toEqual([
+      "판상형",
+      "현관창고",
+      "중문등상태굿",
+      "공원뷰굿",
+      "이사협의",
+    ]);
+  });
+});
+
+describe("parseNaverListingText — 매물특징에서 \"원\"으로 끝나는 한글 단어를 금액으로 오인하지 않음", () => {
+  // 정규식이 "원" 글자 자체를 금지했을 때, "만원"/"억원"처럼 실제 금액
+  // 표현이 아니라 "공원"/"학원"/"정원"/"병원"처럼 원래 "원"으로 끝나는
+  // 흔한 한글 단어까지 특징 후보에서 통째로 걸러졌던 회귀를 잡는 테스트입니다.
+  const buildText = (featureLine: string) =>
+    `테스트단지 101동\n${featureLine}\n집주인확인매물 2026. 08. 12.\n기본 정보`;
+
+  it("공원/학원/정원/병원이 포함된 문구는 특징에서 제거되지 않는다", () => {
+    const parsed = parseNaverListingText(
+      buildText("공원인접 학원가까움 정원있음 병원근처"),
+    );
+    expect(parsed.features).toEqual([
+      "공원인접",
+      "학원가까움",
+      "정원있음",
+      "병원근처",
+    ]);
+  });
+
+  it("숫자와 함께 쓰인 실제 금액 표현(만원/억/숫자+원)은 여전히 특징에서 제외한다", () => {
+    // "25만원"·"4억"은 토큰 전체가 숫자+단위 접미사라 기존 규칙으로도 이미
+    // 제외됩니다. "관리비별도25만원"처럼 숫자 앞에 다른 글자가 붙어 있어
+    // 그 기존 규칙만으로는 못 잡는 경우까지, 새 "숫자+원으로 끝남" 규칙이
+    // 계속 제외하는지 확인합니다.
+    const parsed = parseNaverListingText(
+      buildText("판상형 관리비별도25만원 즉시입주 이사협의"),
+    );
+    // 특징 후보 줄 자체가 금액성 토큰 때문에 통째로 제외되고, 남는
+    // 공백형 후보가 없어 인식 실패합니다.
+    expect(parsed.features).toBeUndefined();
   });
 });
