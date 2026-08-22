@@ -37,6 +37,7 @@ import { getListingById } from "../../lib/listings";
 import {
   formatArea,
   formatFloorRange,
+  formatParking,
   formatRooms,
 } from "../../lib/format/listingFields";
 import { getUnitTypeImages } from "../../lib/unitTypeImages";
@@ -321,7 +322,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             <InfoItem
               icon={Ruler}
               label="공급면적"
-              value={`${listing.supplyArea}㎡`}
+              value={formatArea(listing.supplyArea)}
             />
             <InfoItem
               icon={Home}
@@ -460,9 +461,10 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                     icon={Car}
                     label="주차"
                     value={
+                      complex.parkingCount !== 0 &&
                       complex.parkingPerHousehold !== undefined
-                        ? `${complex.parkingCount.toLocaleString()}대 (세대당 ${complex.parkingPerHousehold}대)`
-                        : `${complex.parkingCount.toLocaleString()}대`
+                        ? `${formatParking(complex.parkingCount)} (세대당 ${complex.parkingPerHousehold}대)`
+                        : formatParking(complex.parkingCount)
                     }
                   />
                 )}
