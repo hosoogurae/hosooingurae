@@ -40,7 +40,6 @@ import {
   buildInquiryMessage,
   formatComplexAndBuilding,
 } from "../../lib/listingInquiry";
-import { getTransactionsByComplexId } from "../../lib/transactions";
 import ListingGallery from "../../components/ListingGallery";
 import ListingInquiryMessage from "../../components/ListingInquiryMessage";
 import TransactionPriceChart from "../../components/TransactionPriceChart";
@@ -128,7 +127,6 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
     complex.floorAreaRatio !== undefined ||
     complex.buildingCoverageRatio !== undefined ||
     complex.features.length > 0;
-  const transactions = getTransactionsByComplexId(complex.id);
   const [floorPlanImages, unitTypeImages, complexImages] = await Promise.all([
     listing.unitType ? getFloorPlanImages(complex.id, listing.unitType) : [],
     listing.unitType ? getUnitTypeImages(complex.id, listing.unitType) : [],
@@ -416,7 +414,6 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
 
           <div className="mt-6">
             <TransactionPriceChart
-              transactions={transactions}
               complexId={complex.id}
               exclusiveArea={listing.exclusiveArea}
             />

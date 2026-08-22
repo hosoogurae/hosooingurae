@@ -10,6 +10,8 @@ export interface ComplexTransaction {
   floor: number;
   exclusiveArea: number;
   transactionType: ComplexTransactionType;
+  /** 국토부 공개시스템 화면을 직접 확인해 이 값을 입력한 날짜(YYYY-MM-DD). 화면 캡션에 그대로 노출됩니다. */
+  verifiedAt: string;
 }
 
 /**
@@ -27,6 +29,7 @@ export const complexTransactions: ComplexTransaction[] = [
     floor: 15,
     exclusiveArea: 84.87,
     transactionType: "매매",
+    verifiedAt: "2026-07-20",
   },
   {
     id: "hosumaeul-2-txn-20260312",
@@ -37,6 +40,7 @@ export const complexTransactions: ComplexTransaction[] = [
     floor: 12,
     exclusiveArea: 84.87,
     transactionType: "매매",
+    verifiedAt: "2026-07-20",
   },
   {
     id: "hosumaeul-2-txn-20260318",
@@ -47,5 +51,6 @@ export const complexTransactions: ComplexTransaction[] = [
     floor: 4,
     exclusiveArea: 84.87,
     transactionType: "매매",
+    verifiedAt: "2026-07-20",
   },
 ];

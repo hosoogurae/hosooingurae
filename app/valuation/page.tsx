@@ -617,7 +617,6 @@ function ValuationView() {
 
                 <div className="mt-8">
                   <TransactionPriceChart
-                    transactions={resultTransactionList}
                     complexId={selectedComplex.id}
                     exclusiveArea={selectedArea.exclusiveArea}
                   />
