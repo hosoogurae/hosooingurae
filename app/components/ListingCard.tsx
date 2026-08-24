@@ -34,11 +34,17 @@ export default function ListingCard({
   listing,
   floorPlanImage,
   complexImageUrl,
+  priceNotice,
+  emphasize,
 }: {
   listing: ListingWithComplex;
   floorPlanImage?: FloorPlanImage;
   /** 매물 사진·평면도가 모두 없을 때 세 번째로 시도할 단지 대표 이미지. */
   complexImageUrl?: string;
+  /** 가격 바로 아래에 경고색으로 붙일 한 줄 안내(예: 예산 초과/부족 안내). 없으면 표시 안 함. */
+  priceNotice?: string;
+  /** 카드 테두리·배경을 경고 톤으로 바꿔 조건에 맞는 매물과 한눈에 구분되게 합니다. */
+  emphasize?: "warning";
 }) {
   const heroImage = resolveListingHeroImage(listing);
   const floorPlanThumbnail =
@@ -48,7 +54,11 @@ export default function ListingCard({
   return (
     <Link
       href={`/listings/${listing.id}`}
-      className="group flex flex-1 flex-col overflow-hidden rounded-xl border border-navy-900/10 bg-white shadow-sm transition-shadow hover:shadow-lg"
+      className={`group flex flex-1 flex-col overflow-hidden rounded-xl border shadow-sm transition-shadow hover:shadow-lg ${
+        emphasize === "warning"
+          ? "border-amber-300 bg-amber-50/50"
+          : "border-navy-900/10 bg-white"
+      }`}
     >
       <div className="relative h-52 shrink-0 sm:h-56 lg:h-60">
         {heroImage ? (
@@ -107,6 +117,10 @@ export default function ListingCard({
         <p className="text-xl font-black text-gold-600">
           {listing.transactionType} {listing.priceLabel}
         </p>
+
+        {priceNotice && (
+          <p className="-mt-2 text-sm font-bold text-amber-700">{priceNotice}</p>
+        )}
 
         {buildingFloorLine && (
           <p className="-mt-2 text-sm font-medium text-navy-800/60">

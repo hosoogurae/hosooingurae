@@ -8,7 +8,9 @@ import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getAllListings } from "../lib/listings";
 import { ruleBasedQueryParser } from "../lib/recommend/queryParser";
-import { rankListings } from "../lib/recommend/scoring";
+import type { PriceCondition } from "../lib/recommend/queryParser";
+import { rankListings, type NearMissListing } from "../lib/recommend/scoring";
+import { formatPriceFull } from "../lib/transactions";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 
 export const metadata: Metadata = {
@@ -36,6 +38,30 @@ function formatMatchSummary(satisfiedCount: number, totalCount: number, unknownC
   if (totalCount === 0) return undefined;
   const base = `${totalCount}개 조건 중 ${satisfiedCount}개 충족`;
   return unknownCount > 0 ? `${base} · ${unknownCount}개 확인 불가` : base;
+}
+
+/** 카드 상단에서 스캔하기 쉬운 짧은 라벨. 금액은 가격 바로 아래(priceNotice)에서 보여줍니다. */
+function formatViolationBadge(direction: "over" | "under") {
+  return direction === "over" ? "예산 초과" : "예산 부족";
+}
+
+/**
+ * "요청 예산 3억보다 5,000만원 높음"처럼 가격과 한 덩어리로 읽히게 만듭니다.
+ * 손님이 실제로 그은 예산 경계(priceCondition)와 비교해서 보여줘야 의미가
+ * 있어서, violation.detail(예: "예산 5,000만원 초과")과 별개로 여기서
+ * 새로 구성합니다.
+ */
+function formatPriceNoticeBelowPrice(
+  violation: NearMissListing["violation"],
+  priceCondition: PriceCondition | undefined,
+): string | undefined {
+  if (!priceCondition) return undefined;
+  const boundary = violation.direction === "over" ? priceCondition.max : priceCondition.min;
+  const boundaryText = formatPriceFull(boundary);
+  const amountText = formatPriceFull(violation.amountManwon);
+  return violation.direction === "over"
+    ? `요청 예산 ${boundaryText}보다 ${amountText} 높음`
+    : `요청 예산 ${boundaryText}보다 ${amountText} 낮음`;
 }
 
 export default async function RecommendPage({ searchParams }: RecommendPageProps) {
@@ -264,14 +290,19 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                 구분합니다(뱃지에 예산 초과 금액을 그대로 노출). */}
             {recommendation.results.length === 0 && recommendation.nearMisses.length > 0 && (
               <div className="mt-8">
-                <p className="rounded-md border border-navy-900/10 bg-navy-900/[0.02] px-4 py-3 text-sm font-medium text-navy-900">
-                  조건에 맞는 매물이 없어 가장 가까운 매물을 보여드립니다.
-                </p>
+                <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4">
+                  <p className="text-base font-bold text-navy-950">
+                    조건에 맞는 매물이 없어 가장 가까운 매물을 보여드립니다
+                  </p>
+                  <p className="mt-1 text-sm text-navy-800/60">
+                    아래 매물은 요청하신 예산 범위를 벗어났습니다.
+                  </p>
+                </div>
                 <ul className="mt-6 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
                   {recommendation.nearMisses.map((nearMiss) => (
                     <li key={nearMiss.listing.id} className="relative flex flex-col">
                       <span className="absolute right-3 top-3 z-10 rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white">
-                        {nearMiss.violation.detail}
+                        {formatViolationBadge(nearMiss.violation.direction)}
                       </span>
                       <ListingCard
                         listing={nearMiss.listing}
@@ -282,6 +313,11 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                         complexImageUrl={complexImagesByComplex.get(
                           nearMiss.listing.complexId,
                         )}
+                        priceNotice={formatPriceNoticeBelowPrice(
+                          nearMiss.violation,
+                          parsedQuery?.price,
+                        )}
+                        emphasize="warning"
                       />
                       <CompareToggle listingId={nearMiss.listing.id} />
                     </li>
@@ -317,7 +353,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                     {recommendation.nearMisses.map((nearMiss) => (
                       <li key={nearMiss.listing.id} className="relative flex flex-col">
                         <span className="absolute right-3 top-3 z-10 rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white">
-                          {nearMiss.violation.detail}
+                          {formatViolationBadge(nearMiss.violation.direction)}
                         </span>
                         <ListingCard
                           listing={nearMiss.listing}
@@ -328,6 +364,11 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                           complexImageUrl={complexImagesByComplex.get(
                             nearMiss.listing.complexId,
                           )}
+                          priceNotice={formatPriceNoticeBelowPrice(
+                            nearMiss.violation,
+                            parsedQuery?.price,
+                          )}
+                          emphasize="warning"
                         />
                         <CompareToggle listingId={nearMiss.listing.id} />
                       </li>
