@@ -13,6 +13,7 @@ export type InspectionCategory =
   | "no-photo"
   | "low-info"
   | "missing-fields"
+  | "no-transaction-match"
   | "no-floorplan"
   | "draft"
   | "negotiating";
@@ -22,6 +23,7 @@ export const INSPECTION_CATEGORY_LABELS: Record<InspectionCategory, string> = {
   "no-photo": "사진이 없는 공개 매물",
   "low-info": "설명·특징 정보가 부족한 매물",
   "missing-fields": "층수·면적·방 수 미입력 매물",
+  "no-transaction-match": "실거래 매칭 불가 매물",
   "no-floorplan": "평형타입 또는 평면도 연결이 부족한 매물",
   draft: "비공개 매물",
   negotiating: "계약 진행중 매물",
@@ -38,6 +40,7 @@ export const INSPECTION_CATEGORIES: InspectionCategory[] = [
   "urgent",
   "low-info",
   "missing-fields",
+  "no-transaction-match",
   "no-floorplan",
   "draft",
   "negotiating",
@@ -74,6 +77,11 @@ export function matchesInspectionCategory(
         isUnknownListingNumber(listing.roomCount) ||
         isUnknownListingNumber(listing.bathroomCount)
       );
+    case "no-transaction-match":
+      // 국토부 실거래는 전용면적으로만 비교할 수 있어, 이 값을 모르면
+      // 상세페이지 실거래가 섹션이 "면적 정보가 없어 불러올 수 없다"로
+      // 뜹니다(app/api/transactions/route.ts의 noExclusiveArea 참고).
+      return isUnknownListingNumber(listing.exclusiveArea);
     case "no-floorplan":
       return (
         !listing.unitType ||

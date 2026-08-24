@@ -52,6 +52,22 @@ describe("matchesInspectionCategory — missing-fields", () => {
   });
 });
 
+describe("matchesInspectionCategory — no-transaction-match", () => {
+  it("전용면적이 있으면 걸리지 않는다", () => {
+    expect(matchesInspectionCategory(BASE, "no-transaction-match", {})).toBe(false);
+  });
+
+  it("전용면적이 0이면 걸린다(국토부 실거래와 비교할 기준이 없음)", () => {
+    const listing = { ...BASE, exclusiveArea: 0 };
+    expect(matchesInspectionCategory(listing, "no-transaction-match", {})).toBe(true);
+  });
+
+  it("층수·방 수 등 다른 필드가 0이어도 전용면적만 있으면 걸리지 않는다", () => {
+    const listing = { ...BASE, floor: 0, totalFloors: 0, roomCount: 0 };
+    expect(matchesInspectionCategory(listing, "no-transaction-match", {})).toBe(false);
+  });
+});
+
 describe("describeMissingFieldsReason", () => {
   it("정상 매물은 빈 문자열을 반환한다", () => {
     expect(describeMissingFieldsReason(BASE)).toBe("");

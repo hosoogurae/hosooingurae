@@ -25,7 +25,7 @@ const GOLD = "#c9a24b";
 const NAVY_900 = "#0b1a33";
 const MOBILE_QUERY = "(max-width: 639px)";
 
-type ChartStatus = "loading" | "molit" | "mock" | "empty" | "error";
+type ChartStatus = "loading" | "molit" | "mock" | "empty" | "error" | "noExclusiveArea";
 
 function formatContractDateMonth(dateStr: string) {
   return dateStr.slice(0, 7).replaceAll("-", ".");
@@ -207,6 +207,25 @@ export default function TransactionPriceChart({
           >
             다시 시도
           </button>
+        }
+      />
+    );
+  }
+
+  if (status === "noExclusiveArea") {
+    // "내역 없음"이 아니라 "무엇과 비교할지 모른다"입니다 — 실거래는
+    // 존재할 수 있으니 사실과 다른 안내를 하지 않습니다.
+    return (
+      <NoticeBox
+        title="전용면적 정보가 등록되지 않아 실거래가를 불러올 수 없습니다."
+        description="전화로 문의해 주세요."
+        action={
+          <a
+            href={PHONE_HREF}
+            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-6 py-3 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.03]"
+          >
+            전화 상담 {PHONE_NUMBER}
+          </a>
         }
       />
     );
