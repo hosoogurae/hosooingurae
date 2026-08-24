@@ -279,6 +279,38 @@ export interface Database {
           },
         ];
       };
+      contact_requests: {
+        Row: {
+          id: string;
+          listing_id: string;
+          name: string;
+          phone: string;
+          preferred_time: string | null;
+          status: "new" | "contacted" | "closed";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          listing_id: string;
+          name: string;
+          phone: string;
+          preferred_time?: string | null;
+          status?: "new" | "contacted" | "closed";
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["contact_requests"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "contact_requests_listing_id_fkey";
+            columns: ["listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       listing_submissions: {
         Row: {
           id: string;
@@ -418,3 +450,7 @@ export type AdminSmsTemplateRow =
   Database["public"]["Tables"]["admin_sms_templates"]["Row"];
 export type AdminSmsTemplateInsert =
   Database["public"]["Tables"]["admin_sms_templates"]["Insert"];
+export type ContactRequestRow =
+  Database["public"]["Tables"]["contact_requests"]["Row"];
+export type ContactRequestInsert =
+  Database["public"]["Tables"]["contact_requests"]["Insert"];

@@ -1,7 +1,16 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 import { PhoneIcon } from "./icons";
 
 export default function FloatingCallButton() {
+  const pathname = usePathname();
+  // 매물 상세페이지는 ContactActions의 모바일 하단 고정 바에 이미 전화
+  // 버튼이 있어(app/components/ContactActions.tsx), 겹치지 않도록 이
+  // 페이지에서는 숨깁니다. 매물 목록(/listings, id 없음)은 그대로 둡니다.
+  if (pathname?.startsWith("/listings/")) return null;
+
   return (
     <a
       href={PHONE_HREF}

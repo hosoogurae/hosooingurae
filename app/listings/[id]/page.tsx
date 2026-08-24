@@ -24,9 +24,8 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PHONE_HREF, PHONE_NUMBER } from "../../data/contact";
+import ContactActions from "../../components/ContactActions";
 import FloorPlanImage from "../../components/FloorPlanImage";
-import InquirySmsButton from "../../components/InquirySmsButton";
 import { getComplexImages } from "../../lib/complexImages";
 import { getFloorPlanImages } from "../../lib/floorPlans";
 import {
@@ -49,7 +48,6 @@ import {
 import ListingGallery from "../../components/ListingGallery";
 import ListingInquiryMessage from "../../components/ListingInquiryMessage";
 import TransactionPriceChart from "../../components/TransactionPriceChart";
-import { PhoneIcon } from "../../components/icons";
 
 interface ListingPageProps {
   params: Promise<{ id: string }>;
@@ -159,9 +157,6 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const protocol = host?.startsWith("localhost") ? "http" : "https";
   const pageUrl = host ? `${protocol}://${host}/listings/${listing.id}` : undefined;
 
-  const inquiryMobileNumber =
-    process.env.NEXT_PUBLIC_INQUIRY_MOBILE?.trim() || undefined;
-
   const inquiryMessage = buildInquiryMessage({
     complexName: complex.name,
     building: listing.building,
@@ -217,41 +212,29 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 </span>
               )}
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                {inquiryMobileNumber ? (
-                  <InquirySmsButton
-                    phoneNumber={inquiryMobileNumber}
-                    message={inquiryMessage}
-                    officePhoneNumber={PHONE_NUMBER}
-                    officePhoneHref={PHONE_HREF}
-                  />
-                ) : (
-                  <Link
-                    href="/#contact"
-                    className="rounded-full bg-gradient-to-r from-gold-400 to-gold-600 px-6 py-3 text-center text-sm font-bold text-navy-950 shadow-lg shadow-gold-500/30 transition-transform hover:scale-[1.03]"
-                  >
-                    문의하기
-                  </Link>
-                )}
-                <a
-                  href={PHONE_HREF}
-                  className="flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/5 px-6 py-3 text-sm font-bold text-white backdrop-blur transition-colors hover:border-gold-400 hover:text-gold-400"
-                >
-                  <PhoneIcon className="h-4 w-4" />
-                  전화 상담 {PHONE_NUMBER}
-                </a>
-                {listing.naverUrl && (
-                  <a
-                    href={listing.naverUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/5 px-6 py-3 text-sm font-bold text-white backdrop-blur transition-colors hover:border-gold-400 hover:text-gold-400"
-                  >
-                    <ExternalLink className="h-4 w-4" strokeWidth={2} />
-                    네이버부동산에서 보기
-                  </a>
-                )}
+              <div className="mt-8">
+                <ContactActions
+                  listingId={listing.id}
+                  complexName={complex.name}
+                  building={listing.building}
+                  floor={listing.floor}
+                  transactionType={listing.transactionType}
+                  priceLabel={listing.priceLabel}
+                  pageUrl={pageUrl}
+                />
               </div>
+
+              {listing.naverUrl && (
+                <a
+                  href={listing.naverUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex w-fit items-center gap-2 rounded-full border border-white/30 bg-white/5 px-6 py-3 text-sm font-bold text-white backdrop-blur transition-colors hover:border-gold-400 hover:text-gold-400"
+                >
+                  <ExternalLink className="h-4 w-4" strokeWidth={2} />
+                  네이버부동산에서 보기
+                </a>
+              )}
 
               <div className="mt-4">
                 <ListingInquiryMessage message={inquiryMessage} />
@@ -295,7 +278,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
         </div>
       </section>
 
-      <section className="mx-auto max-w-5xl px-6 py-16">
+      <section className="mx-auto max-w-5xl px-6 pb-32 pt-16 sm:pb-16">
         {galleryImages.length > 0 && (
           <div
             className="animate-fade-in-up"
@@ -563,6 +546,17 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           </div>
         )}
       </section>
+
+      <ContactActions
+        listingId={listing.id}
+        complexName={complex.name}
+        building={listing.building}
+        floor={listing.floor}
+        transactionType={listing.transactionType}
+        priceLabel={listing.priceLabel}
+        pageUrl={pageUrl}
+        variant="sticky"
+      />
     </>
   );
 }
