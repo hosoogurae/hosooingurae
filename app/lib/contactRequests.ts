@@ -1,4 +1,8 @@
-import type { ContactRequest, ContactRequestInput } from "../data/contactRequests";
+import type {
+  ContactRequest,
+  ContactRequestInput,
+  ContactRequestStatus,
+} from "../data/contactRequests";
 import { getSupabaseAdminClient } from "./supabase/client";
 import type { ContactRequestRow } from "./supabase/database.types";
 
@@ -44,6 +48,51 @@ export async function createContactRequest(
   if (error || !data) {
     console.error("[contactRequests] 저장 실패", error);
     return { error: "저장에 실패했습니다." };
+  }
+
+  return { contactRequest: rowToContactRequest(data) };
+}
+
+/** 관리자 문의함(/admin/contacts) 전용. 최신 접수가 먼저 보이도록 정렬합니다. */
+export async function getAllContactRequests(): Promise<ContactRequest[]> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("contact_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    console.error("[contactRequests] 목록 조회 실패", error);
+    return [];
+  }
+
+  return data.map(rowToContactRequest);
+}
+
+export async function updateContactRequestStatus(
+  id: string,
+  status: ContactRequestStatus,
+): Promise<{ contactRequest?: ContactRequest; error?: string }> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return { error: "Supabase가 설정되어 있지 않습니다." };
+  }
+
+  const { data, error } = await supabase
+    .from("contact_requests")
+    .update({ status })
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[contactRequests] 상태 변경 실패", error);
+    return { error: "상태 변경에 실패했습니다." };
+  }
+  if (!data) {
+    return { error: "문의를 찾을 수 없습니다." };
   }
 
   return { contactRequest: rowToContactRequest(data) };

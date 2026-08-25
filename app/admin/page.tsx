@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import type { ContactRequest } from "../data/contactRequests";
 import type { ListingSubmission } from "../data/listingSubmissions";
 import type { ListingStats } from "../lib/listings";
 
@@ -43,19 +44,26 @@ export default function AdminDashboardPage() {
     null,
   );
   const [stats, setStats] = useState<ListingStats | null>(null);
+  const [contactRequests, setContactRequests] = useState<ContactRequest[] | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      const [submissionsResult, statsResult] = await Promise.allSettled([
-        fetch("/api/admin/listing-submissions").then((response) =>
-          response.ok ? response.json() : Promise.reject(response),
-        ),
-        fetch("/api/admin/listings/stats").then((response) =>
-          response.ok ? response.json() : Promise.reject(response),
-        ),
-      ]);
+      const [submissionsResult, statsResult, contactRequestsResult] =
+        await Promise.allSettled([
+          fetch("/api/admin/listing-submissions").then((response) =>
+            response.ok ? response.json() : Promise.reject(response),
+          ),
+          fetch("/api/admin/listings/stats").then((response) =>
+            response.ok ? response.json() : Promise.reject(response),
+          ),
+          fetch("/api/admin/contact-requests").then((response) =>
+            response.ok ? response.json() : Promise.reject(response),
+          ),
+        ]);
 
       if (cancelled) return;
 
@@ -68,6 +76,14 @@ export default function AdminDashboardPage() {
       if (statsResult.status === "fulfilled") {
         setStats(statsResult.value.stats as ListingStats);
       }
+
+      if (contactRequestsResult.status === "fulfilled") {
+        setContactRequests(
+          contactRequestsResult.value.contactRequests as ContactRequest[],
+        );
+      } else {
+        setContactRequests([]);
+      }
     }
 
     load();
@@ -79,6 +95,8 @@ export default function AdminDashboardPage() {
   const newCount = submissions?.filter((s) => s.status === "new").length ?? 0;
   const confirmedCount =
     submissions?.filter((s) => s.status === "confirmed").length ?? 0;
+  const newContactCount =
+    contactRequests?.filter((c) => c.status === "new").length ?? 0;
 
   const recentSubmissions = useMemo(() => {
     if (!submissions) return [];
@@ -90,6 +108,13 @@ export default function AdminDashboardPage() {
   }, [submissions]);
 
   const cards: DashboardCard[] = [
+    {
+      title: "문의함",
+      description: "매물 상세페이지 \"연락받기\" 폼으로 들어온 문의를 확인하고 연락하세요.",
+      href: "/admin/contacts",
+      badge: contactRequests === null ? undefined : `미확인 ${newContactCount}건`,
+      highlight: newContactCount > 0,
+    },
     {
       title: "상담 도우미",
       description: "고객과 대면 상담할 때 마이크로 들은 말을 큰 글씨 자막으로 보여줍니다.",
@@ -117,6 +142,11 @@ export default function AdminDashboardPage() {
       title: "매물 점검 센터",
       description: "사진 없는 매물, 오래 미확인 매물 등을 자동으로 찾아줍니다.",
       href: "/admin/listing-inspection",
+    },
+    {
+      title: "광고용 도구",
+      description: "등록된 매물 정보로 문자·블로그·SNS 광고문구를 만듭니다.",
+      href: "/admin/ad-copy",
     },
     {
       title: "단지 정보 관리",
