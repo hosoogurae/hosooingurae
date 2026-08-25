@@ -311,6 +311,28 @@ export interface Database {
           },
         ];
       };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["push_subscriptions"]["Insert"]
+        >;
+        Relationships: [];
+      };
       listing_submissions: {
         Row: {
           id: string;
@@ -454,3 +476,7 @@ export type ContactRequestRow =
   Database["public"]["Tables"]["contact_requests"]["Row"];
 export type ContactRequestInsert =
   Database["public"]["Tables"]["contact_requests"]["Insert"];
+export type PushSubscriptionRow =
+  Database["public"]["Tables"]["push_subscriptions"]["Row"];
+export type PushSubscriptionInsert =
+  Database["public"]["Tables"]["push_subscriptions"]["Insert"];
