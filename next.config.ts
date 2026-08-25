@@ -24,6 +24,21 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/*": ["node_modules/sharp/**/*", "node_modules/@img/**/*"],
   },
+  // sw.js를 CDN/브라우저가 캐싱하면 push 리스너를 새로 추가해도 기기에
+  // 반영되지 않을 수 있어(등록 시 updateViaCache:'none'과 별개로, 서버가
+  // 캐시 헤더를 내려주면 그걸 우선시하는 중간 캐시가 있을 수 있음)
+  // 명시적으로 캐시를 막습니다.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

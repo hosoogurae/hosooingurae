@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import type { ContactRequest } from "../data/contactRequests";
 import { AdminLogoutButton } from "./AdminLogoutButton";
 import { AdminInstallPwaButton } from "./AdminInstallPwaButton";
+import { AdminPushToggleButton } from "./AdminPushToggleButton";
 
 const NAV_ITEMS = [
   { label: "대시보드", href: "/admin" },
@@ -93,6 +94,7 @@ export function AdminNav() {
           홈페이지 보기
         </a>
         <div className="ml-auto flex items-center gap-2">
+          <AdminPushToggleButton />
           <AdminInstallPwaButton />
           <AdminLogoutButton />
         </div>

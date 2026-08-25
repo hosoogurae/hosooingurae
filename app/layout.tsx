@@ -72,9 +72,20 @@ export default async function RootLayout({
         <Script id="pwa-sw-register" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {
-              window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js');
-              });
+              var registerSw = function () {
+                navigator.serviceWorker.register('/sw.js', {
+                  scope: '/',
+                  updateViaCache: 'none',
+                });
+              };
+              // afterInteractive 스크립트는 이미 window의 load 이벤트가 지나간
+              // 뒤에 실행되는 경우가 많아서, 'load' 리스너만 걸면 서비스워커가
+              // 영영 등록되지 않을 수 있습니다. readyState를 먼저 확인합니다.
+              if (document.readyState === 'complete') {
+                registerSw();
+              } else {
+                window.addEventListener('load', registerSw);
+              }
             }
           `}
         </Script>

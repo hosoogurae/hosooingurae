@@ -14,3 +14,45 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   event.respondWith(fetch(event.request));
 });
+
+// 관리자 새 문의 알림. payload는 app/lib/push.ts가 { title, body, url } 모양으로 보냅니다.
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    return;
+  }
+
+  const targetUrl = payload.url || "/admin/contacts";
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "새 알림", {
+      body: payload.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: targetUrl },
+    }),
+  );
+});
+
+// 이미 열려 있는 문의함 탭이 있으면 포커스만 하고, 없으면 새로 엽니다.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "/admin/contacts";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if (new URL(client.url).pathname === targetUrl && "focus" in client) {
+            return client.focus();
+          }
+        }
+        return self.clients.openWindow(targetUrl);
+      }),
+  );
+});
