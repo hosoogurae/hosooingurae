@@ -3,6 +3,9 @@ import type {
   ContactRequestInput,
   ContactRequestStatus,
 } from "../data/contactRequests";
+import { formatComplexAndBuilding } from "./listingInquiry";
+import { getListingById } from "./listings";
+import { sendNewContactPush } from "./push";
 import { getSupabaseAdminClient } from "./supabase/client";
 import type { ContactRequestRow } from "./supabase/database.types";
 
@@ -50,7 +53,22 @@ export async function createContactRequest(
     return { error: "저장에 실패했습니다." };
   }
 
-  return { contactRequest: rowToContactRequest(data) };
+  const contactRequest = rowToContactRequest(data);
+
+  // 발송 실패가 문의 저장(손님 응답) 자체를 막지 않도록 감싸서 로그만 남깁니다.
+  try {
+    const listing = await getListingById(contactRequest.listingId, {
+      includeDrafts: true,
+    });
+    const listingLabel = listing
+      ? formatComplexAndBuilding(listing.complex.name, listing.building)
+      : "매물 정보 확인 필요";
+    await sendNewContactPush(contactRequest.name, listingLabel);
+  } catch (pushError) {
+    console.error("[contactRequests] 새 문의 알림 발송 실패", pushError);
+  }
+
+  return { contactRequest };
 }
 
 /** 관리자 문의함(/admin/contacts) 전용. 최신 접수가 먼저 보이도록 정렬합니다. */

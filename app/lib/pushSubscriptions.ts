@@ -89,3 +89,24 @@ export async function getAllSubscriptions(): Promise<StoredPushSubscription[]> {
 
   return data.map(rowToStoredSubscription);
 }
+
+/** "테스트 알림 보내기" 버튼이 현재 기기 하나만 조회할 때 사용합니다. */
+export async function getSubscriptionByEndpoint(
+  endpoint: string,
+): Promise<StoredPushSubscription | undefined> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return undefined;
+
+  const { data, error } = await supabase
+    .from("push_subscriptions")
+    .select("*")
+    .eq("endpoint", endpoint)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.error("[pushSubscriptions] 단건 조회 실패", error);
+    return undefined;
+  }
+
+  return rowToStoredSubscription(data);
+}

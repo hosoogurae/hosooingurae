@@ -18,6 +18,9 @@ type PushUiState =
  */
 export function AdminPushToggleButton() {
   const [state, setState] = useState<PushUiState>("checking");
+  const [testStatus, setTestStatus] = useState<"idle" | "sending" | "sent">(
+    "idle",
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +117,40 @@ export function AdminPushToggleButton() {
     }
   }
 
+  /** 실제 문의를 만들지 않고 설정이 제대로 됐는지 이 기기로만 확인합니다. */
+  async function handleSendTest() {
+    setTestStatus("sending");
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        alert("먼저 알림을 켜주세요.");
+        setTestStatus("idle");
+        return;
+      }
+
+      const response = await fetch("/api/admin/push-subscriptions/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.errors?.[0] ?? "테스트 알림 전송에 실패했습니다.");
+        setTestStatus("idle");
+        return;
+      }
+
+      setTestStatus("sent");
+      setTimeout(() => setTestStatus("idle"), 2000);
+    } catch (err) {
+      console.error("[push] 테스트 발송 실패", err);
+      alert("테스트 알림 전송에 실패했습니다.");
+      setTestStatus("idle");
+    }
+  }
+
   if (state === "unsupported" || state === "checking") return null;
 
   if (state === "denied") {
@@ -130,13 +167,29 @@ export function AdminPushToggleButton() {
   const isSubscribed = state === "subscribed";
 
   return (
-    <button
-      type="button"
-      onClick={isSubscribed ? handleDisable : handleEnable}
-      disabled={state === "busy"}
-      className="rounded-md px-3 py-2 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
-    >
-      {isSubscribed ? "이 기기 알림 끄기" : "이 기기에서 알림 받기"}
-    </button>
+    <>
+      {isSubscribed && (
+        <button
+          type="button"
+          onClick={handleSendTest}
+          disabled={testStatus === "sending"}
+          className="rounded-md px-3 py-2 text-xs font-bold text-navy-800/70 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+        >
+          {testStatus === "sent"
+            ? "전송됨"
+            : testStatus === "sending"
+              ? "보내는 중..."
+              : "테스트 알림 보내기"}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={isSubscribed ? handleDisable : handleEnable}
+        disabled={state === "busy"}
+        className="rounded-md px-3 py-2 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+      >
+        {isSubscribed ? "이 기기 알림 끄기" : "이 기기에서 알림 받기"}
+      </button>
+    </>
   );
 }
