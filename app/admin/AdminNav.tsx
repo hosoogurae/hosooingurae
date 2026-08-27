@@ -11,6 +11,7 @@ import { AdminPushToggleButton } from "./AdminPushToggleButton";
 const NAV_ITEMS = [
   { label: "대시보드", href: "/admin" },
   { label: "문의함", href: "/admin/contacts" },
+  { label: "문자양식", href: "/admin/sms-templates" },
   { label: "상담 도우미", href: "/admin/consult-helper" },
   { label: "매물 접수", href: "/admin/listing-submissions" },
   { label: "매물 등록", href: "/admin/listings/new" },

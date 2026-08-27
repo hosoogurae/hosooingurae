@@ -243,6 +243,20 @@ export default function AdminContactsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
+                        <Link
+                          href={{
+                            pathname: "/admin/sms-compose",
+                            query: {
+                              phone: request.phone,
+                              contactRequestId: request.id,
+                              contactStatus: request.status,
+                              ...(listing ? { listingId: listing.id } : {}),
+                            },
+                          }}
+                          className="rounded-full border border-gold-500 px-3 py-1 text-xs font-bold text-gold-600 transition-colors hover:bg-gold-500/10"
+                        >
+                          문자 보내기
+                        </Link>
                         {STATUS_ORDER.map((status) => (
                           <button
                             key={status}
