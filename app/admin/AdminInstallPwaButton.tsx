@@ -37,7 +37,7 @@ export function AdminInstallPwaButton() {
     <button
       type="button"
       onClick={handleInstallClick}
-      className="rounded-md px-3 py-2 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5 sm:text-base"
+      className="flex min-h-[44px] items-center rounded-md px-3 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5"
     >
       홈 화면에 설치
     </button>

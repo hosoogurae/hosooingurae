@@ -9,9 +9,7 @@ import {
   COMPANY_NAME,
   PHONE_NUMBER,
 } from "./data/contact";
-import Header from "./components/Header";
-import Footer from "./components/Footer";
-import FloatingCallButton from "./components/FloatingCallButton";
+import { SiteChrome } from "./components/SiteChrome";
 import CompareBar from "./components/CompareBar";
 import { getApartmentComplexOptions } from "./lib/listings";
 
@@ -64,10 +62,7 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-        <Header apartmentComplexes={apartmentComplexes} />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <FloatingCallButton />
+        <SiteChrome apartmentComplexes={apartmentComplexes}>{children}</SiteChrome>
         <CompareBar />
         <Script id="pwa-sw-register" strategy="afterInteractive">
           {`

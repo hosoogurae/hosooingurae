@@ -156,10 +156,10 @@ export function AdminPushToggleButton() {
   if (state === "denied") {
     return (
       <span
-        className="rounded-md px-3 py-2 text-xs font-semibold text-red-600 sm:text-sm"
+        className="flex min-h-[44px] items-center rounded-md px-3 text-xs font-semibold text-red-600"
         title="브라우저 주소창 왼쪽 자물쇠 아이콘 > 사이트 설정에서 알림을 허용으로 바꾼 뒤 새로고침해 주세요."
       >
-        알림 차단됨 · 브라우저 설정에서 허용해 주세요
+        알림 차단됨
       </span>
     );
   }
@@ -173,22 +173,22 @@ export function AdminPushToggleButton() {
           type="button"
           onClick={handleSendTest}
           disabled={testStatus === "sending"}
-          className="rounded-md px-3 py-2 text-xs font-bold text-navy-800/70 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+          className="flex min-h-[44px] items-center rounded-md px-3 text-xs font-bold text-navy-800/70 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {testStatus === "sent"
             ? "전송됨"
             : testStatus === "sending"
               ? "보내는 중..."
-              : "테스트 알림 보내기"}
+              : "테스트 알림"}
         </button>
       )}
       <button
         type="button"
         onClick={isSubscribed ? handleDisable : handleEnable}
         disabled={state === "busy"}
-        className="rounded-md px-3 py-2 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+        className="flex min-h-[44px] items-center rounded-md px-3 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isSubscribed ? "이 기기 알림 끄기" : "이 기기에서 알림 받기"}
+        {isSubscribed ? "알림 끄기" : "알림 받기"}
       </button>
     </>
   );
