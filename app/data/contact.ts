@@ -10,7 +10,9 @@ export const ADDRESS_LINES = [
   "경기도 김포시 김포한강5로 385, 상가동 108호",
   "(구래동, 호수마을자연앤이편한세상아파트)",
 ];
-export const BUSINESS_HOURS = "매일 오전 10:00 ~ 오후 8:00";
+export const BUSINESS_HOURS = "월~토 10:00 ~ 18:00";
+/** 정기 휴무. 협회 지정 휴무일(app/lib/holiday.ts)과는 별개로 매주 고정입니다. */
+export const WEEKLY_CLOSED_LABEL = "매주 일요일";
 export const NAVER_MAP_URL = "https://naver.me/5DDixBuS";
 /** 개인정보처리방침(app/privacy)의 개인정보 보호책임자 이메일. */
 export const PRIVACY_OFFICER_EMAIL = "bskimbt@naver.com";
