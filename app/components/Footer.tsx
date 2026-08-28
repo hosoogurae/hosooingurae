@@ -1,28 +1,42 @@
 import Link from "next/link";
 import { BUSINESS_HOURS, COMPANY_NAME, NAVER_MAP_URL, WEEKLY_CLOSED_LABEL } from "../data/contact";
-import type { UpcomingHolidays } from "../lib/holiday";
+import { SIGNAGE_PHOTO } from "../data/media";
+import { ASSOCIATION_HOLIDAY_CONTEXT_LABEL, type UpcomingHolidays } from "../lib/holiday";
 import BrokerageInfo from "./BrokerageInfo";
 import { LocationIcon } from "./icons";
 
 export default function Footer({ holidayInfo }: { holidayInfo: UpcomingHolidays }) {
-  const holidayText = holidayInfo.thisMonth
-    ? `${WEEKLY_CLOSED_LABEL} · ${holidayInfo.thisMonth.label} · 다음 ${holidayInfo.next.label}`
-    : `${WEEKLY_CLOSED_LABEL} · ${holidayInfo.next.label}`;
+  const holidayDateLine = holidayInfo.thisMonth
+    ? `${holidayInfo.thisMonth.label} · 다음 ${holidayInfo.next.label} · ${ASSOCIATION_HOLIDAY_CONTEXT_LABEL}`
+    : `${holidayInfo.next.label} · ${ASSOCIATION_HOLIDAY_CONTEXT_LABEL}`;
 
   return (
     <footer className="border-t border-navy-900/10 bg-white px-6 py-12">
       <div className="mx-auto max-w-6xl">
         <BrokerageInfo
           headerExtra={
-            <a
-              href={NAVER_MAP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 px-5 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:border-gold-500 hover:bg-gold-500/10"
-            >
-              <LocationIcon className="h-4 w-4 text-gold-600" />
-              네이버지도로 보기
-            </a>
+            <div className="flex flex-col items-end gap-2">
+              {SIGNAGE_PHOTO && (
+                <div className="flex flex-col items-center gap-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={SIGNAGE_PHOTO}
+                    alt="호수공인중개사사무소 간판"
+                    className="h-16 w-16 rounded-lg object-cover ring-1 ring-navy-900/10"
+                  />
+                  <p className="text-[11px] text-navy-800/50">이 간판을 찾으세요</p>
+                </div>
+              )}
+              <a
+                href={NAVER_MAP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 px-5 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:border-gold-500 hover:bg-gold-500/10"
+              >
+                <LocationIcon className="h-4 w-4 text-gold-600" />
+                네이버지도로 보기
+              </a>
+            </div>
           }
         >
           <div className="mt-4 flex flex-col gap-1 text-sm text-navy-800/70">
@@ -36,7 +50,11 @@ export default function Footer({ holidayInfo }: { holidayInfo: UpcomingHolidays 
               <span className="w-20 shrink-0 whitespace-nowrap font-semibold text-navy-800/50">
                 휴무
               </span>
-              <span>{holidayText}</span>
+              <span>
+                {WEEKLY_CLOSED_LABEL}
+                <br />
+                {holidayDateLine}
+              </span>
             </p>
           </div>
         </BrokerageInfo>

@@ -1,5 +1,12 @@
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
+/**
+ * 협회 지정 휴무일 옆에 붙이는 맥락 표현. 규칙("3주차 월요일" 등)을
+ * 그대로 설명하면 손님이 더 헷갈리므로, "동네 부동산 공동 휴무"라는
+ * 성격만 알려줍니다.
+ */
+export const ASSOCIATION_HOLIDAY_CONTEXT_LABEL = "구래동 부동산 공동 휴무";
+
 export interface HolidayDate {
   year: number;
   month: number;
