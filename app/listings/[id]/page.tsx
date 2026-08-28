@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -19,11 +18,13 @@ import {
   MapPin,
   Percent,
   Ruler,
+  Tag,
   TrainFront,
   Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import BrokerageInfo from "../../components/BrokerageInfo";
 import ContactActions from "../../components/ContactActions";
 import FloorPlanImage from "../../components/FloorPlanImage";
 import { getComplexImages } from "../../lib/complexImages";
@@ -39,6 +40,7 @@ import {
   formatParking,
   formatRooms,
 } from "../../lib/format/listingFields";
+import { buildAbsoluteUrl } from "../../lib/requestUrl";
 import { getUnitTypeImages } from "../../lib/unitTypeImages";
 import {
   BUILDING_UNKNOWN_LABEL,
@@ -118,8 +120,9 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const transportation = complex.transportation.subway
     ? `${complex.transportation.subway} ${complex.transportation.subwayDistance ?? ""}`.trim()
     : "-";
+  // 주소는 "매물 핵심정보"에서 항상 보여주므로 여기서는 판정에서 뺍니다
+  // (그래야 이 섹션이 정말 "그 외 단지정보"가 있을 때만 나타납니다).
   const hasComplexInfo =
-    Boolean(complex.address) ||
     Boolean(complex.transportation.subway) ||
     complex.nearbySchools.length > 0 ||
     complex.parkingCount !== undefined ||
@@ -152,10 +155,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const heroImage = resolveListingHeroImage(listing);
   const hasHeroVisual = Boolean(heroImage || floorPlanImages[0] || complexImages[0]);
 
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("host");
-  const protocol = host?.startsWith("localhost") ? "http" : "https";
-  const pageUrl = host ? `${protocol}://${host}/listings/${listing.id}` : undefined;
+  const pageUrl = await buildAbsoluteUrl(`/listings/${listing.id}`);
 
   const inquiryMessage = buildInquiryMessage({
     complexName: complex.name,
@@ -298,6 +298,16 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           <h2 className="text-lg font-bold text-navy-950">매물 핵심정보</h2>
           <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 text-sm sm:grid-cols-4">
             <InfoItem
+              icon={MapPin}
+              label="소재지"
+              value={complex.address || "주소 확인 필요"}
+            />
+            <InfoItem
+              icon={Tag}
+              label="매물종류"
+              value={listing.propertyType}
+            />
+            <InfoItem
               icon={Building2}
               label="동"
               value={listing.building || BUILDING_UNKNOWN_LABEL}
@@ -426,9 +436,6 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           {hasComplexInfo ? (
             <>
               <dl className="mt-6 grid gap-x-6 gap-y-6 text-sm sm:grid-cols-2">
-                {complex.address && (
-                  <InfoItem icon={MapPin} label="주소" value={complex.address} />
-                )}
                 {complex.transportation.subway && (
                   <InfoItem icon={TrainFront} label="교통" value={transportation} />
                 )}
@@ -519,6 +526,13 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               등록된 단지정보가 없습니다.
             </div>
           )}
+        </div>
+
+        <div className="mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8">
+          <h2 className="text-lg font-bold text-navy-950">중개사무소 정보</h2>
+          <div className="mt-6">
+            <BrokerageInfo />
+          </div>
         </div>
 
         <div className="mt-8 rounded-xl bg-navy-900/[0.03] p-6 text-xs leading-relaxed text-navy-800/60 sm:p-8">

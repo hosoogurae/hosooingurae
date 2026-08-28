@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { COMPANY_NAME } from "../data/contact";
+import {
+  CEO_NAME,
+  COMPANY_NAME,
+  PHONE_NUMBER,
+  PRIVACY_OFFICER_EMAIL,
+} from "../data/contact";
 
 export const metadata: Metadata = {
   title: `개인정보처리방침 | ${COMPANY_NAME}`,
@@ -59,24 +64,27 @@ export default function PrivacyPolicyPage() {
 
       <Section title="3. 개인정보의 보유 및 이용 기간">
         <p>
-          [보유기간 — 예: 수집일로부터 O개월/O년]. 보유기간 경과, 처리
-          목적 달성 등 개인정보가 불필요하게 되었을 때는 지체 없이
-          파기합니다.
+          문의 처리 후 6개월. 보유기간 경과, 처리 목적 달성 등 개인정보가
+          불필요하게 되었을 때는 지체 없이 파기합니다.
         </p>
       </Section>
 
       <Section title="4. 개인정보의 제3자 제공">
         <p>
-          회사는 원칙적으로 손님의 개인정보를 제1항의 목적 범위를 초과하여
-          이용하거나 외부에 제공하지 않습니다. [제3자 제공이 있는 경우 그
-          내용을 기재 — 없으면 「해당 없음」]
+          회사는 손님의 개인정보를 제1항의 목적 범위를 초과하여 이용하거나
+          외부 제3자에게 제공하지 않습니다.
         </p>
       </Section>
 
       <Section title="5. 개인정보처리 위탁">
-        <p>
-          [처리위탁 여부 및 수탁자·위탁업무 내용 기재 — 없으면 「해당 없음」]
-        </p>
+        <p>회사는 아래와 같이 개인정보 처리업무를 위탁하고 있습니다.</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>수탁자: Vercel Inc. — 위탁업무: 웹사이트 호스팅 및 배포</li>
+          <li>
+            수탁자: Supabase, Inc. — 위탁업무: 데이터베이스 저장·관리
+            (문의자 이름·연락처 등 개인정보 보관)
+          </li>
+        </ul>
       </Section>
 
       <Section title="6. 정보주체의 권리·의무 및 행사 방법">
@@ -90,17 +98,17 @@ export default function PrivacyPolicyPage() {
 
       <Section title="7. 개인정보 보호책임자">
         <ul className="list-disc space-y-1 pl-5">
-          <li>성명: [보호책임자 성명]</li>
-          <li>연락처: [보호책임자 전화번호]</li>
-          <li>이메일: [보호책임자 이메일]</li>
+          <li>성명: {CEO_NAME}</li>
+          <li>연락처: {PHONE_NUMBER}</li>
+          <li>이메일: {PRIVACY_OFFICER_EMAIL}</li>
         </ul>
       </Section>
 
       <Section title="8. 개인정보처리방침의 변경">
         <p>
-          이 개인정보처리방침은 [시행일자]부터 적용됩니다. 법령·정책 또는
-          보안기술의 변경에 따라 내용의 추가·삭제 및 수정이 있을 시에는
-          변경사항의 시행 전에 공지하겠습니다.
+          이 개인정보처리방침은 2026년 8월 28일부터 적용됩니다. 법령·정책
+          또는 보안기술의 변경에 따라 내용의 추가·삭제 및 수정이 있을
+          시에는 변경사항의 시행 전에 공지하겠습니다.
         </p>
       </Section>
     </section>

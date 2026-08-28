@@ -1,31 +1,7 @@
 import Link from "next/link";
-import {
-  ADDRESS_LINES,
-  BUSINESS_HOURS,
-  BUSINESS_REG_NUMBER,
-  CEO_NAME,
-  COMPANY_NAME,
-  NAVER_MAP_URL,
-  PHONE_HREF,
-  PHONE_NUMBER,
-} from "../data/contact";
-import { LocationIcon, PhoneIcon } from "./icons";
-
-const INFO_ROWS = [
-  { label: "대표자", value: CEO_NAME },
-  { label: "사업자등록번호", value: BUSINESS_REG_NUMBER },
-  {
-    label: "주소",
-    value: (
-      <>
-        {ADDRESS_LINES[0]}
-        <br />
-        {ADDRESS_LINES[1]}
-      </>
-    ),
-  },
-  { label: "영업시간", value: BUSINESS_HOURS },
-];
+import { BUSINESS_HOURS, COMPANY_NAME, NAVER_MAP_URL } from "../data/contact";
+import BrokerageInfo from "./BrokerageInfo";
+import { LocationIcon } from "./icons";
 
 export default function Footer() {
   return (
@@ -34,30 +10,16 @@ export default function Footer() {
         <div>
           <p className="text-lg font-bold text-navy-900">{COMPANY_NAME}</p>
 
-          <dl className="mt-4 grid gap-2 text-sm text-navy-800/70 sm:grid-cols-2 sm:gap-x-8 lg:grid-cols-1">
-            {INFO_ROWS.map((row) => (
-              <div key={row.label} className="flex gap-2">
-                <dt className="w-28 shrink-0 whitespace-nowrap font-semibold text-navy-800/50">
-                  {row.label}
-                </dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <dt className="w-28 shrink-0 whitespace-nowrap font-semibold text-navy-800/50">
-                전화
-              </dt>
-              <dd>
-                <a
-                  href={PHONE_HREF}
-                  className="inline-flex items-center gap-1 font-semibold text-navy-900 hover:text-gold-600"
-                >
-                  <PhoneIcon className="h-3.5 w-3.5 text-gold-600" />
-                  {PHONE_NUMBER}
-                </a>
-              </dd>
-            </div>
-          </dl>
+          <div className="mt-4">
+            <BrokerageInfo />
+          </div>
+
+          <p className="mt-3 flex gap-2 text-sm text-navy-800/70">
+            <span className="w-32 shrink-0 whitespace-nowrap font-semibold text-navy-800/50">
+              영업시간
+            </span>
+            <span>{BUSINESS_HOURS}</span>
+          </p>
         </div>
 
         <div className="flex flex-col items-start gap-4 lg:items-end">
@@ -77,18 +39,12 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="mx-auto mt-6 flex max-w-6xl items-center justify-center gap-1 md:justify-end">
+      <div className="mx-auto mt-6 flex max-w-6xl items-center justify-center md:justify-end">
         <Link
           href="/privacy"
           className="inline-flex min-h-[44px] items-center justify-center px-4 text-[11px] text-navy-800/30 transition-colors hover:text-navy-800/50 md:inline-block md:min-h-0 md:px-2 md:py-3"
         >
           개인정보처리방침
-        </Link>
-        <Link
-          href="/admin"
-          className="inline-flex min-h-[44px] items-center justify-center px-4 text-[11px] text-navy-800/30 transition-colors hover:text-navy-800/50 md:inline-block md:min-h-0 md:px-2 md:py-3"
-        >
-          관리자
         </Link>
       </div>
     </footer>
