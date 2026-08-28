@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { BUSINESS_HOURS, COMPANY_NAME, NAVER_MAP_URL } from "../data/contact";
+import type { UpcomingHolidays } from "../lib/holiday";
 import BrokerageInfo from "./BrokerageInfo";
 import { LocationIcon } from "./icons";
 
-export default function Footer() {
+export default function Footer({ holidayInfo }: { holidayInfo: UpcomingHolidays }) {
+  const holidayText = holidayInfo.thisMonth
+    ? `휴무 ${holidayInfo.thisMonth.label} · 다음 ${holidayInfo.next.label}`
+    : `휴무 ${holidayInfo.next.label}`;
+
   return (
     <footer className="border-t border-navy-900/10 bg-white px-6 py-12">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
@@ -20,6 +25,7 @@ export default function Footer() {
             </span>
             <span>{BUSINESS_HOURS}</span>
           </p>
+          <p className="mt-1 text-sm text-navy-800/70">{holidayText}</p>
         </div>
 
         <div className="flex flex-col items-start gap-4 lg:items-end">

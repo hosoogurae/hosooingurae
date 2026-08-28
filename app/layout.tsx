@@ -12,6 +12,7 @@ import {
 import { SiteChrome } from "./components/SiteChrome";
 import CompareBar from "./components/CompareBar";
 import { getApartmentComplexOptions } from "./lib/listings";
+import { getSeoulToday, getUpcomingHolidays } from "./lib/holiday";
 
 const notoSansKr = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -54,6 +55,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const apartmentComplexes = await getApartmentComplexOptions();
+  // 휴무일은 매 요청마다 Asia/Seoul 기준 "오늘"로 새로 계산합니다(레이아웃이
+  // 이미 force-dynamic이라 매 요청 재렌더링됨). SiteChrome은 클라이언트
+  // 컴포넌트라 그 안에서 new Date()를 부르면 서버/클라이언트 계산이 어긋나
+  // 하이드레이션 불일치가 날 수 있어, 계산은 여기(서버 컴포넌트)에서 한 번만
+  // 하고 결과값만 prop으로 내려줍니다.
+  const holidayInfo = getUpcomingHolidays(getSeoulToday());
 
   return (
     <html lang="ko" className={`${notoSansKr.variable} h-full antialiased`}>
@@ -62,7 +69,9 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-        <SiteChrome apartmentComplexes={apartmentComplexes}>{children}</SiteChrome>
+        <SiteChrome apartmentComplexes={apartmentComplexes} holidayInfo={holidayInfo}>
+          {children}
+        </SiteChrome>
         <CompareBar />
         <Script id="pwa-sw-register" strategy="afterInteractive">
           {`

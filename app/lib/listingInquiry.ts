@@ -99,6 +99,19 @@ export function buildCompareInquiryMessage(params: {
   return lines.join("\n");
 }
 
+/**
+ * 휴무일 배너의 "문자 문의" 버튼에 씁니다. 특정 매물이 아니라 휴무 안내에
+ * 대한 일반 문의라 매물 정보 없이 간단한 문구만 담습니다.
+ */
+export function buildHolidayInquiryMessage(dateLabel: string): string {
+  return [
+    "[휴무일 문의]",
+    "",
+    `${dateLabel} 사무실 휴무일에 문의드립니다.`,
+    "다음 영업일에 연락 부탁드립니다.",
+  ].join("\n");
+}
+
 function isIOS(): boolean {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent);
 }

@@ -2,9 +2,11 @@
 
 import { usePathname } from "next/navigation";
 import type { ApartmentComplexOption } from "../lib/listings";
+import type { UpcomingHolidays } from "../lib/holiday";
 import Header from "./Header";
 import Footer from "./Footer";
 import FloatingCallButton from "./FloatingCallButton";
+import HolidayBanner from "./HolidayBanner";
 
 /**
  * 관리자(/admin) 영역은 손님용 헤더/푸터/플로팅 전화버튼을 쓰지 않습니다 —
@@ -16,9 +18,11 @@ import FloatingCallButton from "./FloatingCallButton";
  */
 export function SiteChrome({
   apartmentComplexes,
+  holidayInfo,
   children,
 }: {
   apartmentComplexes: ApartmentComplexOption[];
+  holidayInfo: UpcomingHolidays;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -30,9 +34,10 @@ export function SiteChrome({
 
   return (
     <>
+      <HolidayBanner holidayInfo={holidayInfo} />
       <Header apartmentComplexes={apartmentComplexes} />
       <main className="flex-1">{children}</main>
-      <Footer />
+      <Footer holidayInfo={holidayInfo} />
       <FloatingCallButton />
     </>
   );
