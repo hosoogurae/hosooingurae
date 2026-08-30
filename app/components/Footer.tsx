@@ -1,6 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import { BUSINESS_HOURS, COMPANY_NAME, NAVER_MAP_URL, WEEKLY_CLOSED_LABEL } from "../data/contact";
-import { SIGNAGE_PHOTO } from "../data/media";
+import { OFFICE_PHOTO } from "../data/media";
 import { ASSOCIATION_HOLIDAY_CONTEXT_LABEL, type UpcomingHolidays } from "../lib/holiday";
 import BrokerageInfo from "./BrokerageInfo";
 import { LocationIcon } from "./icons";
@@ -16,14 +17,17 @@ export default function Footer({ holidayInfo }: { holidayInfo: UpcomingHolidays 
         <BrokerageInfo
           headerExtra={
             <div className="flex flex-col items-end gap-2">
-              {SIGNAGE_PHOTO && (
+              {OFFICE_PHOTO && (
                 <div className="flex flex-col items-center gap-1">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={SIGNAGE_PHOTO}
-                    alt="호수공인중개사사무소 간판"
-                    className="h-16 w-16 rounded-lg object-cover ring-1 ring-navy-900/10"
-                  />
+                  <div className="relative h-16 w-16 overflow-hidden rounded-lg ring-1 ring-navy-900/10">
+                    <Image
+                      src={OFFICE_PHOTO}
+                      alt="호수공인중개사사무소 외관"
+                      fill
+                      sizes="4rem"
+                      className="object-cover"
+                    />
+                  </div>
                   <p className="text-[11px] text-navy-800/50">이 간판을 찾으세요</p>
                 </div>
               )}

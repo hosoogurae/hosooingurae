@@ -1,4 +1,5 @@
-import { CEO_PHOTO, OFFICE_INTERIOR_PHOTO } from "../data/media";
+import Image from "next/image";
+import { CEO_PHOTO, OFFICE_INTERIOR_PHOTO, OFFICE_PHOTO } from "../data/media";
 
 const VALUES = [
   {
@@ -19,30 +20,53 @@ const VALUES = [
 ];
 
 /**
- * 사무실 내부·대표 사진 영역. 아직 사진이 없으면(환경변수 미설정) 통째로
- * 숨깁니다 — 빈 회색 박스는 미완성처럼 보이므로 자리만 차지하게 두지
- * 않습니다.
+ * 사무실 외관 사진(크게) + 내부·대표 사진(있으면 그 아래 작게). 사진이
+ * 없으면 해당 부분을 통째로 숨깁니다 — 빈 회색 박스는 미완성처럼 보이므로
+ * 자리만 차지하게 두지 않습니다. public/에 파일을 넣고
+ * app/data/media.ts의 경로만 채우면 자동으로 나타납니다.
  */
 function AboutPhotos() {
-  if (!OFFICE_INTERIOR_PHOTO && !CEO_PHOTO) return null;
+  const hasSecondaryPhotos = Boolean(OFFICE_INTERIOR_PHOTO || CEO_PHOTO);
+  if (!OFFICE_PHOTO && !hasSecondaryPhotos) return null;
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 lg:mb-0 lg:w-40 lg:shrink-0 lg:grid-cols-1">
-      {OFFICE_INTERIOR_PHOTO && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={OFFICE_INTERIOR_PHOTO}
-          alt="호수공인중개사사무소 사무실 내부"
-          className="aspect-square w-full rounded-lg object-cover ring-1 ring-navy-900/10"
-        />
+    <div className="mb-6 lg:mb-0 lg:w-64 lg:shrink-0">
+      {OFFICE_PHOTO && (
+        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl ring-1 ring-navy-900/10">
+          <Image
+            src={OFFICE_PHOTO}
+            alt="호수공인중개사사무소 외관"
+            fill
+            sizes="(min-width: 1024px) 16rem, 100vw"
+            className="object-cover"
+          />
+        </div>
       )}
-      {CEO_PHOTO && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={CEO_PHOTO}
-          alt="호수공인중개사사무소 대표 김병수"
-          className="aspect-square w-full rounded-lg object-cover ring-1 ring-navy-900/10"
-        />
+      {hasSecondaryPhotos && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {OFFICE_INTERIOR_PHOTO && (
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg ring-1 ring-navy-900/10">
+              <Image
+                src={OFFICE_INTERIOR_PHOTO}
+                alt="호수공인중개사사무소 사무실 내부"
+                fill
+                sizes="(min-width: 1024px) 8rem, 50vw"
+                className="object-cover"
+              />
+            </div>
+          )}
+          {CEO_PHOTO && (
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg ring-1 ring-navy-900/10">
+              <Image
+                src={CEO_PHOTO}
+                alt="호수공인중개사사무소 대표 김병수"
+                fill
+                sizes="(min-width: 1024px) 8rem, 50vw"
+                className="object-cover"
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
