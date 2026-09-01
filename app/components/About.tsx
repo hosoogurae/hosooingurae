@@ -20,17 +20,16 @@ const VALUES = [
 ];
 
 /**
- * 사무실 외관 사진(오른쪽 글 칼럼과 같은 높이) + 내부·대표 사진(있으면
+ * 사무실 외관 사진(원본 비율 그대로, 자르지 않음) + 내부·대표 사진(있으면
  * 그 아래 작게). 사진이 없으면 해당 부분을 통째로 숨깁니다 — 빈 회색
  * 박스는 미완성처럼 보이므로 자리만 차지하게 두지 않습니다. public/에
  * 파일을 넣고 app/data/media.ts의 경로만 채우면 자동으로 나타납니다.
  *
- * aspect-[4/3]가 이 칼럼의 "선호 높이"를 그리드 트랙 계산에 반영합니다.
- * 글 칼럼이 이보다 짧으면(보통 이 경우) 4:3 높이가 행 높이가 되어 글이
- * 세로 중앙 정렬될 여백이 생기고, 글이 더 길면 그리드 기본 정렬(stretch)
- * 로 사진이 그 높이까지 늘어나 결국 두 칼럼은 항상 같은 높이가 됩니다.
- * object-top으로 잘라내는 기준을 위쪽에 둬 간판이 있는 상단이 잘리지
- * 않게 합니다.
+ * office.jpg의 실제 픽셀 크기(1383×1137)를 그대로 넘겨 next/image가
+ * 원본 비율을 유지한 채(자르지 않고) w-full h-auto로 반응형 표시하게
+ * 합니다. fill+object-cover는 오른쪽 세로 간판이 잘려 나가는 문제가
+ * 있어 쓰지 않습니다 — 사진이 글 칼럼보다 짧아 아래에 여백이 생기는
+ * 쪽을 택합니다.
  */
 function AboutPhoto() {
   const hasSecondaryPhotos = Boolean(OFFICE_INTERIOR_PHOTO || CEO_PHOTO);
@@ -39,13 +38,14 @@ function AboutPhoto() {
   return (
     <div>
       {OFFICE_PHOTO && (
-        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl ring-1 ring-navy-900/10">
+        <div className="overflow-hidden rounded-xl ring-1 ring-navy-900/10">
           <Image
             src={OFFICE_PHOTO}
             alt="호수공인중개사사무소 외관"
-            fill
+            width={1383}
+            height={1137}
             sizes="(min-width: 1024px) 50vw, 100vw"
-            className="object-cover object-top"
+            className="h-auto w-full"
           />
         </div>
       )}
