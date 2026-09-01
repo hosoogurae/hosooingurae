@@ -28,6 +28,10 @@ interface ComplexFormValues {
   maxFloor: string;
   floorAreaRatio: string;
   buildingCoverageRatio: string;
+  managementOfficePhone: string;
+  managementFeeWon: string;
+  managementFeeRaw: string;
+  managementFeeAsOf: string;
   features: string;
   subway: string;
   subwayDistance: string;
@@ -63,6 +67,11 @@ function toFormValues(complex?: Complex | null): ComplexFormValues {
       complex?.buildingCoverageRatio !== undefined
         ? String(complex.buildingCoverageRatio)
         : "",
+    managementOfficePhone: complex?.managementOfficePhone ?? "",
+    managementFeeWon:
+      complex?.managementFeeWon !== undefined ? String(complex.managementFeeWon) : "",
+    managementFeeRaw: complex?.managementFeeRaw ?? "",
+    managementFeeAsOf: complex?.managementFeeAsOf ?? "",
     features: complex?.features?.join(", ") ?? "",
     subway: complex?.transportation.subway ?? "",
     subwayDistance: complex?.transportation.subwayDistance ?? "",
@@ -115,6 +124,24 @@ function mergeParsedComplex(
       parsed.buildingCoverageRatio !== undefined
         ? String(parsed.buildingCoverageRatio)
         : prev.buildingCoverageRatio,
+    managementOfficePhone:
+      parsed.managementOfficePhone ?? prev.managementOfficePhone,
+    managementFeeRaw: parsed.managementFeeRaw ?? prev.managementFeeRaw,
+    managementFeeWon:
+      parsed.managementFeeRaw !== undefined
+        ? parsed.managementFeeWon === null || parsed.managementFeeWon === undefined
+          ? ""
+          : String(parsed.managementFeeWon)
+        : prev.managementFeeWon,
+    managementFeeAsOf: parsed.managementFeeAsOf ?? prev.managementFeeAsOf,
+    nearbySchools: parsed.nearbySchools?.join(", ") ?? prev.nearbySchools,
+    subway: parsed.subway ?? prev.subway,
+    subwayDistance: parsed.subwayDistance ?? prev.subwayDistance,
+    subwayWalkMinutes:
+      parsed.subwayWalkMinutes !== undefined
+        ? String(parsed.subwayWalkMinutes)
+        : prev.subwayWalkMinutes,
+    buses: parsed.buses?.join(", ") ?? prev.buses,
   };
 }
 
@@ -148,6 +175,7 @@ function toFieldsInput(
     ["floorAreaRatio", "용적률"],
     ["buildingCoverageRatio", "건폐율"],
     ["subwayWalkMinutes", "지하철 도보시간"],
+    ["managementFeeWon", "관리비"],
   ];
 
   for (const [key, label] of numberFields) {
@@ -183,6 +211,10 @@ function toFieldsInput(
       maxFloor: numeric.maxFloor,
       floorAreaRatio: numeric.floorAreaRatio,
       buildingCoverageRatio: numeric.buildingCoverageRatio,
+      managementOfficePhone: values.managementOfficePhone.trim() || null,
+      managementFeeWon: numeric.managementFeeWon,
+      managementFeeRaw: values.managementFeeRaw.trim() || null,
+      managementFeeAsOf: values.managementFeeAsOf.trim() || null,
       features: toStringList(values.features),
       subway: values.subway.trim() || null,
       subwayDistance: values.subwayDistance.trim() || null,
@@ -224,6 +256,12 @@ type MolitCheckResult =
     }
   | { status: "error"; message: string };
 
+interface MolitComplexResult {
+  aptSeq: string;
+  aptNm: string;
+  tradeCount: number;
+}
+
 export default function ComplexForm({
   initial,
   onSubmit,
@@ -240,6 +278,10 @@ export default function ComplexForm({
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [molitResult, setMolitResult] = useState<MolitCheckResult>({ status: "idle" });
+  const [molitSearching, setMolitSearching] = useState(false);
+  const [molitSearchError, setMolitSearchError] = useState("");
+  const [molitComplexes, setMolitComplexes] = useState<MolitComplexResult[]>([]);
+  const [molitNameFilter, setMolitNameFilter] = useState("");
   const [naverPastedText, setNaverPastedText] = useState("");
   const [naverUncertainFields, setNaverUncertainFields] = useState<string[] | null>(
     null,
@@ -253,7 +295,37 @@ export default function ComplexForm({
     if (!naverPastedText.trim()) return;
     const parsed = parseNaverComplexText(naverPastedText);
     setValues((prev) => mergeParsedComplex(prev, parsed));
-    setNaverUncertainFields(getUncertainComplexFieldLabels(parsed));
+    setNaverUncertainFields([
+      ...getUncertainComplexFieldLabels(parsed),
+      ...(parsed.notices ?? []),
+    ]);
+  }
+
+  async function handleMolitSearch() {
+    if (!/^\d{5}$/.test(values.molitLawdCode.trim())) {
+      setMolitSearchError("지역코드(lawdCode)는 5자리 숫자로 입력해주세요.");
+      return;
+    }
+    setMolitSearching(true);
+    setMolitSearchError("");
+    setMolitComplexes([]);
+    try {
+      const response = await fetch("/api/admin/molit-complex-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lawdCode: values.molitLawdCode.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setMolitSearchError(data.error ?? data.errors?.[0] ?? "단지 검색에 실패했습니다.");
+      } else {
+        setMolitComplexes(data.complexes ?? []);
+      }
+    } catch {
+      setMolitSearchError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setMolitSearching(false);
+    }
   }
 
   async function handleMolitCheck() {
@@ -465,6 +537,18 @@ export default function ComplexForm({
               className={inputClass}
             />
           </Field>
+          <Field label="관리사무소 전화번호">
+            <input value={values.managementOfficePhone} onChange={(event) => update("managementOfficePhone", event.target.value)} className={inputClass} />
+          </Field>
+          <Field label="관리비(원)">
+            <input type="number" value={values.managementFeeWon} onChange={(event) => update("managementFeeWon", event.target.value)} className={inputClass} />
+          </Field>
+          <Field label="관리비 원문">
+            <input value={values.managementFeeRaw} onChange={(event) => update("managementFeeRaw", event.target.value)} className={inputClass} />
+          </Field>
+          <Field label="관리비 기준연월" hint="YYYY-MM">
+            <input type="month" value={values.managementFeeAsOf} onChange={(event) => update("managementFeeAsOf", event.target.value)} className={inputClass} />
+          </Field>
         </div>
         <div className="mt-4">
           <Field label="특징 (쉼표로 구분)" hint="매물 상세페이지 단지 소개에 노출됩니다.">
@@ -555,6 +639,41 @@ export default function ComplexForm({
             />
           </Field>
         </div>
+        <button
+          type="button"
+          onClick={handleMolitSearch}
+          disabled={molitSearching}
+          className="mt-4 rounded-md border border-gold-500 px-5 py-2 text-sm font-bold text-gold-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {molitSearching ? "검색 중..." : "단지 찾기"}
+        </button>
+        {molitSearchError && <p className="mt-3 text-sm text-red-600">{molitSearchError}</p>}
+        {molitComplexes.length > 10 && (
+          <input
+            value={molitNameFilter}
+            onChange={(event) => setMolitNameFilter(event.target.value)}
+            placeholder="단지명으로 결과 필터"
+            className={`${inputClass} mt-3 w-full`}
+          />
+        )}
+        {molitComplexes.length > 0 && (
+          <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+            {molitComplexes
+              .filter((item) => item.aptNm.toLowerCase().includes(molitNameFilter.trim().toLowerCase()))
+              .map((item) => (
+                <li key={item.aptSeq}>
+                  <button
+                    type="button"
+                    onClick={() => update("molitAptSeq", item.aptSeq)}
+                    className="w-full rounded-md border border-navy-900/10 px-3 py-2 text-left text-sm hover:border-gold-500"
+                  >
+                    <span className="font-semibold">{item.aptNm || "단지명 없음"}</span>
+                    <span className="ml-2 text-xs text-navy-800/60">{item.aptSeq} · {item.tradeCount}건</span>
+                  </button>
+                </li>
+              ))}
+          </ul>
+        )}
         <button
           type="button"
           onClick={handleMolitCheck}

@@ -19,6 +19,10 @@ export interface ComplexFieldsInput {
   maxFloor?: number | null;
   floorAreaRatio?: number | null;
   buildingCoverageRatio?: number | null;
+  managementOfficePhone?: string | null;
+  managementFeeWon?: number | null;
+  managementFeeRaw?: string | null;
+  managementFeeAsOf?: string | null;
   nearbySchools?: string[];
   subway?: string | null;
   subwayDistance?: string | null;
@@ -36,6 +40,9 @@ const STRING_OR_NULL_FIELDS = [
   ["heating", "난방"],
   ["hallwayType", "복도식 구조"],
   ["builder", "시공사"],
+  ["managementOfficePhone", "관리사무소 전화번호"],
+  ["managementFeeRaw", "관리비 원문"],
+  ["managementFeeAsOf", "관리비 기준연월"],
   ["subway", "지하철역"],
   ["subwayDistance", "지하철 거리"],
   ["molitLawdCode", "MOLIT 지역코드(lawdCode)"],
@@ -51,6 +58,7 @@ const NUMBER_OR_NULL_FIELDS = [
   ["floorAreaRatio", "용적률"],
   ["buildingCoverageRatio", "건폐율"],
   ["subwayWalkMinutes", "지하철 도보시간"],
+  ["managementFeeWon", "관리비"],
 ] as const;
 
 const STRING_ARRAY_FIELDS = [

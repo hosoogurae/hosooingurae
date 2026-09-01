@@ -31,6 +31,19 @@ export interface ParsedNaverComplex {
   floorAreaRatio?: number;
   /** 건폐율(%) */
   buildingCoverageRatio?: number;
+  managementOfficePhone?: string;
+  managementFeeWon?: number | null;
+  /** 네이버에 표시된 관리비 원문. 숫자 변환 실패 여부와 무관하게 보존합니다. */
+  managementFeeRaw?: string;
+  /** YYYY-MM */
+  managementFeeAsOf?: string;
+  nearbySchools?: string[];
+  subway?: string;
+  subwayDistance?: string;
+  subwayWalkMinutes?: number;
+  buses?: string[];
+  /** 두 번째 이후 지하철역처럼 자동 저장하지 않은 확인 필요 안내. */
+  notices?: string[];
 }
 
 /** 화면에 보여줄 한글 라벨. getUncertainComplexFieldLabels에서 사용합니다. */
@@ -47,7 +60,76 @@ const FIELD_LABELS: Partial<Record<keyof ParsedNaverComplex, string>> = {
   parkingPerHousehold: "세대당 주차대수",
   floorAreaRatio: "용적률",
   buildingCoverageRatio: "건폐율",
+  managementOfficePhone: "관리사무소 전화번호",
+  managementFeeRaw: "관리비",
+  managementFeeAsOf: "관리비 기준연월",
+  nearbySchools: "배정 초등학교",
+  subway: "지하철역",
+  subwayDistance: "지하철 거리",
+  subwayWalkMinutes: "지하철 도보시간",
+  buses: "버스",
 };
+
+/** 네이버식 만원 혼합 표기(19만 9,546원)를 원 단위 정수로 변환합니다. */
+export function parseManagementFeeWon(raw: string): number | null {
+  const normalized = raw.replace(/\s/g, "").replace(/,/g, "");
+  const mixed = normalized.match(/(\d+(?:\.\d+)?)만(?:원)?(?:(\d+)원?)?/);
+  if (mixed) {
+    const won = Number(mixed[1]) * 10000 + Number(mixed[2] ?? 0);
+    return Number.isInteger(won) && won >= 0 ? won : null;
+  }
+  const wonOnly = normalized.match(/(\d+)원/);
+  if (!wonOnly) return null;
+  const won = Number(wonOnly[1]);
+  return Number.isSafeInteger(won) ? won : null;
+}
+
+function parseManagement(section: string): Pick<
+  ParsedNaverComplex,
+  "managementFeeRaw" | "managementFeeWon" | "managementFeeAsOf"
+> {
+  const match = section.match(/(?:월\s*)?관리비(?!\s*기준)\s*[:：]?\s*([^\n]+)/);
+  if (!match) return {};
+  const raw = match[1].trim();
+  const date = (raw + "\n" + section.match(/관리비\s*기준(?:연월)?\s*[:：]?\s*([^\n]+)/)?.[1]).match(
+    /(20\d{2})[.\-/년]\s*(\d{1,2})\s*(?:월)?/,
+  );
+  return {
+    managementFeeRaw: raw,
+    managementFeeWon: parseManagementFeeWon(raw),
+    managementFeeAsOf: date ? `${date[1]}-${date[2].padStart(2, "0")}` : undefined,
+  };
+}
+
+function parsePhone(section: string): string | undefined {
+  return section.match(/관리사무소(?:\s*전화번호)?\s*[:：]?\s*(0\d{1,2}-\d{3,4}-\d{4})/)?.[1];
+}
+
+function parseSchools(text: string): string[] | undefined {
+  const results = [...text.matchAll(/([가-힣A-Za-z0-9]+초등학교)\s*(?:[·|,]\s*)?(?:약\s*)?(\d[\d,]*)\s*m\s*(?:[·|,]\s*)?(?:도보\s*)?(\d+)\s*분/g)]
+    .map((match) => `${match[1]} · 약 ${match[2].replace(/,/g, "")}m · 도보 ${match[3]}분`);
+  return results.length > 0 ? [...new Set(results)] : undefined;
+}
+
+function parseSubways(text: string): Pick<ParsedNaverComplex, "subway" | "subwayDistance" | "subwayWalkMinutes" | "notices"> {
+  const matches = [...text.matchAll(/([가-힣A-Za-z0-9]+역)\s*(?:[·|,]\s*)?(?:약\s*)?(\d[\d,]*)\s*m\s*(?:[·|,]\s*)?(?:도보\s*)?(\d+)\s*분/g)];
+  if (matches.length === 0) return {};
+  const first = matches[0];
+  return {
+    subway: first[1],
+    subwayDistance: `약 ${first[2].replace(/,/g, "")}m`,
+    subwayWalkMinutes: Number(first[3]),
+    notices: matches.length > 1
+      ? [`지하철역이 여러 개 확인되었습니다. ${matches.slice(1).map((match) => match[1]).join(", ")}은 직접 확인해주세요.`]
+      : undefined,
+  };
+}
+
+function parseBuses(text: string): string[] | undefined {
+  const results = [...text.matchAll(/(?:버스\s*)?([A-Za-z]?\d{1,4}(?:-\d{1,3})?)\s*[\[(]?\s*(일반|간선|지선|광역|직행좌석|좌석|마을|공항)\s*[\])]?/g)]
+    .map((match) => `${match[1]}(${match[2]})`);
+  return results.length > 0 ? [...new Set(results)] : undefined;
+}
 
 /** "기본 정보" 문자열 이후 구간만 돌려줍니다. 못 찾으면 전체 텍스트를 그대로 씁니다(구형/다른 레이아웃 대비 — 위 클래스 코멘트 참고). */
 function getBasicInfoSection(text: string): string {
@@ -163,6 +245,8 @@ export function parseNaverComplexText(rawText: string): ParsedNaverComplex {
 
   const parking = parseParking(section);
   const ratios = parseRatios(section);
+  const management = parseManagement(section);
+  const subways = parseSubways(text);
 
   return {
     name: parseComplexName(text),
@@ -177,6 +261,11 @@ export function parseNaverComplexText(rawText: string): ParsedNaverComplex {
     parkingPerHousehold: parking.perHousehold,
     floorAreaRatio: ratios.floorAreaRatio,
     buildingCoverageRatio: ratios.buildingCoverageRatio,
+    managementOfficePhone: parsePhone(section),
+    ...management,
+    nearbySchools: parseSchools(text),
+    ...subways,
+    buses: parseBuses(text),
   };
 }
 

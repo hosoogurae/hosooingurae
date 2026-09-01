@@ -177,6 +177,18 @@ function toDbPatch(input: ComplexFieldsInput): ComplexUpdate {
   if (input.buildingCoverageRatio !== undefined) {
     patch.building_coverage_ratio = input.buildingCoverageRatio;
   }
+  if (input.managementOfficePhone !== undefined) {
+    patch.management_office_phone = input.managementOfficePhone;
+  }
+  if (input.managementFeeWon !== undefined) {
+    patch.management_fee_won = input.managementFeeWon;
+  }
+  if (input.managementFeeRaw !== undefined) {
+    patch.management_fee_raw = input.managementFeeRaw;
+  }
+  if (input.managementFeeAsOf !== undefined) {
+    patch.management_fee_as_of = input.managementFeeAsOf;
+  }
   if (input.nearbySchools !== undefined) patch.nearby_schools = input.nearbySchools;
   if (input.subway !== undefined) patch.subway = input.subway;
   if (input.subwayDistance !== undefined) patch.subway_distance = input.subwayDistance;

@@ -34,6 +34,11 @@ export interface Complex {
   floorAreaRatio?: number;
   /** 건폐율(%) */
   buildingCoverageRatio?: number;
+  managementOfficePhone?: string;
+  managementFeeWon?: number;
+  managementFeeRaw?: string;
+  /** 관리비 기준연월(YYYY-MM). */
+  managementFeeAsOf?: string;
   nearbySchools: string[];
   transportation: ComplexTransportation;
   features: string[];

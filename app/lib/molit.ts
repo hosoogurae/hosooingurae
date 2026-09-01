@@ -29,6 +29,36 @@ export interface MolitAptTradeItem {
   cdealType: string;
 }
 
+export interface MolitComplexSearchResult {
+  aptSeq: string;
+  aptNm: string;
+  tradeCount: number;
+}
+
+/** 거래를 aptSeq별로 합쳐 단지 선택 목록으로 만듭니다. */
+export function summarizeMolitComplexes(
+  trades: MolitAptTradeItem[],
+): MolitComplexSearchResult[] {
+  const grouped = new Map<string, MolitComplexSearchResult>();
+  for (const trade of trades) {
+    if (!trade.aptSeq) continue;
+    const existing = grouped.get(trade.aptSeq);
+    if (existing) {
+      existing.tradeCount += 1;
+      if (!existing.aptNm && trade.aptNm) existing.aptNm = trade.aptNm;
+    } else {
+      grouped.set(trade.aptSeq, {
+        aptSeq: trade.aptSeq,
+        aptNm: trade.aptNm,
+        tradeCount: 1,
+      });
+    }
+  }
+  return [...grouped.values()].sort(
+    (a, b) => b.tradeCount - a.tradeCount || a.aptNm.localeCompare(b.aptNm, "ko"),
+  );
+}
+
 const xmlParser = new XMLParser({
   ignoreAttributes: true,
   trimValues: true,

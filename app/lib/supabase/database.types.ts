@@ -31,6 +31,10 @@ export interface Database {
           max_floor: number | null;
           floor_area_ratio: number | null;
           building_coverage_ratio: number | null;
+          management_office_phone: string | null;
+          management_fee_won: number | null;
+          management_fee_raw: string | null;
+          management_fee_as_of: string | null;
           nearby_schools: string[];
           subway: string | null;
           subway_distance: string | null;
@@ -58,6 +62,10 @@ export interface Database {
           max_floor?: number | null;
           floor_area_ratio?: number | null;
           building_coverage_ratio?: number | null;
+          management_office_phone?: string | null;
+          management_fee_won?: number | null;
+          management_fee_raw?: string | null;
+          management_fee_as_of?: string | null;
           nearby_schools?: string[];
           subway?: string | null;
           subway_distance?: string | null;

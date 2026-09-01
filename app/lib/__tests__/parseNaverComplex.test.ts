@@ -1,8 +1,44 @@
 import { describe, expect, it } from "vitest";
 import {
   getUncertainComplexFieldLabels,
+  parseManagementFeeWon,
   parseNaverComplexText,
 } from "../parseNaverComplex";
+
+describe("관리비 파싱", () => {
+  it.each([
+    ["19만 9,546원", 199546],
+    ["19만원", 190000],
+    ["199,546원", 199546],
+  ])("%s를 원 단위 정수로 변환한다", (raw, expected) => {
+    expect(parseManagementFeeWon(raw)).toBe(expected);
+  });
+
+  it("숫자 변환 실패 시 원문을 보존하고 won은 null로 둔다", () => {
+    const parsed = parseNaverComplexText(
+      "테스트단지\n기본 정보\n관리비 별도 문의\n관리비 기준연월 2026. 7.",
+    );
+    expect(parsed.managementFeeRaw).toBe("별도 문의");
+    expect(parsed.managementFeeWon).toBeNull();
+    expect(parsed.managementFeeAsOf).toBe("2026-07");
+  });
+
+  it("학교·첫 지하철·유형을 포함한 버스를 파싱한다", () => {
+    const parsed = parseNaverComplexText([
+      "테스트단지",
+      "김포호수초등학교 · 약 350m · 도보 5분",
+      "구래역 · 약 500m · 도보 7분",
+      "양촌역 · 약 900m · 도보 12분",
+      "108(일반)",
+    ].join("\n"));
+    expect(parsed.nearbySchools).toEqual(["김포호수초등학교 · 약 350m · 도보 5분"]);
+    expect(parsed.subway).toBe("구래역");
+    expect(parsed.subwayDistance).toBe("약 500m");
+    expect(parsed.subwayWalkMinutes).toBe(7);
+    expect(parsed.buses).toEqual(["108(일반)"]);
+    expect(parsed.notices?.[0]).toContain("양촌역");
+  });
+});
 
 const SAMPLE_WITH_BASIC_INFO = [
   "호반베르디움더레이크5차",
@@ -68,8 +104,17 @@ describe("parseNaverComplexText — 기본 정보 섹션이 있는 경우", () =
     expect(parsed.buildingCoverageRatio).toBe(12);
   });
 
-  it("인식 실패 필드가 없다(모두 채워짐)", () => {
-    expect(getUncertainComplexFieldLabels(parsed)).toEqual([]);
+  it("기존 기본정보는 모두 채우고 새 확장정보만 확인 필요로 남긴다", () => {
+    expect(getUncertainComplexFieldLabels(parsed)).toEqual([
+      "관리사무소 전화번호",
+      "관리비",
+      "관리비 기준연월",
+      "배정 초등학교",
+      "지하철역",
+      "지하철 거리",
+      "지하철 도보시간",
+      "버스",
+    ]);
   });
 });
 
