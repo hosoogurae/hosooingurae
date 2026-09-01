@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Listing } from "../../../data/listings";
 import type { ListingSubmission } from "../../../data/listingSubmissions";
+import { normalizeComplexName } from "../../../lib/complexNameNormalize";
 import type { DuplicateMatch } from "../../../lib/naverDuplicate";
 import type { ComplexOption } from "../../../lib/naverImport";
 import { parseKoreanAmountToManwon } from "../../../lib/naverTextParser";
@@ -17,10 +18,6 @@ import {
 import NaverDuplicatePanel from "../../NaverDuplicatePanel";
 
 type NaverDuplicateChoice = "update" | "new" | null;
-
-function normalizeComplexName(name: string): string {
-  return name.replace(/\s+/g, "").toLowerCase();
-}
 
 /** 접수 건의 자유 입력 단지명을 기존 단지 목록과 매칭합니다(네이버 가져오기와 동일한 방식). */
 function matchComplexId(

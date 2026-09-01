@@ -1,4 +1,5 @@
 import { getAllComplexes } from "./complexes";
+import { normalizeComplexName } from "./complexNameNormalize";
 import type { Complex } from "../data/complexes";
 import type { Listing } from "../data/listings";
 import {
@@ -22,20 +23,16 @@ export async function getComplexOptions(): Promise<ComplexOption[]> {
   }));
 }
 
-function normalizeName(name: string): string {
-  return name.replace(/\s+/g, "").toLowerCase();
-}
-
 /** complexName으로 기존 단지 중 가장 가능성 높은 단지를 추측합니다. 못 찾으면 null. */
 export function suggestComplexId(
   complexName: string,
   complexes: Complex[],
 ): string | null {
-  const target = normalizeName(complexName);
+  const target = normalizeComplexName(complexName);
   if (!target) return null;
 
   const matched = complexes.find((complex) => {
-    const name = normalizeName(complex.name);
+    const name = normalizeComplexName(complex.name);
     return name === target || name.includes(target) || target.includes(name);
   });
 

@@ -1,4 +1,5 @@
 import type { Complex } from "../data/complexes";
+import { normalizeComplexName } from "./complexNameNormalize";
 import type { ComplexFieldsInput } from "./complexValidation";
 import { getFloorPlanCountsByComplex } from "./floorPlans";
 import { getSupabaseAdminClient, getSupabaseClient } from "./supabase/client";
@@ -81,6 +82,34 @@ export async function createComplex(
       error:
         "Supabase가 설정되어 있지 않습니다. SUPABASE_SECRET_KEY를 확인해주세요.",
     };
+  }
+
+  // 같은 단지를 매물 등록마다 새로 만들지 않도록, insert 전에 이름이
+  // (공백·특수문자 차이를 무시하고) 일치하는 기존 단지가 있는지 먼저
+  // 찾아 재사용합니다. name_normalized에 대한 DB unique 제약이 아직 없어서
+  // (supabase/migrations/0020에서 추가 예정 — 기존 중복 정리가 먼저 끝나야
+  // 걸 수 있음) 이 조회만으로는 완전히 동시인 요청까지는 못 막습니다.
+  // 그 마이그레이션이 적용되면 이 조회 뒤에 upsert(onConflict)를 붙여
+  // 마저 보강합니다.
+  const normalized = normalizeComplexName(input.name);
+  const { data: rows, error: lookupError } = await supabase
+    .from("complexes")
+    .select("id, name");
+
+  if (lookupError) {
+    console.error("[complexes] 기존 단지 조회 실패", lookupError);
+    return { error: "단지 정보를 조회하지 못했습니다." };
+  }
+
+  const existingId = rows?.find(
+    (row) => normalizeComplexName(row.name) === normalized,
+  )?.id;
+
+  if (existingId) {
+    const existing = await getComplexById(existingId);
+    if (existing) {
+      return { complex: existing };
+    }
   }
 
   const id = generateComplexId(input.name);
