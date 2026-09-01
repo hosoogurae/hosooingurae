@@ -86,11 +86,8 @@ export async function createComplex(
 
   // 같은 단지를 매물 등록마다 새로 만들지 않도록, insert 전에 이름이
   // (공백·특수문자 차이를 무시하고) 일치하는 기존 단지가 있는지 먼저
-  // 찾아 재사용합니다. name_normalized에 대한 DB unique 제약이 아직 없어서
-  // (supabase/migrations/0020에서 추가 예정 — 기존 중복 정리가 먼저 끝나야
-  // 걸 수 있음) 이 조회만으로는 완전히 동시인 요청까지는 못 막습니다.
-  // 그 마이그레이션이 적용되면 이 조회 뒤에 upsert(onConflict)를 붙여
-  // 마저 보강합니다.
+  // 찾아 재사용합니다. 대부분의 요청은 여기서 끝나 아래 upsert까지
+  // 가지 않습니다.
   const normalized = normalizeComplexName(input.name);
   const { data: rows, error: lookupError } = await supabase
     .from("complexes")
@@ -112,11 +109,19 @@ export async function createComplex(
     }
   }
 
+  // 위 조회 이후 다른 요청이 같은 이름으로 먼저 insert를 끝냈을 수 있으므로
+  // (조회→생성 사이의 경쟁 조건), 단순 insert 대신 upsert +
+  // onConflict: name_normalized를 씁니다. complexes.name_normalized의
+  // unique 인덱스(supabase/migrations/0020)가 최종 방어선이라, 충돌이 나면
+  // ignoreDuplicates로 기존 행을 그대로 두고 내 새 값으로 덮어쓰지
+  // 않습니다. upsert 응답만으로는 "내가 만든 건지 남이 먼저 만든 건지"를
+  // 안정적으로 구분할 수 없어(버전에 따라 무시된 충돌 행을 안 돌려줄 수
+  // 있음), 바로 뒤에 name_normalized로 다시 조회해 최종 승자 행을
+  // 확정합니다.
   const id = generateComplexId(input.name);
 
-  const { data, error } = await supabase
-    .from("complexes")
-    .insert({
+  const { error: upsertError } = await supabase.from("complexes").upsert(
+    {
       id,
       name: input.name,
       address: input.address ?? "",
@@ -124,16 +129,27 @@ export async function createComplex(
       nearby_schools: [],
       buses: [],
       features: [],
-    })
-    .select("*")
-    .single();
+    },
+    { onConflict: "name_normalized", ignoreDuplicates: true },
+  );
 
-  if (error || !data) {
-    console.error("[complexes] 새 단지 생성 실패", error);
+  if (upsertError) {
+    console.error("[complexes] 새 단지 생성 실패", upsertError);
     return { error: "단지 정보를 저장하지 못했습니다." };
   }
 
-  return { complex: complexRowToComplex(data) };
+  const { data: finalRow, error: finalError } = await supabase
+    .from("complexes")
+    .select("*")
+    .eq("name_normalized", normalized)
+    .maybeSingle();
+
+  if (finalError || !finalRow) {
+    console.error("[complexes] 생성된 단지 재조회 실패", finalError);
+    return { error: "단지 정보를 저장하지 못했습니다." };
+  }
+
+  return { complex: complexRowToComplex(finalRow) };
 }
 
 /**
@@ -215,6 +231,13 @@ export async function createComplexFull(
     .single();
 
   if (error || !data) {
+    // 23505 = Postgres unique_violation. complexes_name_normalized_key
+    // (supabase/migrations/0020)에 걸려 실패한 경우, 이 화면은 의도적으로
+    // "새로" 등록하는 화면이라 createComplex처럼 조용히 기존 단지를
+    // 대신 돌려주지 않고, 관리자가 뭐가 문제인지 바로 알 수 있게 알려줍니다.
+    if (error?.code === "23505") {
+      return { error: "이미 같은 이름의 단지가 있습니다." };
+    }
     console.error("[complexes] 새 단지 생성 실패(전체 필드)", error);
     return { error: "단지 정보를 저장하지 못했습니다." };
   }

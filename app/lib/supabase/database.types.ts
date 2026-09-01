@@ -15,6 +15,9 @@ export interface Database {
         Row: {
           id: string;
           name: string;
+          /** generated column(supabase/migrations/0020) — 소문자화 + 공백·특수문자
+           *  제거한 name. insert/update로 직접 쓸 수 없어 Insert/Update 타입엔 없음. */
+          name_normalized: string;
           address: string;
           property_type: string | null;
           approval_date: string | null;
