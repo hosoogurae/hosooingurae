@@ -1,6 +1,27 @@
 import type { NextConfig } from "next";
 
+// 매물/단지/평면도 사진은 전부 Supabase Storage 공개 버킷에 있습니다.
+// 프로젝트 URL에서 호스트네임만 뽑아 등록해두면 나중에 Supabase 프로젝트가
+// 바뀌어도 이 파일을 고칠 필요가 없습니다.
+const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+  : undefined;
+
 const nextConfig: NextConfig = {
+  images: {
+    // 기본값도 webp지만, next dev(Turbopack)에서 협상 여부를 직접
+    // 확인해야 해서 명시적으로 적어둡니다.
+    formats: ["image/webp"],
+    remotePatterns: supabaseHostname
+      ? [
+          {
+            protocol: "https",
+            hostname: supabaseHostname,
+            pathname: "/storage/v1/object/public/**",
+          },
+        ]
+      : [],
+  },
   // sharp는 네이티브 바이너리라 서버 번들링 대상에서 제외하고 Node의 기본
   // require로 로드해야 합니다(공식 문서 권장 패턴).
   serverExternalPackages: ["sharp"],

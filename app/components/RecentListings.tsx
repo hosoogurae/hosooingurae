@@ -53,7 +53,7 @@ export default async function RecentListings() {
       </div>
 
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-        {recentListings.map((listing) => (
+        {recentListings.map((listing, index) => (
           <ListingCard
             key={listing.id}
             listing={listing}
@@ -62,6 +62,7 @@ export default async function RecentListings() {
               listing.unitType,
             )}
             complexImageUrl={complexImagesByComplex.get(listing.complexId)}
+            priority={index < 3}
           />
         ))}
       </div>

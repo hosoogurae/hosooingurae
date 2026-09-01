@@ -256,6 +256,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                         complexImageUrl={complexImagesByComplex.get(
                           ranked.listing.complexId,
                         )}
+                        priority={index < 3}
                       />
                       {ranked.reasons.length > 0 && (
                         <div className="mt-3 rounded-lg bg-navy-900/[0.03] p-3">
@@ -299,7 +300,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                   </p>
                 </div>
                 <ul className="mt-6 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                  {recommendation.nearMisses.map((nearMiss) => (
+                  {recommendation.nearMisses.map((nearMiss, index) => (
                     <li key={nearMiss.listing.id} className="relative flex flex-col">
                       <span className="absolute right-3 top-3 z-10 rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white">
                         {formatViolationBadge(nearMiss.violation.direction)}
@@ -318,6 +319,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                           parsedQuery?.price,
                         )}
                         emphasize="warning"
+                        priority={index < 3}
                       />
                       <CompareToggle listingId={nearMiss.listing.id} />
                     </li>

@@ -116,7 +116,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
 
         {listings.length > 0 ? (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {listings.map((listing) => (
+            {listings.map((listing, index) => (
               <div key={listing.id} className="flex h-full flex-col">
                 <ListingCard
                   listing={listing}
@@ -125,6 +125,7 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
                     listing.unitType,
                   )}
                   complexImageUrl={complexImagesByComplex.get(listing.complexId)}
+                  priority={index < 3}
                 />
                 <CompareToggle listingId={listing.id} />
               </div>

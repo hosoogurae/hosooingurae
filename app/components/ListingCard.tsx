@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { FloorPlanImage } from "../data/floorPlans";
 import { resolveListingHeroImage } from "../lib/listingGalleryImages";
@@ -9,6 +10,11 @@ import {
   formatRooms,
 } from "../lib/format/listingFields";
 import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
+
+// 목록 그리드(sm:2열/lg:3열, 컨테이너 max-w-6xl)에서 카드 이미지가 실제로
+// 차지하는 폭 근사치입니다. 이 값이 있어야 next/image가 큰 원본 대신 실제
+// 표시 크기에 맞는 작은 변형을 요청합니다.
+const CARD_IMAGE_SIZES = "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw";
 
 function formatVerifiedDate(dateStr: string) {
   return dateStr.replaceAll("-", ".");
@@ -36,6 +42,7 @@ export default function ListingCard({
   complexImageUrl,
   priceNotice,
   emphasize,
+  priority = false,
 }: {
   listing: ListingWithComplex;
   floorPlanImage?: FloorPlanImage;
@@ -45,11 +52,20 @@ export default function ListingCard({
   priceNotice?: string;
   /** 카드 테두리·배경을 경고 톤으로 바꿔 조건에 맞는 매물과 한눈에 구분되게 합니다. */
   emphasize?: "warning";
+  /**
+   * 첫 화면에 바로 보이는 카드(보통 그리드 첫 줄 2~3장)만 true로 넘겨
+   * 지연 로딩 없이 즉시 불러옵니다. 그리드 카드는 뷰포트에 따라 어느 것이
+   * LCP가 될지 달라질 수 있어(Next.js 16 문서상 이런 경우엔 preload 대신
+   * loading="eager" 권장) next/image의 preload/priority prop은 쓰지 않고
+   * loading 속성만 바꿉니다.
+   */
+  priority?: boolean;
 }) {
   const heroImage = resolveListingHeroImage(listing);
   const floorPlanThumbnail =
     floorPlanImage && (floorPlanImage.previewUrl || floorPlanImage.url);
   const buildingFloorLine = formatBuildingFloor(listing);
+  const loading = priority ? "eager" : "lazy";
 
   return (
     <Link
@@ -62,30 +78,36 @@ export default function ListingCard({
     >
       <div className="relative h-52 shrink-0 sm:h-56 lg:h-60">
         {heroImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={heroImage}
             alt={`${listing.complex.name} 대표 이미지`}
-            className="h-full w-full object-cover"
+            fill
+            sizes={CARD_IMAGE_SIZES}
+            loading={loading}
+            className="object-cover"
           />
         ) : floorPlanThumbnail ? (
-          <div className="flex h-full w-full items-center justify-center bg-white p-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+          <div className="relative h-full w-full bg-white p-3">
+            <Image
               src={floorPlanThumbnail}
               alt={`${listing.unitType} 평면도`}
-              className="max-h-full max-w-full object-contain"
+              fill
+              sizes={CARD_IMAGE_SIZES}
+              loading={loading}
+              className="object-contain"
             />
-            <span className="absolute right-2 top-2 rounded-full bg-navy-950/70 px-2 py-0.5 text-[10px] font-bold text-gold-400 backdrop-blur">
+            <span className="absolute right-2 top-2 z-10 rounded-full bg-navy-950/70 px-2 py-0.5 text-[10px] font-bold text-gold-400 backdrop-blur">
               {listing.unitType} 평면도
             </span>
           </div>
         ) : complexImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={complexImageUrl}
             alt={`${listing.complex.name} 단지 사진`}
-            className="h-full w-full object-cover"
+            fill
+            sizes={CARD_IMAGE_SIZES}
+            loading={loading}
+            className="object-cover"
           />
         ) : (
           <ListingBrandPlaceholder

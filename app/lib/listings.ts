@@ -16,6 +16,23 @@ export interface ListingWithComplex extends Listing {
 }
 
 /**
+ * listings 테이블의 모든 컬럼 중 raw_source_text(네이버 원문 스크랩 텍스트,
+ * 관리자 전용)만 뺀 목록. 공개 조회(getAllListings의 includeDrafts=false
+ * 경로)는 이 컬럼을 절대 쓰지 않으므로 select 단계에서부터 가져오지
+ * 않습니다. listingRowToListing이 이 컬럼 외의 모든 필드를 무조건 읽으므로,
+ * 여기서 더 줄이면 다른 화면(recommend/compare 등)이 조용히 깨질 수 있어
+ * 이 필드 하나만 제외합니다.
+ */
+const PUBLIC_LISTING_COLUMNS =
+  "id, complex_id, property_type, status, deal_status, last_verified_at, " +
+  "transaction_type, price, price_label, building, floor, total_floors, " +
+  "supply_area, exclusive_area, room_count, bathroom_count, direction, " +
+  "move_in_date, maintenance_fee, has_loan, loan_amount, short_description, " +
+  "features, naver_url, article_number, verified_date, is_featured, " +
+  "source_type, source_article_id, unit_type, created_at, updated_at, " +
+  "suspected_match_acknowledged_at";
+
+/**
  * 로그인 없이 누구나 호출 가능한 공개 API(app/api/listings) 응답 형태.
  * rawSourceText, sourceType, sourceArticleId, status 등 관리자 전용/내부 정보는
  * 절대 포함하지 않습니다 — 그런 정보가 필요하면 app/api/admin/listings를 씁니다.
@@ -289,7 +306,7 @@ export async function getAllListings(
   );
   let query = supabase
     .from("listings")
-    .select("*")
+    .select(options.includeDrafts ? "*" : PUBLIC_LISTING_COLUMNS)
     .order(column, { ascending, nullsFirst });
 
   if (!options.includeDrafts) {
@@ -332,8 +349,12 @@ export async function getAllListings(
     query = query.limit(options.limit);
   }
 
+  // select()에 동적 문자열(PUBLIC_LISTING_COLUMNS)을 넘기면 Supabase 타입
+  // 추론이 컬럼별 타입을 잃으므로, 실행 직전에 .returns()로 실제 행 모양을
+  // 명시합니다(raw_source_text만 안 가져올 뿐 나머지는 ListingRow와 동일).
+  // .eq()/.order() 등 필터 메서드를 잃지 않도록 체이닝 맨 끝에서만 붙입니다.
   const [{ data: rows, error }, complexes] = await Promise.all([
-    query,
+    query.returns<ListingRow[]>(),
     getAllComplexes(),
   ]);
 
