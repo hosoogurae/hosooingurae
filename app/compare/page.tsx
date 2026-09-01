@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { Fragment } from "react";
 import Link from "next/link";
-import { headers } from "next/headers";
 import type { ListingWithComplex } from "../lib/listings";
 import { getListingById } from "../lib/listings";
 import { buildCompareInquiryMessage } from "../lib/listingInquiry";
 import { getComplexRepresentativeImages } from "../lib/complexImages";
+import { buildAbsoluteUrl } from "../lib/requestUrl";
+import { formatArea, formatFloorRange, formatRooms } from "../lib/format/listingFields";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 import InquirySmsButton from "../components/InquirySmsButton";
 import ListingBrandPlaceholder from "../components/ListingBrandPlaceholder";
@@ -81,16 +82,21 @@ function buildAttributeRows(complexImagesByComplex: Map<string, string>): Attrib
       label: "단지명",
       render: (l) => <span className="font-bold text-navy-950">{l.complex.name}</span>,
     },
+    { label: "매물종류", render: (l) => l.propertyType },
     { label: "거래유형", render: (l) => l.transactionType },
     {
       label: "가격",
       render: (l) => <span className="font-bold text-gold-600">{l.priceLabel}</span>,
     },
+    { label: "소재지", render: (l) => l.complex.address || "주소 확인 필요" },
     { label: "동", render: (l) => (l.building?.trim() ? l.building : "동 정보 미등록") },
-    { label: "층", render: (l) => `${l.floor}/${l.totalFloors}층` },
-    { label: "공급면적", render: (l) => `${l.supplyArea}㎡` },
-    { label: "전용면적", render: (l) => `${l.exclusiveArea}㎡` },
-    { label: "방 / 욕실", render: (l) => `방 ${l.roomCount} · 욕실 ${l.bathroomCount}` },
+    { label: "층", render: (l) => formatFloorRange(l.floor, l.totalFloors) },
+    { label: "공급면적", render: (l) => formatArea(l.supplyArea) },
+    { label: "전용면적", render: (l) => formatArea(l.exclusiveArea) },
+    {
+      label: "방 / 욕실",
+      render: (l) => `방 ${formatRooms(l.roomCount)} · 욕실 ${formatRooms(l.bathroomCount)}`,
+    },
     { label: "방향", render: (l) => l.direction },
     { label: "입주 가능일", render: (l) => l.moveInDate },
     {
@@ -149,12 +155,11 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
   );
   const attributeRows = buildAttributeRows(complexImagesByComplex);
 
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("host");
-  const protocol = host?.startsWith("localhost") ? "http" : "https";
   const pageUrl =
-    host && validListings.length > 0
-      ? `${protocol}://${host}/compare?ids=${validListings.map((l) => l.id).join(",")}`
+    validListings.length > 0
+      ? await buildAbsoluteUrl(
+          `/compare?ids=${validListings.map((l) => l.id).join(",")}`,
+        )
       : undefined;
 
   const inquiryMobileNumber =
