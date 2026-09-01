@@ -1,7 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
 import { BUSINESS_HOURS, COMPANY_NAME, NAVER_MAP_URL, WEEKLY_CLOSED_LABEL } from "../data/contact";
-import { OFFICE_PHOTO } from "../data/media";
 import { ASSOCIATION_HOLIDAY_CONTEXT_LABEL, type UpcomingHolidays } from "../lib/holiday";
 import BrokerageInfo from "./BrokerageInfo";
 import { LocationIcon } from "./icons";
@@ -16,31 +14,15 @@ export default function Footer({ holidayInfo }: { holidayInfo: UpcomingHolidays 
       <div className="mx-auto max-w-6xl">
         <BrokerageInfo
           headerExtra={
-            <div className="flex flex-col items-end gap-2">
-              {OFFICE_PHOTO && (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="relative h-16 w-16 overflow-hidden rounded-lg ring-1 ring-navy-900/10">
-                    <Image
-                      src={OFFICE_PHOTO}
-                      alt="호수공인중개사사무소 외관"
-                      fill
-                      sizes="4rem"
-                      className="object-cover"
-                    />
-                  </div>
-                  <p className="text-[11px] text-navy-800/50">이 간판을 찾으세요</p>
-                </div>
-              )}
-              <a
-                href={NAVER_MAP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 px-5 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:border-gold-500 hover:bg-gold-500/10"
-              >
-                <LocationIcon className="h-4 w-4 text-gold-600" />
-                네이버지도로 보기
-              </a>
-            </div>
+            <a
+              href={NAVER_MAP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 px-5 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:border-gold-500 hover:bg-gold-500/10"
+            >
+              <LocationIcon className="h-4 w-4 text-gold-600" />
+              네이버지도로 보기
+            </a>
           }
         >
           <div className="mt-4 flex flex-col gap-1 text-sm text-navy-800/70">
