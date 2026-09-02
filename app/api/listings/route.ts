@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PROPERTY_TYPES, type PropertyType } from "../../data/listings";
 import { createComplex } from "../../lib/complexes";
 import { getAllListings, toPublicListing } from "../../lib/listings";
 import { parseListingPayload } from "../../lib/listingValidation";
@@ -64,8 +65,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const propertyType =
-      typeof data.propertyType === "string" ? data.propertyType : undefined;
+    const propertyType: PropertyType | undefined =
+      typeof data.propertyType === "string" &&
+      (PROPERTY_TYPES as readonly string[]).includes(data.propertyType)
+        ? (data.propertyType as PropertyType)
+        : undefined;
 
     const { complex, error } = await createComplex({
       name,

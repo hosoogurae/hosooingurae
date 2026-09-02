@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { COMPLEX_PROPERTY_TYPES, type Complex } from "../../data/complexes";
+import type { PropertyType } from "../../data/listings";
 import type { ComplexFieldsInput } from "../../lib/complexValidation";
 import type { MolitCheckSample } from "../../api/admin/molit-check/route";
 import {
@@ -204,7 +205,7 @@ function toFieldsInput(
     input: {
       name: values.name.trim(),
       address: values.address.trim(),
-      propertyType: values.propertyType.trim() || null,
+      propertyType: (values.propertyType.trim() || null) as PropertyType | null,
       approvalDate: values.approvalDate.trim() || null,
       totalHouseholds: numeric.totalHouseholds,
       buildings: numeric.buildings,
@@ -501,16 +502,13 @@ export default function ComplexForm({
               className={inputClass}
             />
           </Field>
-          <Field label="건축물 용도">
+          <Field label="매물종류">
             <select
               value={values.propertyType}
               onChange={(event) => update("propertyType", event.target.value)}
               className={inputClass}
             >
               <option value="">선택해주세요</option>
-              {values.propertyType === "아파트상가" && (
-                <option value="아파트상가" disabled>기존 값: 아파트상가</option>
-              )}
               {COMPLEX_PROPERTY_TYPES.map((type) => (
                 <option key={type} value={type}>{type}</option>
               ))}

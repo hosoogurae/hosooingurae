@@ -7,7 +7,7 @@ const BASE_COMPLEX: Complex = {
   id: "complex-1",
   name: "테스트단지",
   address: "경기도 김포시",
-  propertyType: "공동주택",
+  propertyType: "아파트",
   approvalDate: "2020-01-01",
   totalHouseholds: 100,
   nearbySchools: [],
@@ -67,5 +67,11 @@ describe("독립 상가 등록", () => {
 
   it("신규 단지 유형에 아파트상가가 없다", () => {
     expect(COMPLEX_PROPERTY_TYPES).not.toContain("아파트상가");
+  });
+
+  it("단지 매물종류는 listings.propertyType과 같은 값 체계를 쓴다(공동주택 같은 레거시 값이 다시 섞이지 않도록)", () => {
+    expect(COMPLEX_PROPERTY_TYPES).not.toContain("공동주택");
+    expect(COMPLEX_PROPERTY_TYPES).not.toContain("주상복합");
+    expect(COMPLEX_PROPERTY_TYPES).toEqual(["아파트", "오피스텔", "상가", "단독주택", "기타"]);
   });
 });

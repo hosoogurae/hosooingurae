@@ -1,7 +1,9 @@
 import type { Complex } from "../data/complexes";
+import type { PropertyType } from "../data/listings";
 import { normalizeComplexName } from "./complexNameNormalize";
 import type { ComplexFieldsInput } from "./complexValidation";
 import { getFloorPlanCountsByComplex } from "./floorPlans";
+import { extractStoragePath } from "./storagePhotos";
 import { getSupabaseAdminClient, getSupabaseClient } from "./supabase/client";
 import { complexRowToComplex } from "./supabase/mappers";
 import type { ComplexInsert, ComplexUpdate } from "./supabase/database.types";
@@ -64,8 +66,8 @@ export interface NewComplexInput {
   name: string;
   /** 모르면 비워둘 수 있습니다. 관리자가 나중에 매물 관리 화면에서 보완합니다. */
   address?: string;
-  /** 매물 등록 화면에서 함께 입력한 매물종류를 그대로 단지의 건축물 용도로도 기록해둡니다. */
-  propertyType?: string;
+  /** 매물 등록 화면에서 함께 입력한 매물종류를 그대로 단지의 매물종류로도 기록해둡니다. */
+  propertyType?: PropertyType;
 }
 
 /**
@@ -293,6 +295,111 @@ export async function updateComplex(
   return { complex: complexRowToComplex(data) };
 }
 
+export interface ComplexDeletionInfo {
+  /** 이 단지를 참조하는 매물 수(listings.complex_id는 ON DELETE RESTRICT라
+   * 1건이라도 있으면 삭제가 DB에서 막힙니다). */
+  listingCount: number;
+  /** complex_images/floor_plan_images/unit_type_images 합계(ON DELETE
+   * CASCADE라 삭제를 막지는 않지만, 함께 지워진다는 걸 미리 알려주는 용도). */
+  imageCount: number;
+}
+
+/** /admin/complexes/[id]/edit의 "위험 구역" 삭제 확인 UI 전용. */
+export async function getComplexDeletionInfo(
+  complexId: string,
+): Promise<ComplexDeletionInfo> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { listingCount: 0, imageCount: 0 };
+  }
+
+  const [listings, complexImages, floorPlanImages, unitTypeImages] = await Promise.all([
+    supabase
+      .from("listings")
+      .select("id", { count: "exact", head: true })
+      .eq("complex_id", complexId),
+    supabase
+      .from("complex_images")
+      .select("id", { count: "exact", head: true })
+      .eq("complex_id", complexId),
+    supabase
+      .from("floor_plan_images")
+      .select("id", { count: "exact", head: true })
+      .eq("complex_id", complexId),
+    supabase
+      .from("unit_type_images")
+      .select("id", { count: "exact", head: true })
+      .eq("complex_id", complexId),
+  ]);
+
+  return {
+    listingCount: listings.count ?? 0,
+    imageCount:
+      (complexImages.count ?? 0) +
+      (floorPlanImages.count ?? 0) +
+      (unitTypeImages.count ?? 0),
+  };
+}
+
+/** 단지 삭제 시 CASCADE로 함께 지워지는 이미지 행의 Storage 버킷·경로. */
+const CASCADED_IMAGE_TABLES = [
+  { table: "complex_images", bucket: "complex-photos" },
+  { table: "unit_type_images", bucket: "complex-photos" },
+  { table: "floor_plan_images", bucket: "floor-plans" },
+] as const;
+
+/**
+ * /admin/complexes/[id]/edit의 "위험 구역"에서만 호출합니다. 진짜 방어선은
+ * listings.complex_id의 ON DELETE RESTRICT(DB)이고, 이 함수는 그 결과를
+ * 사람이 이해할 수 있는 메시지로 바꿔주는 역할만 합니다 — 매물이 있으면 화면이
+ * 버튼을 미리 비활성화하지만, 확인과 삭제 사이 동시 요청으로 매물이 새로
+ * 생겨도 최종적으로는 DB가 막고 여기서 그 에러(23503)를 잡아 번역합니다.
+ */
+export async function deleteComplex(
+  complexId: string,
+): Promise<{ success?: boolean; error?: string }> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return { error: "Supabase가 설정되어 있지 않습니다." };
+  }
+
+  // CASCADE로 함께 지워질 이미지 행은 삭제되고 나면 URL을 더는 알 수 없으므로,
+  // 단지를 지우기 전에 Storage 경로를 미리 모아둡니다.
+  const pathsByBucket = new Map<string, string[]>();
+  for (const { table, bucket } of CASCADED_IMAGE_TABLES) {
+    const { data } = await supabase.from(table).select("url").eq("complex_id", complexId);
+    const paths = (data ?? [])
+      .map((row) => extractStoragePath(row.url, bucket))
+      .filter((path): path is string => path !== null);
+    if (paths.length === 0) continue;
+    pathsByBucket.set(bucket, [...(pathsByBucket.get(bucket) ?? []), ...paths]);
+  }
+
+  const { error } = await supabase.from("complexes").delete().eq("id", complexId);
+
+  if (error) {
+    // 23503 = Postgres foreign_key_violation. listings.complex_id의 ON DELETE
+    // RESTRICT에 걸린 경우이며, 원문 Postgres 에러를 그대로 노출하지 않습니다.
+    if (error.code === "23503") {
+      return { error: "이 단지에 연결된 매물이 있어 삭제할 수 없습니다." };
+    }
+    console.error("[complexes] 단지 삭제 실패", error);
+    return { error: "단지를 삭제하지 못했습니다." };
+  }
+
+  // 단지 삭제(및 이미지 행 CASCADE)는 이미 끝났으므로, Storage 정리가
+  // 실패해도 삭제 자체를 실패로 취급하지 않고 경고만 남깁니다(고아 파일로
+  // 남을 수 있음 — deleteComplexImage/deleteFloorPlanImage와 같은 방침).
+  for (const [bucket, paths] of pathsByBucket) {
+    const { error: storageError } = await supabase.storage.from(bucket).remove(paths);
+    if (storageError) {
+      console.error(`[complexes] 단지 삭제 후 Storage 정리 실패 (${bucket})`, storageError);
+    }
+  }
+
+  return { success: true };
+}
+
 export type CompletionLevel = "complete" | "partial" | "empty";
 
 export interface ComplexCompletion {
@@ -309,7 +416,7 @@ function missingBasicFields(complex: Complex): string[] {
   return [
     [complex.name, "단지명"],
     [complex.address, "주소"],
-    [complex.propertyType, "건축물 용도"],
+    [complex.propertyType, "매물종류"],
     [complex.approvalDate, "사용승인일"],
     [complex.totalHouseholds, "세대수"],
   ].filter(([value]) => value === undefined || value === null || value === "")

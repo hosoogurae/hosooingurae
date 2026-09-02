@@ -3,11 +3,12 @@
  * 모든 필드가 선택값입니다 — 단지명 하나만으로도 생성할 수 있어야
  * (기본정보만 채우고 나머지는 나중에 보완) 하기 때문입니다.
  */
+import { PROPERTY_TYPES, type PropertyType } from "../data/listings";
 
 export interface ComplexFieldsInput {
   name?: string;
   address?: string;
-  propertyType?: string | null;
+  propertyType?: PropertyType | null;
   approvalDate?: string | null;
   totalHouseholds?: number | null;
   buildings?: number | null;
@@ -35,7 +36,6 @@ export interface ComplexFieldsInput {
 
 const STRING_OR_NULL_FIELDS = [
   ["address", "주소"],
-  ["propertyType", "건축물 용도"],
   ["approvalDate", "사용승인일"],
   ["heating", "난방"],
   ["hallwayType", "복도식 구조"],
@@ -91,6 +91,19 @@ export function parseComplexFieldsInput(
     }
   } else if (requireName) {
     errors.push("단지명을 입력해주세요.");
+  }
+
+  if (data.propertyType !== undefined) {
+    if (data.propertyType === null || data.propertyType === "") {
+      input.propertyType = null;
+    } else if (
+      typeof data.propertyType === "string" &&
+      (PROPERTY_TYPES as readonly string[]).includes(data.propertyType)
+    ) {
+      input.propertyType = data.propertyType as PropertyType;
+    } else {
+      errors.push(`매물종류는 ${PROPERTY_TYPES.join("/")} 중 하나여야 합니다.`);
+    }
   }
 
   for (const [key, label] of STRING_OR_NULL_FIELDS) {

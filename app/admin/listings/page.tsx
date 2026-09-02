@@ -133,6 +133,7 @@ function AdminListingsView() {
   const statusFilter = searchParams.get("status") ?? "";
   const transactionTypeFilter = searchParams.get("transactionType") ?? "";
   const searchQuery = searchParams.get("q") ?? "";
+  const complexIdFilter = searchParams.get("complexId") ?? "";
 
   const [listings, setListings] = useState<ListingWithComplex[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +187,7 @@ function AdminListingsView() {
         if (statusFilter) params.set("status", statusFilter);
         if (transactionTypeFilter) params.set("transactionType", transactionTypeFilter);
         if (searchQuery) params.set("q", searchQuery);
+        if (complexIdFilter) params.set("complexId", complexIdFilter);
         const query = params.toString();
 
         const response = await fetch(
@@ -213,7 +215,7 @@ function AdminListingsView() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, statusFilter, transactionTypeFilter, searchQuery]);
+  }, [searchParams, statusFilter, transactionTypeFilter, searchQuery, complexIdFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -441,6 +443,19 @@ function AdminListingsView() {
       {activeFilter && (
         <div className="mt-6 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <span>{INSPECTION_CATEGORY_LABELS[activeFilter]}만 보고 있습니다.</span>
+          <Link href="/admin/listings" className="font-bold underline">
+            전체 보기
+          </Link>
+        </div>
+      )}
+
+      {complexIdFilter && (
+        <div className="mt-6 flex items-center justify-between rounded-md border border-navy-900/10 bg-navy-900/[0.03] px-3 py-2 text-sm text-navy-800">
+          <span>
+            {listings?.[0]?.complex.name
+              ? `‘${listings[0].complex.name}’ 단지의 매물만 보고 있습니다.`
+              : "특정 단지의 매물만 보고 있습니다."}
+          </span>
           <Link href="/admin/listings" className="font-bold underline">
             전체 보기
           </Link>

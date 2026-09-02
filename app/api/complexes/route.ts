@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PROPERTY_TYPES } from "../../data/listings";
 import { createComplex, getAllComplexes } from "../../lib/complexes";
 
 export async function GET() {
@@ -45,7 +46,11 @@ export async function POST(request: NextRequest) {
   const { complex, error } = await createComplex({
     name: trimmedName,
     address: trimmedAddress,
-    propertyType: typeof propertyType === "string" ? propertyType : "아파트",
+    propertyType:
+      typeof propertyType === "string" &&
+      (PROPERTY_TYPES as readonly string[]).includes(propertyType)
+        ? (propertyType as (typeof PROPERTY_TYPES)[number])
+        : "아파트",
   });
 
   if (!complex) {

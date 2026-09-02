@@ -1,3 +1,5 @@
+import { PROPERTY_TYPES, type PropertyType } from "./listings";
+
 export interface ComplexTransportation {
   subway?: string;
   subwayDistance?: string;
@@ -6,15 +8,10 @@ export interface ComplexTransportation {
   buses?: string[];
 }
 
-/** 신규 단지 등록에서 선택 가능한 주거 단지 유형. 기존 레거시 값은 보존합니다. */
-export const COMPLEX_PROPERTY_TYPES = [
-  "공동주택",
-  "아파트",
-  "오피스텔",
-  "주상복합",
-  "단독주택",
-  "기타",
-] as const;
+/** 단지 등록 화면에서 선택 가능한 매물종류. listings.propertyType과 값 체계를
+ * 공유합니다(2026-09-02, '공동주택' 같은 레거시 값이 흩어지는 문제를 정리하며
+ * PROPERTY_TYPES로 통일 — app/data/listings.ts 참고). */
+export const COMPLEX_PROPERTY_TYPES = PROPERTY_TYPES;
 
 export interface ComplexMolitLink {
   /** 국토교통부 실거래가 API 지역코드(시군구 5자리, LAWD_CD) */
@@ -28,8 +25,10 @@ export interface Complex {
   id: string;
   name: string;
   address: string;
-  /** "공동주택" 같은 법정 건축물 용도. 매물 화면의 "매물종류"(아파트/오피스텔/상가)와는 다른 개념. */
-  propertyType?: string;
+  /** 매물종류(아파트/오피스텔/상가/단독주택/기타) — listings.propertyType과 같은
+   * 값 체계(PropertyType)를 공유합니다. 법정 건축물대장상의 용도(제1종근린생활시설
+   * 등)를 따로 기록할 필요가 생기면 이 필드에 겹쳐 넣지 말고 별도 컬럼을 만드세요. */
+  propertyType?: PropertyType;
   /** 아래 세부 정보는 관리자가 "새 단지 추가"로 빠르게 등록할 때는 비워둘 수 있습니다. */
   approvalDate?: string;
   totalHouseholds?: number;
@@ -61,7 +60,7 @@ export const complexes: Complex[] = [
     id: "hosumaeul-epyeonhansesang-2",
     name: "호수마을e편한세상2단지",
     address: "경기도 김포시 구래동 6874-17",
-    propertyType: "공동주택",
+    propertyType: "아파트",
     approvalDate: "2013-02-26",
     totalHouseholds: 1167,
     buildings: 12,

@@ -470,10 +470,3 @@ export async function getListingById(
 
   return { ...listing, complex };
 }
-
-export async function getListingsByComplexId(
-  complexId: string,
-): Promise<ListingWithComplex[]> {
-  const all = await getAllListings();
-  return all.filter((listing) => listing.complexId === complexId);
-}

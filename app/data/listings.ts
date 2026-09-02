@@ -1,7 +1,18 @@
 export type TransactionType = "매매" | "전세" | "월세";
 
-/** 매물종류: 무엇을 파는지(아파트/오피스텔/상가 등). 단지의 법정 건축물 용도와는 다른 개념. */
+/** 매물종류: 무엇을 파는지(아파트/오피스텔/상가 등). */
 export type PropertyType = "아파트" | "오피스텔" | "상가" | "단독주택" | "기타";
+
+/** PropertyType의 전체 값 목록. select 드롭다운 등에서 하드코딩하지 말고 재사용하세요.
+ * complexes.propertyType도 이 값 체계를 그대로 공유합니다(app/data/complexes.ts의
+ * COMPLEX_PROPERTY_TYPES 참고). */
+export const PROPERTY_TYPES: readonly PropertyType[] = [
+  "아파트",
+  "오피스텔",
+  "상가",
+  "단독주택",
+  "기타",
+];
 
 /** draft(임시저장, 비공개) / published(공개, 홈페이지·목록에 즉시 노출) */
 export type ListingStatus = "draft" | "published";

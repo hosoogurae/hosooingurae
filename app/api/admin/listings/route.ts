@@ -32,11 +32,12 @@ export async function GET(request: NextRequest) {
     : undefined;
 
   const search = searchParams.get("q")?.trim() || undefined;
+  const complexId = searchParams.get("complexId")?.trim() || undefined;
 
   const listings = await getAllListings({
     includeDrafts: true,
     sort,
-    filters: { status, transactionType, search },
+    filters: { status, transactionType, search, complexId },
   });
   return NextResponse.json({ listings });
 }

@@ -1,4 +1,11 @@
 import type { Complex } from "../../data/complexes";
+import type { Customer, CustomerInput } from "../../data/customers";
+import type {
+  Consultation,
+  ConsultationExtractedField,
+  ConsultationTask,
+  ConsultationTranscriptEntry,
+} from "../../data/consultations";
 import type {
   DealStatus,
   Listing,
@@ -9,10 +16,18 @@ import type {
 import type {
   ComplexInsert,
   ComplexRow,
+  ConsultationExtractedFieldRow,
+  ConsultationInsert,
+  ConsultationRow,
+  ConsultationTaskRow,
+  ConsultationTranscriptRow,
+  CustomerInsert,
+  CustomerRow,
   ListingImageInsert,
   ListingInsert,
   ListingRow,
 } from "./database.types";
+import { normalizePhone } from "../phoneNormalize";
 
 /** DB row(snake_case) → 앱에서 쓰는 Complex 타입(camelCase). */
 export function complexRowToComplex(row: ComplexRow): Complex {
@@ -20,7 +35,7 @@ export function complexRowToComplex(row: ComplexRow): Complex {
     id: row.id,
     name: row.name,
     address: row.address,
-    propertyType: row.property_type ?? undefined,
+    propertyType: (row.property_type as PropertyType | null) ?? undefined,
     approvalDate: row.approval_date ?? undefined,
     totalHouseholds: row.total_households ?? undefined,
     buildings: row.buildings ?? undefined,
@@ -184,4 +199,126 @@ export function listingToImageInserts(listing: Listing): ListingImageInsert[] {
     url,
     sort_order: index,
   }));
+}
+
+export function customerRowToCustomer(row: CustomerRow): Customer {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone ?? undefined,
+    memo: row.memo ?? undefined,
+    desiredTransactionType: row.desired_transaction_type ?? undefined,
+    desiredArea: row.desired_area ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * phone_normalized는 phone에서 파생된 값이라 호출하는 쪽이 따로 넘기지
+ * 않고 여기서 직접 계산합니다 — 화면 표시(phone)와 중복 비교
+ * (phone_normalized)가 항상 같은 규칙으로 어긋나지 않게 하기 위함입니다.
+ * 전화번호가 없으면(undefined/빈 문자열) 둘 다 null로 저장해 중복 검사
+ * 대상에서 자연히 빠집니다.
+ */
+export function customerInputToInsert(input: CustomerInput): CustomerInsert {
+  const phone = input.phone?.trim() || null;
+  return {
+    name: input.name,
+    phone,
+    phone_normalized: phone ? normalizePhone(phone) || null : null,
+    memo: input.memo ?? null,
+    desired_transaction_type: input.desiredTransactionType ?? null,
+    desired_area: input.desiredArea ?? null,
+  };
+}
+
+export function consultationRowToConsultation(row: ConsultationRow): Consultation {
+  return {
+    id: row.id,
+    customerId: row.customer_id ?? undefined,
+    startedAt: row.started_at,
+    endedAt: row.ended_at ?? undefined,
+    durationSeconds: row.duration_seconds ?? undefined,
+    mode: row.mode,
+    status: row.status,
+    transcript: row.transcript ?? undefined,
+    correctedTranscript: row.corrected_transcript ?? undefined,
+    summary: row.summary ?? undefined,
+    extractedConditions: (row.extracted_conditions as Consultation["extractedConditions"]) ?? {},
+    uncertainFields: row.uncertain_fields ?? [],
+    followUpTasks: row.follow_up_tasks ?? [],
+    smsDraft: row.sms_draft ?? undefined,
+    internalMemo: row.internal_memo ?? undefined,
+    tags: row.tags ?? [],
+    createdBy: row.created_by ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** consultations 테이블 update 페이로드(부분 갱신 — PATCH 핸들러가 필요한 키만 채워 넘깁니다). */
+export function consultationUpdateToRowPatch(
+  patch: Partial<Consultation>,
+): Partial<ConsultationInsert> {
+  const row: Partial<ConsultationInsert> = {};
+  if (patch.customerId !== undefined) row.customer_id = patch.customerId ?? null;
+  if (patch.endedAt !== undefined) row.ended_at = patch.endedAt ?? null;
+  if (patch.durationSeconds !== undefined) row.duration_seconds = patch.durationSeconds ?? null;
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.transcript !== undefined) row.transcript = patch.transcript ?? null;
+  if (patch.correctedTranscript !== undefined) {
+    row.corrected_transcript = patch.correctedTranscript ?? null;
+  }
+  if (patch.summary !== undefined) row.summary = patch.summary ?? null;
+  if (patch.extractedConditions !== undefined) {
+    row.extracted_conditions = patch.extractedConditions;
+  }
+  if (patch.uncertainFields !== undefined) row.uncertain_fields = patch.uncertainFields;
+  if (patch.followUpTasks !== undefined) row.follow_up_tasks = patch.followUpTasks;
+  if (patch.smsDraft !== undefined) row.sms_draft = patch.smsDraft ?? null;
+  if (patch.internalMemo !== undefined) row.internal_memo = patch.internalMemo ?? null;
+  if (patch.tags !== undefined) row.tags = patch.tags;
+  return row;
+}
+
+export function transcriptRowToEntry(
+  row: ConsultationTranscriptRow,
+): ConsultationTranscriptEntry {
+  return {
+    id: row.id,
+    consultationId: row.consultation_id,
+    speaker: row.speaker,
+    text: row.text,
+    correctedText: row.corrected_text ?? undefined,
+    sortOrder: row.sort_order,
+    finalizedAt: row.finalized_at,
+  };
+}
+
+export function extractedFieldRowToField(
+  row: ConsultationExtractedFieldRow,
+): ConsultationExtractedField {
+  return {
+    id: row.id,
+    consultationId: row.consultation_id,
+    fieldKey: row.field_key,
+    fieldValue: row.field_value,
+    confidence: row.confidence,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function taskRowToTask(row: ConsultationTaskRow): ConsultationTask {
+  return {
+    id: row.id,
+    consultationId: row.consultation_id ?? undefined,
+    customerId: row.customer_id ?? undefined,
+    taskType: row.task_type,
+    description: row.description,
+    dueDate: row.due_date ?? undefined,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
