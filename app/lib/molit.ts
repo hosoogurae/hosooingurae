@@ -18,6 +18,8 @@ export interface MolitAptTradeItem {
   aptSeq: string;
   jibun: string;
   umdNm: string;
+  /** 거래 대상 동(국토부 원문에 제공되는 경우). */
+  aptDong: string;
   floor: number;
   /** 전용면적(㎡) */
   excluUseAr: number;
@@ -191,6 +193,7 @@ export async function fetchAptTrades(
       aptSeq: String(record.aptSeq ?? "").trim(),
       jibun: String(record.jibun ?? "").trim(),
       umdNm: String(record.umdNm ?? "").trim(),
+      aptDong: String(record.aptDong ?? "").trim(),
       floor: toNumber(record.floor),
       excluUseAr: toNumber(record.excluUseAr),
       dealAmount: toNumber(record.dealAmount),

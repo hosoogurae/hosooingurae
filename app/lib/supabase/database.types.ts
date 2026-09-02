@@ -164,6 +164,28 @@ export interface Database {
           },
         ];
       };
+      listing_suspected_match_events: {
+        Row: {
+          match_key: string;
+          listing_id: string;
+          status: "notified" | "acknowledged";
+          notified_at: string;
+          acknowledged_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          match_key: string;
+          listing_id: string;
+          status?: "notified" | "acknowledged";
+          notified_at?: string;
+          acknowledged_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listing_suspected_match_events"]["Insert"]>;
+        Relationships: [];
+      };
       listing_images: {
         Row: {
           id: string;

@@ -12,6 +12,7 @@ function trade(aptSeq: string, aptNm: string): MolitAptTradeItem {
     aptNm,
     jibun: "",
     umdNm: "",
+    aptDong: "",
     floor: 1,
     excluUseAr: 84,
     dealAmount: 50000,

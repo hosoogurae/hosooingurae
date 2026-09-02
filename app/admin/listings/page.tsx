@@ -122,6 +122,7 @@ function AdminListingsView() {
   // urgent=1은 이전에 배포된 대시보드 카드 링크와의 하위 호환을 위해 남겨두고,
   // 새 필터는 전부 ?filter=<InspectionCategory>로 받습니다.
   const filterParam = searchParams.get("filter");
+  const isSuspectedFilter = filterParam === "suspected";
   const activeFilter: InspectionCategory | null =
     searchParams.get("urgent") === "1"
       ? "urgent"
@@ -355,14 +356,17 @@ function AdminListingsView() {
   }
 
   /** "확인함" — 이 시각 이후 날짜의 새 실거래가 나타나기 전까지는 배지를 다시 띄우지 않습니다. */
-  async function handleAcknowledgeMatch(listing: ListingWithComplex) {
+  async function handleAcknowledgeMatch(listing: ListingWithComplex, match: SuspectedMatch) {
     setMatchActionId(listing.id);
-    const { listing: updated, errors } = await patchListingFields(listing, {
-      suspectedMatchAcknowledgedAt: new Date().toISOString(),
+    const response = await fetch("/api/admin/listings/suspected-matches", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matchKey: match.matchKey }),
     });
-    if (errors) {
-      alert(errors[0]);
-    } else if (updated) {
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.error ?? "정상 매물 확인을 저장하지 못했습니다.");
+    } else {
       setSuspectedMatches((prev) => {
         if (!prev) return prev;
         const next = new Map(prev);
@@ -380,11 +384,13 @@ function AdminListingsView() {
     setExpandedMatchListingId(null);
   }
 
-  const visibleListings = activeFilter
-    ? listings?.filter((listing) =>
+  const visibleListings = isSuspectedFilter
+    ? listings?.filter((listing) => suspectedMatches?.has(listing.id)) ?? null
+    : activeFilter
+      ? listings?.filter((listing) =>
         matchesInspectionCategory(listing, activeFilter, unitTypesByComplex),
       ) ?? null
-    : listings;
+      : listings;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-16">
@@ -420,11 +426,10 @@ function AdminListingsView() {
       </div>
 
       {suspectedMatches && suspectedMatches.size > 0 && (
-        <div className="mt-4 rounded-md border border-purple-300 bg-purple-50 px-3 py-2 text-sm text-purple-800">
+        <Link href="/admin/listings?filter=suspected" className="mt-4 block rounded-md border border-purple-300 bg-purple-50 px-3 py-2 text-sm text-purple-800 transition-colors hover:bg-purple-100">
           <strong>거래 의심 매물 {suspectedMatches.size}건</strong> — 국토부
-          실거래와 조건이 비슷한 매물이 있습니다. 아직 확정된 건 아니니 배지를
-          눌러 실거래 내역을 직접 확인해주세요.
-        </div>
+          실거래와 조건이 비슷한 매물이 있습니다. 클릭하여 매물 점검 목록에서 확인하세요.
+        </Link>
       )}
 
       {error && (
@@ -439,6 +444,16 @@ function AdminListingsView() {
           <Link href="/admin/listings" className="font-bold underline">
             전체 보기
           </Link>
+        </div>
+      )}
+
+      {isSuspectedFilter && (
+        <div className="mt-6 rounded-md border border-purple-200 bg-purple-50 px-3 py-3 text-sm text-purple-800">
+          <div className="flex items-center justify-between gap-3">
+            <strong>매물 점검 &gt; 거래 의심</strong>
+            <Link href="/admin/listing-inspection" className="font-bold underline">점검 센터로</Link>
+          </div>
+          <p className="mt-1 text-xs">판정 기준: 같은 단지의 매매 · 전용면적 ±0.5㎡ · 층 일치(양쪽에 정보가 있는 경우) · 가격 ±10% · 해제 거래 제외</p>
         </div>
       )}
 
@@ -499,7 +514,9 @@ function AdminListingsView() {
         <p className="mt-8 text-sm text-navy-800/50">불러오는 중...</p>
       ) : visibleListings.length === 0 ? (
         <p className="mt-8 rounded-xl border border-navy-900/10 px-6 py-16 text-center text-sm text-navy-800/50">
-          {activeFilter
+          {isSuspectedFilter
+            ? "거래 의심 매물이 없습니다."
+            : activeFilter
             ? `${INSPECTION_CATEGORY_LABELS[activeFilter]}이 없습니다.`
             : "등록된 매물이 없습니다."}
         </p>
@@ -591,23 +608,32 @@ function AdminListingsView() {
                   </p>
 
                   {suspectedMatch && isMatchExpanded && (
-                    <div className="mt-2 rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-900">
-                      <p className="font-semibold">
-                        확정된 거래가 아니라 조건이 비슷한 실거래를 찾은 것입니다 — 직접 확인해주세요.
-                      </p>
-                      <p className="mt-1">
-                        매칭된 실거래: {formatDealDate(suspectedMatch.dealDate)} ·{" "}
-                        {formatDealAmount(suspectedMatch.dealAmount)} · {suspectedMatch.floor}층
-                        {suspectedMatch.confidence === "low" && " (층은 다름, 면적만 일치)"}
-                      </p>
+                    <div className="mt-3 rounded-md border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900">
+                      <p className="font-bold">{suspectedMatch.reason}</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-md bg-white p-3">
+                          <p className="font-bold">등록 매물</p>
+                          <p className="mt-1">{listing.complex.name} · {listing.transactionType}</p>
+                          <p>{listing.priceLabel} · 전용 {listing.exclusiveArea}㎡ · {listing.floor || "-"}층</p>
+                          <p>동·호수: {listing.building || "저장 안 됨"}</p>
+                          <p>등록일: {formatUpdatedAt(listing.createdAt)} · 마지막 확인: {formatUpdatedAt(listing.lastVerifiedAt)}</p>
+                        </div>
+                        <div className="rounded-md bg-white p-3">
+                          <p className="font-bold">일치 가능 국토부 거래</p>
+                          <p className="mt-1">계약일 {formatDealDate(suspectedMatch.dealDate)} · {formatDealAmount(suspectedMatch.dealAmount)}</p>
+                          <p>전용 {suspectedMatch.exclusiveArea}㎡ · {suspectedMatch.floor || "-"}층 · 동 {suspectedMatch.aptDong || "미제공"}</p>
+                          <p>해제 여부: {suspectedMatch.cdealType === "O" ? "해제" : "정상"} · 가격 차이 {suspectedMatch.priceDifferencePercent.toFixed(1)}%</p>
+                        </div>
+                      </div>
                       <div className="mt-2 flex flex-wrap gap-2">
+                        <Link href={`/admin/listings/${listing.id}/edit`} className="rounded-md border border-purple-300 bg-white px-3 py-1.5 font-bold text-purple-700">매물 수정</Link>
                         <button
                           type="button"
-                          onClick={() => handleAcknowledgeMatch(listing)}
+                          onClick={() => handleAcknowledgeMatch(listing, suspectedMatch)}
                           disabled={matchActionId === listing.id}
                           className="rounded-md border border-purple-300 bg-white px-3 py-1.5 font-bold text-purple-700 transition-colors hover:border-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {matchActionId === listing.id ? "처리 중..." : "확인함"}
+                          {matchActionId === listing.id ? "처리 중..." : "정상 매물로 확인"}
                         </button>
                         <button
                           type="button"
@@ -617,6 +643,7 @@ function AdminListingsView() {
                         >
                           거래완료 처리
                         </button>
+                        <button type="button" onClick={() => setExpandedMatchListingId(null)} className="rounded-md border border-purple-300 bg-white px-3 py-1.5 font-bold text-purple-700">나중에 확인</button>
                       </div>
                     </div>
                   )}

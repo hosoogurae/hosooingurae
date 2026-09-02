@@ -80,6 +80,7 @@ function CategoryCard({
 
 export default function ListingInspectionPage() {
   const [counts, setCounts] = useState<InspectionCounts | null>(null);
+  const [suspectedCount, setSuspectedCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -87,12 +88,17 @@ export default function ListingInspectionPage() {
 
     async function load() {
       try {
-        const [listings, unitTypesByComplex] = await Promise.all([
+        const [listings, unitTypesByComplex, suspectedResponse] = await Promise.all([
           loadListings(),
           loadUnitTypesByComplex(),
+          fetch("/api/admin/listings/suspected-matches"),
         ]);
         if (!cancelled) {
           setCounts(countInspectionCategories(listings, unitTypesByComplex));
+          if (suspectedResponse.ok) {
+            const data = await suspectedResponse.json();
+            setSuspectedCount(data.matches?.length ?? 0);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -135,6 +141,13 @@ export default function ListingInspectionPage() {
         우선 확인이 필요한 항목
       </p>
       <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Link href="/admin/listings?filter=suspected" className={`rounded-xl border p-5 transition-colors ${(suspectedCount ?? 0) > 0 ? "border-purple-400 bg-purple-50 hover:bg-purple-100" : "border-navy-900/10 bg-white hover:border-gold-500"}`}>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-bold text-navy-950">거래 의심</h2>
+            <span className="text-2xl font-black text-purple-700">{suspectedCount === null ? "-" : `${suspectedCount}건`}</span>
+          </div>
+          <p className="mt-2 text-xs text-navy-800/60">국토부 실거래와 단지·거래유형·면적·층·가격이 유사한 매물을 비교하고 처리합니다.</p>
+        </Link>
         {priorityCategories.map((category) => (
           <CategoryCard
             key={category}

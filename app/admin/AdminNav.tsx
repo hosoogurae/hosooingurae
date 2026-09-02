@@ -32,6 +32,7 @@ export function AdminNav() {
   // (AdminChrome이 pathname만 다시 읽음), 이 fetch는 admin 화면에 들어올 때 한
   // 번만 실행됩니다.
   const [newContactCount, setNewContactCount] = useState<number | null>(null);
+  const [suspectedCount, setSuspectedCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +49,11 @@ export function AdminNav() {
       .catch(() => {
         // 배지는 부가 정보라 실패해도 조용히 무시합니다(문의함 화면에서 다시 시도됨).
       });
+
+    fetch("/api/admin/listings/suspected-matches")
+      .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+      .then((data) => { if (!cancelled) setSuspectedCount(data.matches?.length ?? 0); })
+      .catch(() => undefined);
 
     return () => {
       cancelled = true;
@@ -104,6 +110,8 @@ export function AdminNav() {
                 : pathname.startsWith(item.href);
             const showContactBadge =
               item.href === "/admin/contacts" && (newContactCount ?? 0) > 0;
+            const showSuspectedBadge =
+              item.href === "/admin/listing-inspection" && (suspectedCount ?? 0) > 0;
             return (
               <Link
                 key={item.href}
@@ -124,6 +132,11 @@ export function AdminNav() {
                     }`}
                   >
                     {newContactCount}
+                  </span>
+                )}
+                {showSuspectedBadge && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${isActive ? "bg-gold-400 text-navy-950" : "bg-purple-600 text-white"}`}>
+                    {suspectedCount}
                   </span>
                 )}
               </Link>

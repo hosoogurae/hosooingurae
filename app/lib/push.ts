@@ -93,3 +93,16 @@ export async function sendTestPush(endpoint: string): Promise<{ error?: string }
     url: "/admin/contacts",
   });
 }
+
+/** 검사 1회에서 새로 발견된 거래 의심 건을 관리자에게 한 번만 요약 발송합니다. */
+export async function sendNewSuspectedMatchesPush(count: number): Promise<void> {
+  if (!vapidConfigured || count <= 0) return;
+  const subscriptions = await getAllSubscriptions();
+  if (subscriptions.length === 0) return;
+  const payload: PushPayload = {
+    title: "거래 의심 매물",
+    body: `새로운 거래 의심 매물 ${count}건이 발견되었습니다.`,
+    url: "/admin/listings?filter=suspected",
+  };
+  await Promise.all(subscriptions.map((sub) => sendToOne(sub, payload)));
+}
