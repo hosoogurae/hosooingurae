@@ -360,7 +360,11 @@ export default function AdminRegisterPage() {
         payload.images = sourceSubmission.photos;
       }
 
-      if (!isUpdatingExisting && complexMode === "new") {
+      if (
+        !isUpdatingExisting &&
+        complexMode === "new" &&
+        draft.propertyType !== "상가"
+      ) {
         delete payload.complexId;
         payload.newComplex = newComplex;
       }

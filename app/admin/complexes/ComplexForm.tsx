@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { Complex } from "../../data/complexes";
+import { useEffect, useState } from "react";
+import { COMPLEX_PROPERTY_TYPES, type Complex } from "../../data/complexes";
 import type { ComplexFieldsInput } from "../../lib/complexValidation";
 import type { MolitCheckSample } from "../../api/admin/molit-check/route";
 import {
@@ -279,6 +279,9 @@ export default function ComplexForm({
   allowNaverPaste?: boolean;
 }) {
   const [values, setValues] = useState<ComplexFormValues>(toFormValues(initial));
+  const [lastSavedValues, setLastSavedValues] = useState<ComplexFormValues>(
+    toFormValues(initial),
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [molitResult, setMolitResult] = useState<MolitCheckResult>({ status: "idle" });
@@ -293,6 +296,15 @@ export default function ComplexForm({
   const [naverUncertainFields, setNaverUncertainFields] = useState<string[] | null>(
     null,
   );
+  const hasUnsavedChanges =
+    JSON.stringify(values) !== JSON.stringify(lastSavedValues);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsavedChanges]);
 
   function update<K extends keyof ComplexFormValues>(key: K, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -418,7 +430,9 @@ export default function ComplexForm({
     try {
       const result = await onSubmit(input);
       if (result.error) {
-        setErrors([result.error]);
+        setErrors([`저장하지 못했습니다. ${result.error}`]);
+      } else {
+        setLastSavedValues(values);
       }
     } finally {
       setSaving(false);
@@ -479,12 +493,19 @@ export default function ComplexForm({
             />
           </Field>
           <Field label="건축물 용도">
-            <input
+            <select
               value={values.propertyType}
               onChange={(event) => update("propertyType", event.target.value)}
-              placeholder="예: 공동주택"
               className={inputClass}
-            />
+            >
+              <option value="">선택해주세요</option>
+              {values.propertyType === "아파트상가" && (
+                <option value="아파트상가" disabled>기존 값: 아파트상가</option>
+              )}
+              {COMPLEX_PROPERTY_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
           </Field>
           <Field label="사용승인일">
             <input
@@ -777,12 +798,18 @@ export default function ComplexForm({
         </div>
       )}
 
+      {hasUnsavedChanges && (
+        <p className="text-sm font-semibold text-gold-700">
+          저장되지 않은 변경사항이 있습니다
+        </p>
+      )}
+
       <button
         type="submit"
         disabled={saving}
         className="self-start rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-2.5 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {saving ? "저장 중..." : submitLabel}
+        {saving ? "저장 중…" : submitLabel}
       </button>
     </form>
   );

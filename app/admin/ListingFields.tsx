@@ -169,6 +169,7 @@ export function ListingFormFields({
 
   return (
     <>
+      {draft.propertyType !== "상가" && (
       <div className="rounded-lg border border-navy-900/10 p-4">
         <p className="text-xs font-semibold text-navy-800/60">단지 · 건물</p>
 
@@ -244,13 +245,18 @@ export function ListingFormFields({
           </div>
         )}
       </div>
+      )}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="매물종류">
           <select
             value={draft.propertyType}
             onChange={(event) =>
-              onChangeField("propertyType", event.target.value as PropertyType)
+              {
+                const propertyType = event.target.value as PropertyType;
+                onChangeField("propertyType", propertyType);
+                if (propertyType === "상가") onChangeField("complexId", "");
+              }
             }
             className={inputClass}
           >
@@ -260,6 +266,11 @@ export function ListingFormFields({
               </option>
             ))}
           </select>
+          {draft.propertyType === "상가" && (
+            <span className="text-xs text-navy-800/50">
+              상가 매물은 주거 단지를 선택하지 않아도 등록할 수 있습니다.
+            </span>
+          )}
         </Field>
 
         <Field label="거래유형">

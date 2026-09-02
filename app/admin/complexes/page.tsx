@@ -7,16 +7,36 @@ import type { ComplexCompletion } from "../../lib/complexes";
 
 type ComplexWithCompletion = Complex & { completion: ComplexCompletion };
 
-function completionLabel(level: ComplexCompletion["basic"]): string {
-  if (level === "complete") return "✓";
-  if (level === "partial") return "△";
-  return "미입력";
-}
-
-function completionClass(level: ComplexCompletion["basic"]): string {
-  if (level === "complete") return "text-green-600";
-  if (level === "partial") return "text-gold-600";
-  return "text-navy-800/40";
+function StatusBadge({
+  label,
+  complete,
+  missing = [],
+  optional = false,
+}: {
+  label: string;
+  complete?: boolean;
+  missing?: string[];
+  optional?: boolean;
+}) {
+  const text = optional ? "선택 입력" : complete ? "입력 완료" : "확인 필요";
+  const style = optional
+    ? "bg-navy-900/5 text-navy-800/50"
+    : complete
+      ? "bg-green-50 text-green-700"
+      : "bg-amber-50 text-amber-700";
+  const detail = missing.length > 0 ? `확인 필요: ${missing.join(", ")}` : undefined;
+  return (
+    <details className="group relative">
+      <summary title={detail} className={`cursor-pointer list-none rounded-full px-2.5 py-1 ${style}`}>
+        {complete && !optional ? "✓ " : optional ? "○ " : "△ "}{label} · {text}
+      </summary>
+      {detail && (
+        <span className="absolute left-0 top-full z-10 mt-1 hidden w-max max-w-xs rounded-md bg-navy-950 px-3 py-2 text-xs font-normal text-white shadow-lg group-open:block group-hover:block">
+          {detail}
+        </span>
+      )}
+    </details>
+  );
 }
 
 export default function AdminComplexesPage() {
@@ -71,6 +91,10 @@ export default function AdminComplexesPage() {
         얼마나 채워져 있는지 한눈에 확인할 수 있습니다. 전부 채워야만 등록되는
         건 아니니, 부족한 영역은 나중에 언제든 보완하면 됩니다.
       </p>
+      <div className="mt-3 rounded-lg bg-navy-900/[0.03] px-4 py-3 text-xs leading-relaxed text-navy-800/65">
+        기본정보: 단지명·주소·건축물 용도·사용승인일·세대수 / 교통·학군:
+        지하철 또는 학교 정보 / MOLIT: lawdCode와 aptSeq 연결 / 평면도·사진 등은 선택 입력
+      </div>
 
       {loadError && (
         <p className="mt-6 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -99,28 +123,11 @@ export default function AdminComplexesPage() {
                   <p className="mt-1 text-sm text-navy-800/70">
                     {complex.address || "주소 미입력"}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold">
-                    <span className={completionClass(complex.completion.basic)}>
-                      기본정보 {completionLabel(complex.completion.basic)}
-                    </span>
-                    <span className="text-navy-800/20">|</span>
-                    <span className={completionClass(complex.completion.ai)}>
-                      AI {completionLabel(complex.completion.ai)}
-                    </span>
-                    <span className="text-navy-800/20">|</span>
-                    <span
-                      className={
-                        complex.completion.molitConnected
-                          ? "text-green-600"
-                          : "text-navy-800/40"
-                      }
-                    >
-                      실거래 {complex.completion.molitConnected ? "연결됨" : "미연결"}
-                    </span>
-                    <span className="text-navy-800/20">|</span>
-                    <span className="text-navy-800/60">
-                      평면도 {complex.completion.floorPlanCount}개
-                    </span>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                    <StatusBadge label="기본정보" complete={complex.completion.basic === "complete"} missing={complex.completion.basicMissing} />
+                    <StatusBadge label="교통·학군" complete={complex.completion.ai === "complete"} missing={complex.completion.aiMissing} />
+                    <StatusBadge label="MOLIT" complete={complex.completion.molitConnected} missing={complex.completion.molitMissing} />
+                    <StatusBadge label={`평면도 ${complex.completion.floorPlanCount}개`} optional />
                   </div>
                 </div>
                 <Link

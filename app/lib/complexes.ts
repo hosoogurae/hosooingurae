@@ -300,49 +300,41 @@ export interface ComplexCompletion {
   ai: CompletionLevel;
   molitConnected: boolean;
   floorPlanCount: number;
+  basicMissing: string[];
+  aiMissing: string[];
+  molitMissing: string[];
 }
 
-/** 기본정보로 취급하는 필드. scoring.ts와 무관하게 매물 상세페이지 노출용 정보들. */
-const BASIC_INFO_FIELDS = (complex: Complex): unknown[] => [
-  complex.address || undefined,
-  complex.approvalDate,
-  complex.totalHouseholds,
-  complex.buildings,
-  complex.builder,
-  complex.heating,
-  complex.hallwayType,
-  complex.maxFloor,
-  complex.floorAreaRatio,
-  complex.buildingCoverageRatio,
-  complex.parkingCount,
-  complex.parkingPerHousehold,
-];
-
-/** app/lib/recommend/scoring.ts가 실제로 점수 계산에 쓰는 필드만. */
-const AI_INFO_FIELDS = (complex: Complex): unknown[] => [
-  complex.transportation.subway,
-  complex.transportation.subwayWalkMinutes,
-  complex.nearbySchools.length > 0 ? complex.nearbySchools : undefined,
-  complex.totalHouseholds,
-  complex.parkingPerHousehold,
-];
-
-function levelFromFields(fields: unknown[]): CompletionLevel {
-  const filled = fields.filter((value) => value !== undefined && value !== null).length;
-  if (filled === 0) return "empty";
-  if (filled === fields.length) return "complete";
-  return "partial";
+function missingBasicFields(complex: Complex): string[] {
+  return [
+    [complex.name, "단지명"],
+    [complex.address, "주소"],
+    [complex.propertyType, "건축물 용도"],
+    [complex.approvalDate, "사용승인일"],
+    [complex.totalHouseholds, "세대수"],
+  ].filter(([value]) => value === undefined || value === null || value === "")
+    .map(([, label]) => label as string);
 }
 
 export function computeComplexCompletion(
   complex: Complex,
   floorPlanCount: number,
 ): ComplexCompletion {
+  const basicMissing = missingBasicFields(complex);
+  const hasTransportOrSchool = Boolean(complex.transportation.subway) ||
+    complex.nearbySchools.length > 0;
+  const molitMissing = [
+    ...(!complex.molit?.lawdCode ? ["lawdCode"] : []),
+    ...(!complex.molit?.aptSeq ? ["aptSeq"] : []),
+  ];
   return {
-    basic: levelFromFields(BASIC_INFO_FIELDS(complex)),
-    ai: levelFromFields(AI_INFO_FIELDS(complex)),
-    molitConnected: Boolean(complex.molit?.lawdCode && complex.molit?.aptSeq),
+    basic: basicMissing.length === 0 ? "complete" : "partial",
+    ai: hasTransportOrSchool ? "complete" : "partial",
+    molitConnected: molitMissing.length === 0,
     floorPlanCount,
+    basicMissing,
+    aiMissing: hasTransportOrSchool ? [] : ["지하철 또는 학교 정보"],
+    molitMissing,
   };
 }
 

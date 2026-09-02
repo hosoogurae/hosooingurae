@@ -50,7 +50,9 @@ export async function POST(request: NextRequest) {
   //    새 단지 정보(newComplex)가 왔으면 지금 만들어서 그 id를 씁니다.
   const newComplex = data.newComplex as NewComplexPayload | undefined;
 
-  if (newComplex && typeof newComplex === "object") {
+  if (data.propertyType === "상가") {
+    data.complexId = "";
+  } else if (newComplex && typeof newComplex === "object") {
     const name = typeof newComplex.name === "string" ? newComplex.name.trim() : "";
     const address =
       typeof newComplex.address === "string" ? newComplex.address.trim() : "";

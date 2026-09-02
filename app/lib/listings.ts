@@ -265,10 +265,24 @@ function attachComplexes(
     const complex = complexById.get(listing.complexId);
     if (complex) {
       result.push({ ...listing, complex });
+    } else if (listing.propertyType === "상가" && !listing.complexId) {
+      result.push({ ...listing, complex: standaloneCommercialComplex(listing) });
     }
   }
 
   return result;
+}
+
+function standaloneCommercialComplex(listing: Listing): Complex {
+  return {
+    id: `standalone-${listing.id}`,
+    name: listing.building.trim() || "상가",
+    address: "",
+    propertyType: "상가",
+    nearbySchools: [],
+    transportation: {},
+    features: [],
+  };
 }
 
 /**
@@ -435,7 +449,14 @@ export async function getListingById(
     return undefined;
   }
 
-  const complex = await getComplexById(row.complex_id);
+  const mappedListing = listingRowToListing(row, [], {
+    includeRawSourceText: options.includeDrafts,
+  });
+  const complex = row.complex_id
+    ? await getComplexById(row.complex_id)
+    : mappedListing.propertyType === "상가"
+      ? standaloneCommercialComplex(mappedListing)
+      : undefined;
   if (!complex) {
     return undefined;
   }

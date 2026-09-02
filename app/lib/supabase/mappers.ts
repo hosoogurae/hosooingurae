@@ -98,7 +98,7 @@ export function listingRowToListing(
 ): Listing {
   return {
     id: row.id,
-    complexId: row.complex_id,
+    complexId: row.complex_id ?? "",
     propertyType: row.property_type as PropertyType,
     status: row.status as ListingStatus,
     dealStatus: row.deal_status as DealStatus,
@@ -142,7 +142,7 @@ export function listingRowToListing(
 export function listingToInsert(listing: Listing): ListingInsert {
   return {
     id: listing.id,
-    complex_id: listing.complexId,
+    complex_id: listing.complexId || null,
     property_type: listing.propertyType,
     status: listing.status,
     deal_status: listing.dealStatus,

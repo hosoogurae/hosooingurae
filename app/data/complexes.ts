@@ -6,6 +6,16 @@ export interface ComplexTransportation {
   buses?: string[];
 }
 
+/** 신규 단지 등록에서 선택 가능한 주거 단지 유형. 기존 레거시 값은 보존합니다. */
+export const COMPLEX_PROPERTY_TYPES = [
+  "공동주택",
+  "아파트",
+  "오피스텔",
+  "주상복합",
+  "단독주택",
+  "기타",
+] as const;
+
 export interface ComplexMolitLink {
   /** 국토교통부 실거래가 API 지역코드(시군구 5자리, LAWD_CD) */
   lawdCode: string;

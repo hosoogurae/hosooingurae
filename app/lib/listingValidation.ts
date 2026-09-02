@@ -22,7 +22,7 @@ const DEAL_STATUSES: DealStatus[] = [
   "hold",
 ];
 
-const REQUIRED_STRING_FIELDS = ["id", "complexId"] as const;
+const REQUIRED_STRING_FIELDS = ["id"] as const;
 
 /**
  * 공개(published) 상태에서는 비어있으면 안 되지만, 임시저장(draft) 상태에서는
@@ -71,6 +71,13 @@ export function parseListingPayload(input: unknown): {
     if (typeof data[field] !== "string" || (data[field] as string).trim() === "") {
       errors.push(`${field} 값이 비어있습니다.`);
     }
+  }
+
+  if (
+    data.propertyType !== "상가" &&
+    (typeof data.complexId !== "string" || data.complexId.trim() === "")
+  ) {
+    errors.push("complexId 값이 비어있습니다.");
   }
 
   const isDraft = data.status === "draft";
@@ -136,7 +143,7 @@ export function parseListingPayload(input: unknown): {
 
   const listing: Listing = {
     id: data.id as string,
-    complexId: data.complexId as string,
+    complexId: typeof data.complexId === "string" ? data.complexId : "",
     propertyType: data.propertyType as PropertyType,
     status: data.status as ListingStatus,
     // 없으면 "광고중" 기본값 — 신규 등록 시 자연스러운 기본값이고, 기존

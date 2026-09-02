@@ -83,7 +83,7 @@ export interface Database {
       listings: {
         Row: {
           id: string;
-          complex_id: string;
+          complex_id: string | null;
           property_type: "아파트" | "오피스텔" | "상가" | "단독주택" | "기타";
           status: "draft" | "published";
           deal_status: "advertising" | "negotiating" | "completed" | "hold";
@@ -119,7 +119,7 @@ export interface Database {
         };
         Insert: {
           id: string;
-          complex_id: string;
+          complex_id?: string | null;
           property_type?: "아파트" | "오피스텔" | "상가" | "단독주택" | "기타";
           status?: "draft" | "published";
           deal_status?: "advertising" | "negotiating" | "completed" | "hold";

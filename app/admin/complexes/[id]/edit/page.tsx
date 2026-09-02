@@ -72,7 +72,16 @@ export default function EditComplexPage({
       if (!data.complex) {
         return { error: "저장 응답에 단지 정보가 없습니다." };
       }
-      setComplex(data.complex);
+      const reloadResponse = await fetch(`/api/admin/complexes/${id}`, {
+        cache: "no-store",
+      });
+      const reloadData = await reloadResponse.json().catch(() => null);
+      if (!reloadResponse.ok || !reloadData?.complex) {
+        return {
+          error: `DB 재조회에 실패했습니다. (${reloadData?.errors?.[0] ?? `HTTP ${reloadResponse.status}`})`,
+        };
+      }
+      setComplex(reloadData.complex as Complex);
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
       return {};
@@ -101,8 +110,8 @@ export default function EditComplexPage({
       {complex && (
         <>
           {savedNotice && (
-            <p className="mt-6 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-              저장되었습니다.
+            <p role="status" className="fixed bottom-6 right-6 z-50 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 shadow-lg">
+              단지 정보가 저장되었습니다.
             </p>
           )}
           <div className="mt-8">

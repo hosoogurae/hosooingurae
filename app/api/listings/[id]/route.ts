@@ -58,24 +58,26 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ errors: [NOT_CONFIGURED_ERROR] }, { status: 500 });
   }
 
-  const { data: existingComplex, error: complexError } = await supabase
-    .from("complexes")
-    .select("id")
-    .eq("id", listing.complexId)
-    .maybeSingle();
+  if (listing.propertyType !== "상가") {
+    const { data: existingComplex, error: complexError } = await supabase
+      .from("complexes")
+      .select("id")
+      .eq("id", listing.complexId)
+      .maybeSingle();
 
-  if (complexError) {
-    console.error("[api/listings/:id] 단지 조회 실패", complexError);
-    return NextResponse.json(
-      { errors: ["단지 정보를 확인하는 중 오류가 발생했습니다."] },
-      { status: 500 },
-    );
-  }
-  if (!existingComplex) {
-    return NextResponse.json(
-      { errors: ["존재하지 않는 단지입니다."] },
-      { status: 400 },
-    );
+    if (complexError) {
+      console.error("[api/listings/:id] 단지 조회 실패", complexError);
+      return NextResponse.json(
+        { errors: ["단지 정보를 확인하는 중 오류가 발생했습니다."] },
+        { status: 500 },
+      );
+    }
+    if (!existingComplex) {
+      return NextResponse.json(
+        { errors: ["존재하지 않는 단지입니다."] },
+        { status: 400 },
+      );
+    }
   }
 
   const { data: updated, error: updateError } = await supabase
