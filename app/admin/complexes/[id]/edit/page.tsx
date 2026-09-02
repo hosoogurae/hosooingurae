@@ -54,11 +54,25 @@ export default function EditComplexPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        return { error: data.errors?.[0] ?? "저장에 실패했습니다." };
+      const responseText = await response.text();
+      let data: { errors?: string[]; complex?: Complex } = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        return {
+          error: `저장 서버가 올바르지 않은 응답을 반환했습니다. (HTTP ${response.status})`,
+        };
       }
-      setComplex(data.complex as Complex);
+      if (!response.ok) {
+        return {
+          error:
+            data.errors?.[0] ?? `저장에 실패했습니다. (HTTP ${response.status})`,
+        };
+      }
+      if (!data.complex) {
+        return { error: "저장 응답에 단지 정보가 없습니다." };
+      }
+      setComplex(data.complex);
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
       return {};

@@ -157,7 +157,7 @@ export async function createComplex(
  * undefined인 키는 건드리지 않고, null인 키는 명시적으로 지웁니다.
  * create/update 양쪽에서 공유합니다.
  */
-function toDbPatch(input: ComplexFieldsInput): ComplexUpdate {
+export function toDbPatch(input: ComplexFieldsInput): ComplexUpdate {
   const patch: ComplexUpdate = {};
   if (input.name !== undefined) patch.name = input.name;
   if (input.address !== undefined) patch.address = input.address;
@@ -282,7 +282,9 @@ export async function updateComplex(
 
   if (error) {
     console.error("[complexes] 단지 정보 수정 실패", error);
-    return { error: "단지 정보를 수정하지 못했습니다." };
+    return {
+      error: `단지 정보를 수정하지 못했습니다. (${error.message})`,
+    };
   }
   if (!data) {
     return { error: "단지를 찾을 수 없습니다." };

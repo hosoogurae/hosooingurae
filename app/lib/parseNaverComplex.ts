@@ -88,10 +88,12 @@ function parseManagement(section: string): Pick<
   ParsedNaverComplex,
   "managementFeeRaw" | "managementFeeWon" | "managementFeeAsOf"
 > {
-  const match = section.match(/(?:월\s*)?관리비(?!\s*기준)\s*[:：]?\s*([^\n]+)/);
+  const managementSection = getNamedSection(section, /(?:월\s*)?관리비/, /학교|교육|교통|버스|주변|매물|분양/);
+  const match = managementSection.match(/(?:월\s*)?관리비(?!\s*기준)\s*[:：]?\s*(?:\n\s*)?([\d,.]+\s*만?\s*[\d,]*\s*원|[^\n]+)/);
   if (!match) return {};
-  const raw = match[1].trim();
-  const date = (raw + "\n" + section.match(/관리비\s*기준(?:연월)?\s*[:：]?\s*([^\n]+)/)?.[1]).match(
+  const feeMatch = match[1].match(/[\d,.]+\s*만?\s*[\d,]*\s*원/);
+  const raw = (feeMatch?.[0] ?? match[1]).replace(/\s+/g, " ").trim();
+  const date = managementSection.match(
     /(20\d{2})[.\-/년]\s*(\d{1,2})\s*(?:월)?/,
   );
   return {
@@ -102,33 +104,70 @@ function parseManagement(section: string): Pick<
 }
 
 function parsePhone(section: string): string | undefined {
-  return section.match(/관리사무소(?:\s*전화번호)?\s*[:：]?\s*(0\d{1,2}-\d{3,4}-\d{4})/)?.[1];
+  return section.match(/관리사무소(?:\s*전화(?:번호)?)?\s*[:：]?\s*(?:\n\s*)?(0\d{1,2}-\d{3,4}-\d{4})/)?.[1];
 }
 
 function parseSchools(text: string): string[] | undefined {
-  const results = [...text.matchAll(/([가-힣A-Za-z0-9]+초등학교)\s*(?:[·|,]\s*)?(?:약\s*)?(\d[\d,]*)\s*m\s*(?:[·|,]\s*)?(?:도보\s*)?(\d+)\s*분/g)]
-    .map((match) => `${match[1]} · 약 ${match[2].replace(/,/g, "")}m · 도보 ${match[3]}분`);
+  const schoolSection = getNamedSection(text, /(?:학교|학군)\s*정보|배정\s*초등학교/, /교통\s*정보|주변\s*시설|매물|분양/) || text;
+  const results = [...schoolSection.matchAll(/([가-힣A-Za-z0-9]+초등학교)(?=([\s\S]{0,120}))/g)]
+    .filter((match) => match[1] !== "배정초등학교")
+    .map((match) => {
+      const distance = match[2].match(/(\d[\d,]*)\s*m/)?.[1];
+      const walk = match[2].match(/도보\s*(\d+)\s*분/)?.[1];
+      return distance && walk
+        ? `${match[1]} · ${distance.replace(/,/g, "")}m · 도보 ${walk}분`
+        : undefined;
+    })
+    .filter((value): value is string => value !== undefined);
   return results.length > 0 ? [...new Set(results)] : undefined;
 }
 
 function parseSubways(text: string): Pick<ParsedNaverComplex, "subway" | "subwayDistance" | "subwayWalkMinutes" | "notices"> {
-  const matches = [...text.matchAll(/([가-힣A-Za-z0-9]+역)\s*(?:[·|,]\s*)?(?:약\s*)?(\d[\d,]*)\s*m\s*(?:[·|,]\s*)?(?:도보\s*)?(\d+)\s*분/g)];
+  const transportSection = getNamedSection(text, /교통\s*정보|지하철/, /주변\s*시설|학교\s*정보|매물|분양/) || text;
+  const matches = [...transportSection.matchAll(/([가-힣A-Za-z0-9]+역)(?=([\s\S]{0,120}))/g)]
+    .filter((match) => match[1] !== "지하철역")
+    .map((match) => ({
+      name: match[1],
+      distance: match[2].match(/(\d[\d,]*)\s*m/)?.[1],
+      walk: match[2].match(/도보\s*(\d+)\s*분/)?.[1],
+    }))
+    .filter((match): match is { name: string; distance: string; walk: string } => Boolean(match.distance && match.walk));
   if (matches.length === 0) return {};
   const first = matches[0];
   return {
-    subway: first[1],
-    subwayDistance: `약 ${first[2].replace(/,/g, "")}m`,
-    subwayWalkMinutes: Number(first[3]),
+    subway: first.name,
+    subwayDistance: `${first.distance.replace(/,/g, "")}m`,
+    subwayWalkMinutes: Number(first.walk),
     notices: matches.length > 1
-      ? [`지하철역이 여러 개 확인되었습니다. ${matches.slice(1).map((match) => match[1]).join(", ")}은 직접 확인해주세요.`]
+      ? [`지하철역이 여러 개 확인되었습니다. ${matches.slice(1).map((match) => match.name).join(", ")}은 직접 확인해주세요.`]
       : undefined,
   };
 }
 
 function parseBuses(text: string): string[] | undefined {
-  const results = [...text.matchAll(/(?:버스\s*)?([A-Za-z]?\d{1,4}(?:-\d{1,3})?)\s*[\[(]?\s*(일반|간선|지선|광역|직행좌석|좌석|마을|공항)\s*[\])]?/g)]
-    .map((match) => `${match[1]}(${match[2]})`);
+  const section = getNamedSection(text, /버스/, /학교\s*정보|주변\s*시설|매물|분양/) || text;
+  const types = ["직행좌석", "일반", "좌석", "마을", "공항", "간선", "지선", "광역"];
+  const typePattern = types.join("|");
+  const results: string[] = [];
+  for (const match of section.matchAll(new RegExp(`(${typePattern})\\s*[:：]?([\\s\\S]*?)(?=${typePattern}|$)`, "g"))) {
+    const type = match[1];
+    const routes = match[2].match(/\b(?:M\d{3,4}|\d{1,4}(?:-\d{1,3})?)\b/g) ?? [];
+    results.push(...routes.map((route) => `${route}(${type})`));
+  }
+  for (const match of section.matchAll(new RegExp(`(?:^|\\s)(M?\\d{1,4}(?:-\\d{1,3})?)\\s*[\\[(](${typePattern})[\\])]`, "g"))) {
+    results.push(`${match[1]}(${match[2]})`);
+  }
   return results.length > 0 ? [...new Set(results)] : undefined;
+}
+
+function getNamedSection(text: string, start: RegExp, end: RegExp): string {
+  const startMatch = text.match(start);
+  if (!startMatch?.index) return startMatch?.index === 0 ? text : "";
+  const rest = text.slice(startMatch.index);
+  const endMatch = rest.slice(startMatch[0].length).match(end);
+  return endMatch?.index === undefined
+    ? rest
+    : rest.slice(0, startMatch[0].length + endMatch.index);
 }
 
 /** "기본 정보" 문자열 이후 구간만 돌려줍니다. 못 찾으면 전체 텍스트를 그대로 씁니다(구형/다른 레이아웃 대비 — 위 클래스 코멘트 참고). */

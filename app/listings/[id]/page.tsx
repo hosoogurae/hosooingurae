@@ -29,6 +29,7 @@ import ContactActions from "../../components/ContactActions";
 import FloorPlanImage from "../../components/FloorPlanImage";
 import { getComplexImages } from "../../lib/complexImages";
 import { getFloorPlanImages } from "../../lib/floorPlans";
+import { formatSubwayTransportation } from "../../lib/format/transportation";
 import {
   resolveListingGallery,
   resolveListingHeroImage,
@@ -117,9 +118,8 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   }
 
   const { complex } = listing;
-  const transportation = complex.transportation.subway
-    ? `${complex.transportation.subway} ${complex.transportation.subwayDistance ?? ""}`.trim()
-    : "-";
+  const transportation =
+    formatSubwayTransportation(complex.transportation) ?? "-";
   // 주소는 "매물 핵심정보"에서 항상 보여주므로 여기서는 판정에서 뺍니다
   // (그래야 이 섹션이 정말 "그 외 단지정보"가 있을 때만 나타납니다).
   const hasComplexInfo =

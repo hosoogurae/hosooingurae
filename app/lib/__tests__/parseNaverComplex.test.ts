@@ -1,9 +1,42 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   getUncertainComplexFieldLabels,
   parseManagementFeeWon,
   parseNaverComplexText,
 } from "../parseNaverComplex";
+
+const BANDOBORA5_FIXTURE = fs.readFileSync(
+  path.join(__dirname, "fixtures", "naver-complex-bandoubora5.txt"),
+  "utf8",
+);
+
+describe("한강신도시반도유보라5차 실제 원문", () => {
+  const parsed = parseNaverComplexText(BANDOBORA5_FIXTURE);
+
+  it("관리·학교·교통 정보를 섹션 범위 안에서 정확히 파싱한다", () => {
+    expect(parsed.managementOfficePhone).toBe("031-983-0052");
+    expect(parsed.managementFeeWon).toBe(297057);
+    expect(parsed.managementFeeRaw).toBe("29만 7,057원");
+    expect(parsed.managementFeeAsOf).toBe("2026-06");
+    expect(parsed.nearbySchools).toEqual([
+      "김포한가람초등학교 · 497m · 도보 7분",
+    ]);
+    expect(parsed.subway).toBe("구래역");
+    expect(parsed.subwayDistance).toBe("330m");
+    expect(parsed.subwayWalkMinutes).toBe(7);
+    expect(parsed.buses).toEqual([
+      "2000(일반)",
+      "21(좌석)",
+      "30(마을)",
+      "6427(직행좌석)",
+      "9000(공항)",
+      "70(간선)",
+      "M6117(광역)",
+    ]);
+  });
+});
 
 describe("관리비 파싱", () => {
   it.each([
@@ -31,9 +64,9 @@ describe("관리비 파싱", () => {
       "양촌역 · 약 900m · 도보 12분",
       "108(일반)",
     ].join("\n"));
-    expect(parsed.nearbySchools).toEqual(["김포호수초등학교 · 약 350m · 도보 5분"]);
+    expect(parsed.nearbySchools).toEqual(["김포호수초등학교 · 350m · 도보 5분"]);
     expect(parsed.subway).toBe("구래역");
-    expect(parsed.subwayDistance).toBe("약 500m");
+    expect(parsed.subwayDistance).toBe("500m");
     expect(parsed.subwayWalkMinutes).toBe(7);
     expect(parsed.buses).toEqual(["108(일반)"]);
     expect(parsed.notices?.[0]).toContain("양촌역");

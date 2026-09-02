@@ -7,6 +7,7 @@ import { buildCompareInquiryMessage } from "../lib/listingInquiry";
 import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { buildAbsoluteUrl } from "../lib/requestUrl";
 import { formatArea, formatFloorRange, formatRooms } from "../lib/format/listingFields";
+import { formatSubwayTransportation } from "../lib/format/transportation";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 import InquirySmsButton from "../components/InquirySmsButton";
 import ListingBrandPlaceholder from "../components/ListingBrandPlaceholder";
@@ -399,10 +400,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                           <div className="flex justify-between gap-2">
                             <dt className="text-navy-800/50">교통</dt>
                             <dd className="text-right">
-                              {complex.transportation.subway}
-                              {complex.transportation.subwayDistance
-                                ? ` (${complex.transportation.subwayDistance})`
-                                : ""}
+                              {formatSubwayTransportation(complex.transportation)}
                             </dd>
                           </div>
                         )}

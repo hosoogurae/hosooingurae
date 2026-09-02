@@ -5,6 +5,10 @@ import type { Complex } from "../../data/complexes";
 import type { ComplexFieldsInput } from "../../lib/complexValidation";
 import type { MolitCheckSample } from "../../api/admin/molit-check/route";
 import {
+  findLawdCodeFromAddress,
+  findUniqueMolitComplexMatch,
+} from "../../lib/molitComplexMatch";
+import {
   getUncertainComplexFieldLabels,
   parseNaverComplexText,
   type ParsedNaverComplex,
@@ -282,6 +286,9 @@ export default function ComplexForm({
   const [molitSearchError, setMolitSearchError] = useState("");
   const [molitComplexes, setMolitComplexes] = useState<MolitComplexResult[]>([]);
   const [molitNameFilter, setMolitNameFilter] = useState("");
+  const [molitSearchResolved, setMolitSearchResolved] = useState(
+    Boolean(initial?.molit?.aptSeq) || !allowNaverPaste,
+  );
   const [naverPastedText, setNaverPastedText] = useState("");
   const [naverUncertainFields, setNaverUncertainFields] = useState<string[] | null>(
     null,
@@ -291,19 +298,35 @@ export default function ComplexForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleNaverAutoFill() {
+  async function handleNaverAutoFill() {
     if (!naverPastedText.trim()) return;
     const parsed = parseNaverComplexText(naverPastedText);
-    setValues((prev) => mergeParsedComplex(prev, parsed));
+    const lawdCode = parsed.address
+      ? findLawdCodeFromAddress(parsed.address)
+      : undefined;
+    setValues((prev) => ({
+      ...mergeParsedComplex(prev, parsed),
+      molitLawdCode: lawdCode ?? prev.molitLawdCode,
+      molitAptSeq: lawdCode ? "" : prev.molitAptSeq,
+    }));
     setNaverUncertainFields([
       ...getUncertainComplexFieldLabels(parsed),
       ...(parsed.notices ?? []),
     ]);
+    if (lawdCode && parsed.name) {
+      await searchMolitComplexes(lawdCode, parsed.name);
+    } else {
+      setMolitSearchError(
+        "주소에서 지역코드를 확인하지 못했습니다. MOLIT 정보를 직접 입력해주세요.",
+      );
+      setMolitSearchResolved(true);
+    }
   }
 
-  async function handleMolitSearch() {
-    if (!/^\d{5}$/.test(values.molitLawdCode.trim())) {
+  async function searchMolitComplexes(lawdCode: string, complexName: string) {
+    if (!/^\d{5}$/.test(lawdCode.trim())) {
       setMolitSearchError("지역코드(lawdCode)는 5자리 숫자로 입력해주세요.");
+      setMolitSearchResolved(true);
       return;
     }
     setMolitSearching(true);
@@ -313,19 +336,37 @@ export default function ComplexForm({
       const response = await fetch("/api/admin/molit-complex-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lawdCode: values.molitLawdCode.trim() }),
+        body: JSON.stringify({ lawdCode: lawdCode.trim() }),
       });
       const data = await response.json();
       if (!response.ok) {
         setMolitSearchError(data.error ?? data.errors?.[0] ?? "단지 검색에 실패했습니다.");
       } else {
-        setMolitComplexes(data.complexes ?? []);
+        const complexes: MolitComplexResult[] = data.complexes ?? [];
+        const exactMatch = findUniqueMolitComplexMatch(complexName, complexes);
+        setMolitComplexes(complexes);
+        if (exactMatch) {
+          setValues((prev) => ({
+            ...prev,
+            molitLawdCode: lawdCode,
+            molitAptSeq: exactMatch.aptSeq,
+          }));
+        } else {
+          setMolitSearchError(
+            "단지명과 정확히 일치하는 결과가 없습니다. 아래에서 직접 선택하거나 코드를 입력해주세요.",
+          );
+        }
       }
     } catch {
       setMolitSearchError("네트워크 오류가 발생했습니다.");
     } finally {
       setMolitSearching(false);
+      setMolitSearchResolved(true);
     }
+  }
+
+  async function handleMolitSearch() {
+    await searchMolitComplexes(values.molitLawdCode, values.name);
   }
 
   async function handleMolitCheck() {
@@ -621,24 +662,31 @@ export default function ComplexForm({
           거래가 조회되는지 먼저 확인할 수 있습니다. 확인이 실패해도 저장은 그대로
           가능합니다(나중에 값을 고쳐 다시 확인하면 됩니다).
         </p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="지역코드 (lawdCode)">
-            <input
-              value={values.molitLawdCode}
-              onChange={(event) => update("molitLawdCode", event.target.value)}
-              placeholder="예: 41570"
-              className={inputClass}
-            />
-          </Field>
-          <Field label="단지코드 (aptSeq)">
-            <input
-              value={values.molitAptSeq}
-              onChange={(event) => update("molitAptSeq", event.target.value)}
-              placeholder="예: 41570-744"
-              className={inputClass}
-            />
-          </Field>
-        </div>
+        {values.molitAptSeq && (
+          <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            MOLIT 단지코드 자동 선택: {values.molitAptSeq}
+          </p>
+        )}
+        {molitSearchResolved && !values.molitAptSeq && (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="지역코드 (lawdCode)">
+              <input
+                value={values.molitLawdCode}
+                onChange={(event) => update("molitLawdCode", event.target.value)}
+                placeholder="예: 41570"
+                className={inputClass}
+              />
+            </Field>
+            <Field label="단지코드 (aptSeq)">
+              <input
+                value={values.molitAptSeq}
+                onChange={(event) => update("molitAptSeq", event.target.value)}
+                placeholder="예: 41570-744"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+        )}
         <button
           type="button"
           onClick={handleMolitSearch}
@@ -648,7 +696,7 @@ export default function ComplexForm({
           {molitSearching ? "검색 중..." : "단지 찾기"}
         </button>
         {molitSearchError && <p className="mt-3 text-sm text-red-600">{molitSearchError}</p>}
-        {molitComplexes.length > 10 && (
+        {!values.molitAptSeq && molitComplexes.length > 10 && (
           <input
             value={molitNameFilter}
             onChange={(event) => setMolitNameFilter(event.target.value)}
@@ -656,7 +704,7 @@ export default function ComplexForm({
             className={`${inputClass} mt-3 w-full`}
           />
         )}
-        {molitComplexes.length > 0 && (
+        {!values.molitAptSeq && molitComplexes.length > 0 && (
           <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
             {molitComplexes
               .filter((item) => item.aptNm.toLowerCase().includes(molitNameFilter.trim().toLowerCase()))
@@ -664,7 +712,10 @@ export default function ComplexForm({
                 <li key={item.aptSeq}>
                   <button
                     type="button"
-                    onClick={() => update("molitAptSeq", item.aptSeq)}
+                    onClick={() => {
+                      update("molitAptSeq", item.aptSeq);
+                      setMolitSearchError("");
+                    }}
                     className="w-full rounded-md border border-navy-900/10 px-3 py-2 text-left text-sm hover:border-gold-500"
                   >
                     <span className="font-semibold">{item.aptNm || "단지명 없음"}</span>
@@ -717,7 +768,7 @@ export default function ComplexForm({
       </section>
 
       {errors.length > 0 && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           <ul className="list-disc space-y-0.5 pl-4">
             {errors.map((message) => (
               <li key={message}>{message}</li>
