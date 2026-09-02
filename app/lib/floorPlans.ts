@@ -1,4 +1,5 @@
 import type { FloorPlanImage } from "../data/floorPlans";
+import { NO_FLOOR_PLAN_UNIT_TYPE } from "../data/listings";
 import { cropFloorPlanPreview } from "./floorPlanImageProcessing";
 import { getSupabaseAdminClient, getSupabaseClient } from "./supabase/client";
 import type { FloorPlanImageRow } from "./supabase/database.types";
@@ -62,6 +63,75 @@ export async function getFloorPlanImages(
   }
 
   return data.map(rowToFloorPlanImage);
+}
+
+/**
+ * 매물 등록·수정 화면의 "평형 타입" 드롭다운 전용: 이 단지에 실제로 등록된
+ * 타입명 목록만 돌려줍니다(중복 제거). 빈 배열이면 이 단지엔 평면도가 아직
+ * 하나도 없다는 뜻이라, 그 경우엔 화면이 자유 텍스트 입력으로 대체합니다.
+ */
+export async function getFloorPlanUnitTypesForComplex(
+  complexId: string,
+): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("floor_plan_images")
+    .select("unit_type")
+    .eq("complex_id", complexId);
+
+  if (error || !data) {
+    console.error("[floorPlans] 단지 평면도 타입 조회 실패", error);
+    return [];
+  }
+
+  return Array.from(new Set(data.map((row) => row.unit_type)));
+}
+
+/**
+ * 매물 저장(생성/수정) API가 공통으로 쓰는 "평형 타입" 서버 검증입니다.
+ * 화면의 드롭다운은 그 단지에 실제 등록된 타입 또는 NO_FLOOR_PLAN_UNIT_TYPE
+ * ("해당 없음")만 보내도록 만들어져 있지만, API를 직접 호출하면 그 드롭다운을
+ * 거치지 않고 임의의 문자열을 보낼 수 있으므로 여기서 다시 확인합니다.
+ *
+ * - 이 단지에 등록된 평면도가 하나도 없으면: 그 값을 그대로 허용합니다(자유 입력,
+ *   빈 값도 허용 — 평면도가 없는 단지에까지 입력을 강제하지 않습니다).
+ * - 평면도가 있으면: 빈 값은 거부합니다(어떤 값이든 명시적으로 선택해야 함).
+ *   NO_FLOOR_PLAN_UNIT_TYPE이면 "해당 없음"으로 확정하고 undefined로 저장합니다.
+ *   그 외 값은 실제 등록된 타입명과 정확히 일치해야만 통과합니다 — 등록된
+ *   평면도와 무관한 문자열이 저장되는 걸(예: 오타로 "108B"가 저장됐는데 그
+ *   단지 평면도는 "100B"뿐인 경우) 막습니다.
+ */
+export async function resolveListingUnitType(
+  complexId: string,
+  submittedUnitType: string | undefined,
+): Promise<{ unitType?: string; error?: string }> {
+  const knownTypes = await getFloorPlanUnitTypesForComplex(complexId);
+
+  if (knownTypes.length === 0) {
+    return { unitType: submittedUnitType };
+  }
+  if (submittedUnitType === NO_FLOOR_PLAN_UNIT_TYPE) {
+    return { unitType: undefined };
+  }
+  const knownTypesLabel = knownTypes.slice().sort((a, b) => a.localeCompare(b)).join(", ");
+  if (!submittedUnitType) {
+    return {
+      error:
+        `이 단지에 등록된 평면도 타입: ${knownTypesLabel}. 그중 하나를 선택하거나 ` +
+        `'해당 없음 / 평면도 미등록'을 선택해주세요.`,
+    };
+  }
+  if (!knownTypes.includes(submittedUnitType)) {
+    return {
+      error:
+        `"${submittedUnitType}"은(는) 이 단지에 등록된 평면도 타입이 아닙니다. ` +
+        `등록된 타입: ${knownTypesLabel}. 그중 하나를 선택하거나 ` +
+        `'해당 없음 / 평면도 미등록'을 선택해주세요.`,
+    };
+  }
+  return { unitType: submittedUnitType };
 }
 
 /** /admin/complexes 목록의 완성도 배지("평면도 N개") 전용: 단지별 평면도 이미지 개수. */

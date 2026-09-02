@@ -6,7 +6,12 @@ import type {
   PropertyType,
   TransactionType,
 } from "../data/listings";
+import { NO_FLOOR_PLAN_UNIT_TYPE } from "../data/listings";
 import type { FloorPlanImage } from "../data/floorPlans";
+import {
+  sortUnitTypesByAreaSimilarity,
+  type UnitTypeAreaCandidate,
+} from "../lib/floorPlanAreaSort";
 import type { ComplexOption } from "../lib/naverImport";
 import ListingPhotoManager, { type ListingPhoto } from "./ListingPhotoManager";
 
@@ -137,13 +142,16 @@ export function ListingFormFields({
     (option) => option.id === draft.complexId,
   );
 
-  // 선택된 단지에 이미 등록된 평면도 타입 목록. 있으면 드롭다운으로 고르게 하고,
-  // 없으면(또는 단지 미선택) 새로 입력할 수 있게 자유 입력칸을 보여줍니다.
-  const [unitTypeOptions, setUnitTypeOptions] = useState<string[]>([]);
+  // 선택된 단지에 이미 등록된 평면도 타입 후보(면적 포함). 있으면 드롭다운으로
+  // 고르게 하고("해당 없음" 포함, 필수), 없으면(또는 단지 미선택) 새로 입력할
+  // 수 있게 자유 입력칸을 보여줍니다(그 경우는 선택 사항으로 남겨둠).
+  const [unitTypeCandidates, setUnitTypeCandidates] = useState<UnitTypeAreaCandidate[]>(
+    [],
+  );
   useEffect(() => {
     async function load() {
       if (!draft.complexId) {
-        setUnitTypeOptions([]);
+        setUnitTypeCandidates([]);
         return;
       }
       try {
@@ -152,20 +160,34 @@ export function ListingFormFields({
         );
         const data = await response.json();
         if (!response.ok) {
-          setUnitTypeOptions([]);
+          setUnitTypeCandidates([]);
           return;
         }
         const images = data.images as FloorPlanImage[];
-        const types = Array.from(new Set(images.map((image) => image.unitType))).sort(
-          (a, b) => a.localeCompare(b),
-        );
-        setUnitTypeOptions(types);
+        const byUnitType = new Map<string, UnitTypeAreaCandidate>();
+        for (const image of images) {
+          if (byUnitType.has(image.unitType)) continue;
+          byUnitType.set(image.unitType, {
+            unitType: image.unitType,
+            exclusiveArea: image.exclusiveArea,
+            supplyArea: image.supplyArea,
+          });
+        }
+        setUnitTypeCandidates(Array.from(byUnitType.values()));
       } catch {
-        setUnitTypeOptions([]);
+        setUnitTypeCandidates([]);
       }
     }
     load();
   }, [draft.complexId]);
+
+  // 입력된 전용/공급면적과 가까운 후보가 위로 오도록 매 렌더마다 다시 정렬합니다
+  // (후보가 많아야 한 자릿수라 비용이 무시할 만함).
+  const sortedUnitTypeCandidates = sortUnitTypesByAreaSimilarity(
+    unitTypeCandidates,
+    draft.exclusiveArea || undefined,
+    draft.supplyArea || undefined,
+  );
 
   return (
     <>
@@ -392,27 +414,38 @@ export function ListingFormFields({
         </Field>
 
         <Field
-          label="평형 타입 (선택)"
+          label={sortedUnitTypeCandidates.length > 0 ? "평형 타입" : "평형 타입 (선택)"}
           hint={
-            unitTypeOptions.length > 0
-              ? "이 단지에 등록된 평면도 타입 중에서 골라주세요."
+            sortedUnitTypeCandidates.length > 0
+              ? "이 단지에 평면도가 등록되어 있어 필수입니다. 해당하는 타입이 없으면 '해당 없음'을 골라주세요(면적이 가까운 순으로 위에 나옵니다)."
               : "이 단지에 등록된 평면도가 아직 없습니다. 새 타입명을 입력해주세요(예: 84A)."
           }
         >
-          {unitTypeOptions.length > 0 ? (
+          {sortedUnitTypeCandidates.length > 0 ? (
             <select
+              required
               value={draft.unitType ?? ""}
               onChange={(event) => onChangeField("unitType", event.target.value)}
               className={inputClass}
             >
-              <option value="">선택 안 함</option>
-              {/* 예전에 자유 입력으로 저장된 값이 목록에 없으면(오타 등) 잃어버리지 않도록 같이 보여줍니다. */}
-              {draft.unitType && !unitTypeOptions.includes(draft.unitType) && (
-                <option value={draft.unitType}>{draft.unitType} (목록에 없음)</option>
+              {/* 아직 아무것도 안 골랐을 때만 보이는, 선택할 수 없는 자리표시자입니다.
+                  "해당 없음"과 구분하기 위해 일부러 기본 선택값으로 두지 않습니다 —
+                  건너뛰려면 반드시 "해당 없음"을 눌러야 합니다. */}
+              {!draft.unitType && (
+                <option value="" disabled hidden>
+                  선택해주세요
+                </option>
               )}
-              {unitTypeOptions.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+              <option value={NO_FLOOR_PLAN_UNIT_TYPE}>해당 없음 / 평면도 미등록</option>
+              {/* 예전에 자유 입력으로 저장된 값이 목록에 없으면(오타 등) 잃어버리지 않도록 같이 보여줍니다. */}
+              {draft.unitType &&
+                draft.unitType !== NO_FLOOR_PLAN_UNIT_TYPE &&
+                !sortedUnitTypeCandidates.some((c) => c.unitType === draft.unitType) && (
+                  <option value={draft.unitType}>{draft.unitType} (목록에 없음)</option>
+                )}
+              {sortedUnitTypeCandidates.map((candidate) => (
+                <option key={candidate.unitType} value={candidate.unitType}>
+                  {candidate.unitType}
                 </option>
               ))}
             </select>

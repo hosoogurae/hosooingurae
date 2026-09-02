@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveListingUnitType } from "../../../lib/floorPlans";
 import { parseListingPayload } from "../../../lib/listingValidation";
 import { getListingById, toPublicListing } from "../../../lib/listings";
 import { getSupabaseAdminClient } from "../../../lib/supabase/client";
@@ -78,6 +79,15 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         { status: 400 },
       );
     }
+
+    const unitTypeResult = await resolveListingUnitType(
+      listing.complexId,
+      listing.unitType,
+    );
+    if (unitTypeResult.error) {
+      return NextResponse.json({ errors: [unitTypeResult.error] }, { status: 400 });
+    }
+    listing.unitType = unitTypeResult.unitType;
   }
 
   const { data: updated, error: updateError } = await supabase

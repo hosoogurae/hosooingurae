@@ -14,6 +14,15 @@ export const PROPERTY_TYPES: readonly PropertyType[] = [
   "기타",
 ];
 
+/**
+ * "평형 타입" 드롭다운에서 그 단지에 평면도가 있는데도 관리자가 의도적으로
+ * "이 매물엔 해당 없음"을 고른 경우에만 쓰는 값입니다. 서버가 빈 값(필드를
+ * 아예 안 건드린 경우)과 구분할 수 있게 하기 위한 표시일 뿐이라, 저장 직전에
+ * 항상 undefined로 바뀌고 DB에는 절대 이 문자열 그대로 들어가지 않습니다
+ * (app/lib/floorPlans.ts의 resolveListingUnitType 참고).
+ */
+export const NO_FLOOR_PLAN_UNIT_TYPE = "__no_floor_plan__";
+
 /** draft(임시저장, 비공개) / published(공개, 홈페이지·목록에 즉시 노출) */
 export type ListingStatus = "draft" | "published";
 
