@@ -8,6 +8,7 @@ function makeTrade(overrides: Partial<MolitAptTradeItem> = {}): MolitAptTradeIte
     aptSeq: "41570-1000",
     jibun: "1-1",
     umdNm: "구래동",
+    buildYear: 2013,
     aptDong: "",
     floor: 10,
     excluUseAr: 84.8,

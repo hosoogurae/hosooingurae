@@ -18,6 +18,8 @@ export interface MolitAptTradeItem {
   aptSeq: string;
   jibun: string;
   umdNm: string;
+  /** 건축연도. 응답에 없거나 숫자가 아니면 0. */
+  buildYear: number;
   /** 거래 대상 동(국토부 원문에 제공되는 경우). */
   aptDong: string;
   floor: number;
@@ -34,6 +36,9 @@ export interface MolitAptTradeItem {
 export interface MolitComplexSearchResult {
   aptSeq: string;
   aptNm: string;
+  umdNm: string;
+  jibun: string;
+  buildYear: number;
   tradeCount: number;
 }
 
@@ -48,10 +53,16 @@ export function summarizeMolitComplexes(
     if (existing) {
       existing.tradeCount += 1;
       if (!existing.aptNm && trade.aptNm) existing.aptNm = trade.aptNm;
+      if (!existing.umdNm && trade.umdNm) existing.umdNm = trade.umdNm;
+      if (!existing.jibun && trade.jibun) existing.jibun = trade.jibun;
+      if (!existing.buildYear && trade.buildYear) existing.buildYear = trade.buildYear;
     } else {
       grouped.set(trade.aptSeq, {
         aptSeq: trade.aptSeq,
         aptNm: trade.aptNm,
+        umdNm: trade.umdNm,
+        jibun: trade.jibun,
+        buildYear: trade.buildYear,
         tradeCount: 1,
       });
     }
@@ -75,6 +86,11 @@ function toNumber(value: unknown): number {
     .trim();
   const num = Number(text);
   return Number.isFinite(num) ? num : NaN;
+}
+
+function toNumberOrZero(value: unknown): number {
+  const number = toNumber(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function pad2(value: unknown): string {
@@ -193,6 +209,7 @@ export async function fetchAptTrades(
       aptSeq: String(record.aptSeq ?? "").trim(),
       jibun: String(record.jibun ?? "").trim(),
       umdNm: String(record.umdNm ?? "").trim(),
+      buildYear: toNumberOrZero(record.buildYear),
       aptDong: String(record.aptDong ?? "").trim(),
       floor: toNumber(record.floor),
       excluUseAr: toNumber(record.excluUseAr),

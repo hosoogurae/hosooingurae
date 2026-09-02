@@ -13,6 +13,7 @@ function listing(overrides: Partial<Listing> = {}): Listing {
 }
 function trade(overrides: Partial<MolitAptTradeItem> = {}): MolitAptTradeItem {
   return { aptNm: "테스트단지", aptSeq: "41570-1000", jibun: "1-1", umdNm: "구래동",
+    buildYear: 2020,
     aptDong: "101", floor: 10, excluUseAr: 84.8, dealAmount: 43000,
     dealDate: "2026-06-01", cdealType: "", ...overrides };
 }

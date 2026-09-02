@@ -7,6 +7,7 @@ import type { MolitCheckSample } from "../../api/admin/molit-check/route";
 import {
   findLawdCodeFromAddress,
   findUniqueMolitComplexMatch,
+  normalizeMolitComplexName,
 } from "../../lib/molitComplexMatch";
 import {
   getUncertainComplexFieldLabels,
@@ -263,6 +264,9 @@ type MolitCheckResult =
 interface MolitComplexResult {
   aptSeq: string;
   aptNm: string;
+  umdNm: string;
+  jibun: string;
+  buildYear: number;
   tradeCount: number;
 }
 
@@ -326,7 +330,7 @@ export default function ComplexForm({
       ...(parsed.notices ?? []),
     ]);
     if (lawdCode && parsed.name) {
-      await searchMolitComplexes(lawdCode, parsed.name);
+      await searchMolitComplexes(lawdCode, parsed.name, parsed.address ?? "", parsed.approvalDate ?? "");
     } else {
       setMolitSearchError(
         "주소에서 지역코드를 확인하지 못했습니다. MOLIT 정보를 직접 입력해주세요.",
@@ -335,7 +339,12 @@ export default function ComplexForm({
     }
   }
 
-  async function searchMolitComplexes(lawdCode: string, complexName: string) {
+  async function searchMolitComplexes(
+    lawdCode: string,
+    complexName: string,
+    address: string,
+    approvalDate: string,
+  ) {
     if (!/^\d{5}$/.test(lawdCode.trim())) {
       setMolitSearchError("지역코드(lawdCode)는 5자리 숫자로 입력해주세요.");
       setMolitSearchResolved(true);
@@ -355,7 +364,7 @@ export default function ComplexForm({
         setMolitSearchError(data.error ?? data.errors?.[0] ?? "단지 검색에 실패했습니다.");
       } else {
         const complexes: MolitComplexResult[] = data.complexes ?? [];
-        const exactMatch = findUniqueMolitComplexMatch(complexName, complexes);
+        const exactMatch = findUniqueMolitComplexMatch(complexName, complexes, { address, approvalDate });
         setMolitComplexes(complexes);
         if (exactMatch) {
           setValues((prev) => ({
@@ -365,7 +374,7 @@ export default function ComplexForm({
           }));
         } else {
           setMolitSearchError(
-            "단지명과 정확히 일치하는 결과가 없습니다. 아래에서 직접 선택하거나 코드를 입력해주세요.",
+            "단지명·지번·건축연도가 모두 일치하는 결과가 없습니다. 아래에서 직접 선택하거나 코드를 입력해주세요.",
           );
         }
       }
@@ -378,7 +387,7 @@ export default function ComplexForm({
   }
 
   async function handleMolitSearch() {
-    await searchMolitComplexes(values.molitLawdCode, values.name);
+    await searchMolitComplexes(values.molitLawdCode, values.name, values.address, values.approvalDate);
   }
 
   async function handleMolitCheck() {
@@ -728,7 +737,7 @@ export default function ComplexForm({
         {!values.molitAptSeq && molitComplexes.length > 0 && (
           <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
             {molitComplexes
-              .filter((item) => item.aptNm.toLowerCase().includes(molitNameFilter.trim().toLowerCase()))
+              .filter((item) => normalizeMolitComplexName(item.aptNm).includes(normalizeMolitComplexName(molitNameFilter)))
               .map((item) => (
                 <li key={item.aptSeq}>
                   <button
@@ -740,7 +749,7 @@ export default function ComplexForm({
                     className="w-full rounded-md border border-navy-900/10 px-3 py-2 text-left text-sm hover:border-gold-500"
                   >
                     <span className="font-semibold">{item.aptNm || "단지명 없음"}</span>
-                    <span className="ml-2 text-xs text-navy-800/60">{item.aptSeq} · {item.tradeCount}건</span>
+                    <span className="ml-2 text-xs text-navy-800/60">{item.aptSeq} · {item.umdNm} {item.jibun} · {item.buildYear ? `${item.buildYear}년` : "연도 미상"} · {item.tradeCount}건</span>
                   </button>
                 </li>
               ))}

@@ -13,18 +13,41 @@ export function findLawdCodeFromAddress(address: string): string | undefined {
 export function normalizeMolitComplexName(name: string): string {
   return name
     .toLowerCase()
+    .replace(/[e이]편한/g, "e편한")
     .replace(/아파트/g, "")
     .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function normalizeMolitBrandBase(name: string): string {
+  return normalizeMolitComplexName(name).replace(/\d+단지$/, "");
+}
+
+function extractJibun(address: string): string | undefined {
+  return address.match(/(?:^|\s)(\d+(?:-\d+)?)(?:\s|$)/)?.[1];
+}
+
+function extractYear(approvalDate: string): number | undefined {
+  const year = Number(approvalDate.match(/^(\d{4})/)?.[1]);
+  return Number.isInteger(year) && year > 0 ? year : undefined;
 }
 
 export function findUniqueMolitComplexMatch(
   name: string,
   complexes: MolitComplexSearchResult[],
+  context: { address: string; approvalDate: string },
 ): MolitComplexSearchResult | undefined {
   const normalized = normalizeMolitComplexName(name);
-  if (!normalized) return undefined;
+  const normalizedBase = normalizeMolitBrandBase(name);
+  const jibun = extractJibun(context.address);
+  const buildYear = extractYear(context.approvalDate);
+  if (!normalized || !jibun || !buildYear) return undefined;
   const matches = complexes.filter(
-    (complex) => normalizeMolitComplexName(complex.aptNm) === normalized,
+    (complex) => {
+      const candidateName = normalizeMolitComplexName(complex.aptNm);
+      const nameMatches = candidateName === normalized ||
+        normalizeMolitBrandBase(complex.aptNm) === normalizedBase;
+      return nameMatches && complex.jibun === jibun && complex.buildYear === buildYear;
+    },
   );
   return matches.length === 1 ? matches[0] : undefined;
 }
