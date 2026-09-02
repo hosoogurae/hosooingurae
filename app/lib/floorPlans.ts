@@ -537,7 +537,7 @@ export async function deleteFloorPlanImage(
 
   const { data: existing, error: fetchError } = await supabase
     .from("floor_plan_images")
-    .select("url")
+    .select("url, preview_url")
     .eq("id", id)
     .maybeSingle();
 
@@ -560,13 +560,21 @@ export async function deleteFloorPlanImage(
   }
 
   // Storage 파일도 함께 정리합니다(실패해도 DB 삭제 자체는 이미 끝났으므로 경고만 남김).
+  // url(원본 이미지)과 preview_url(크롭된 미리보기, 없을 수 있음) 둘 다 같은
+  // 버킷에 저장되므로 한 번에 지웁니다.
   const marker = `/object/public/${BUCKET}/`;
-  const markerIndex = existing.url.indexOf(marker);
-  if (markerIndex !== -1) {
-    const path = existing.url.slice(markerIndex + marker.length);
+  const paths = [existing.url, existing.preview_url]
+    .filter((url): url is string => Boolean(url))
+    .map((url) => {
+      const markerIndex = url.indexOf(marker);
+      return markerIndex === -1 ? null : url.slice(markerIndex + marker.length);
+    })
+    .filter((path): path is string => path !== null);
+
+  if (paths.length > 0) {
     const { error: storageError } = await supabase.storage
       .from(BUCKET)
-      .remove([path]);
+      .remove(paths);
     if (storageError) {
       console.error("[floorPlans] Storage 파일 삭제 실패", storageError);
     }
