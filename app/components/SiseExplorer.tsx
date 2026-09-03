@@ -32,8 +32,11 @@ export interface ComplexSiseEntry {
  */
 export default function SiseExplorer({
   complexes,
+  marketDataMonthsBack,
 }: {
   complexes: ComplexSiseEntry[];
+  /** 서버가 실제로 조회한 개월 수 — "최근 N개월 내 거래가 없습니다" 안내 문구가 조회 기간과 어긋나지 않게 여기서 그대로 받습니다. */
+  marketDataMonthsBack: number;
 }) {
   const [expandedComplexId, setExpandedComplexId] = useState<string | null>(null);
   const [expandedBracketKey, setExpandedBracketKey] = useState<string | null>(null);
@@ -70,7 +73,7 @@ export default function SiseExplorer({
                   {!complex.hasMolit
                     ? "실거래 정보 준비 중"
                     : complex.brackets.length === 0
-                      ? "최근 18개월 내 신고된 거래가 없습니다"
+                      ? `최근 ${marketDataMonthsBack}개월 내 신고된 거래가 없습니다`
                       : `최근 6개월 거래 ${complex.recentTradeCount}건`}
                 </p>
               </div>
@@ -167,7 +170,8 @@ function BracketDetail({
 
         {bracket.comparison && (
           <div className="mt-3 rounded-md border border-navy-900/10 bg-white px-4 py-3 text-sm">
-            <p className="text-navy-950">
+            <p className="text-xs font-semibold text-navy-800/50">전년 동기 대비</p>
+            <p className="mt-1 text-navy-950">
               <span className="font-bold">
                 {formatPriceFull(bracket.comparison.previous.medianPrice)}
               </span>

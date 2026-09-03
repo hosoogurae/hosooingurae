@@ -30,7 +30,7 @@ export interface GuraeMarketData {
  * aptSeq로 걸러서 나눠 쓰면 됩니다.
  */
 export async function getGuraeApartmentMarketData(
-  monthsBack = 18,
+  monthsBack = 24,
 ): Promise<GuraeMarketData> {
   const trades = await fetchRecentAptTrades(LAWD_CD_GIMPO, monthsBack);
   return {

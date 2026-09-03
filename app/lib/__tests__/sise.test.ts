@@ -102,6 +102,13 @@ describe("getPeriodRange", () => {
     expect(range.endDate).toBe("2026-02-28");
     expect(range.label).toBe("2025.09~2026.02");
   });
+
+  it("offset=13(1+12)이면 정확히 1년 전 같은 달들(전년 동기)이 된다 — comparePeriods가 이 값을 쓴다", () => {
+    const range = getPeriodRange(NOW, 6, 13);
+    expect(range.startDate).toBe("2025-03-01");
+    expect(range.endDate).toBe("2025-08-31");
+    expect(range.label).toBe("2025.03~2025.08");
+  });
 });
 
 describe("buildComplexAreaBrackets", () => {
@@ -137,7 +144,7 @@ describe("buildComplexAreaBrackets", () => {
   it("recent 기간 안의 거래만 표본으로 세고, 5건 미만이면 감춘다", () => {
     const trades = [
       makeTrade({ dealDate: "2026-08-01" }), // recent(03~08) 안
-      makeTrade({ dealDate: "2025-01-01" }), // recent 밖(18개월 조회 범위지만 기간 밖)
+      makeTrade({ dealDate: "2025-01-01" }), // recent 밖(조회 범위 안이지만 최근 기간 밖)
     ];
     const brackets = buildComplexAreaBrackets(trades, NOW);
     expect(brackets[0].recent.hidden).toBe(true);
@@ -146,36 +153,46 @@ describe("buildComplexAreaBrackets", () => {
     expect(brackets[0].trades).toHaveLength(2);
   });
 
-  it("현재·직전 기간 둘 다 5건 이상이어야 전기 대비를 계산한다", () => {
-    const enoughTrades = [
-      ...Array.from({ length: 5 }, (_, i) =>
-        makeTrade({ dealDate: `2026-0${3 + (i % 6)}-01`, dealAmount: 40000 + i * 1000 }),
-      ),
-      ...Array.from({ length: 5 }, (_, i) =>
-        makeTrade({ dealDate: `2025-${9 + (i % 4 === 0 ? 0 : 0)}-01`, dealAmount: 38000 }),
-      ),
+  it("전년 동기(같은 달들, 1년 전)와 비교한다 — 계절이 다른 직전 반기와는 비교하지 않는다", () => {
+    const currentPeriodTrades = [
+      makeTrade({ dealDate: "2026-03-01", dealAmount: 40000 }),
+      makeTrade({ dealDate: "2026-04-01", dealAmount: 41000 }),
+      makeTrade({ dealDate: "2026-05-01", dealAmount: 42000 }),
+      makeTrade({ dealDate: "2026-06-01", dealAmount: 43000 }),
+      makeTrade({ dealDate: "2026-08-01", dealAmount: 44000 }),
     ];
-    // 직전 기간(2025.09~2026.02)에 5건을 명시적으로 채운다.
-    const previousPeriodTrades = [
-      makeTrade({ dealDate: "2025-09-01", dealAmount: 38000 }),
-      makeTrade({ dealDate: "2025-10-01", dealAmount: 38000 }),
-      makeTrade({ dealDate: "2025-11-01", dealAmount: 38000 }),
-      makeTrade({ dealDate: "2025-12-01", dealAmount: 38000 }),
-      makeTrade({ dealDate: "2026-01-01", dealAmount: 38000 }),
+    // 전년 동기(2025.03~2025.08)에 5건.
+    const sameSeasonLastYearTrades = [
+      makeTrade({ dealDate: "2025-03-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2025-04-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2025-05-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2025-06-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2025-08-01", dealAmount: 38000 }),
+    ];
+    // 계절이 다른 직전 반기(2025.09~2026.02)에도 5건을 넣어, 여기와
+    // 비교하지 않는다는 것을 함께 확인한다.
+    const differentSeasonTrades = [
+      makeTrade({ dealDate: "2025-09-01", dealAmount: 100000 }),
+      makeTrade({ dealDate: "2025-10-01", dealAmount: 100000 }),
+      makeTrade({ dealDate: "2025-11-01", dealAmount: 100000 }),
+      makeTrade({ dealDate: "2025-12-01", dealAmount: 100000 }),
+      makeTrade({ dealDate: "2026-01-01", dealAmount: 100000 }),
     ];
     const brackets = buildComplexAreaBrackets(
-      [...enoughTrades.slice(0, 5), ...previousPeriodTrades],
+      [...currentPeriodTrades, ...sameSeasonLastYearTrades, ...differentSeasonTrades],
       NOW,
     );
     expect(brackets[0].comparison).not.toBeNull();
+    expect(brackets[0].comparison?.current.label).toBe("2026.03~2026.08");
+    expect(brackets[0].comparison?.previous.label).toBe("2025.03~2025.08");
     expect(brackets[0].comparison?.previous.count).toBe(5);
-    expect(brackets[0].comparison?.current.count).toBe(5);
+    expect(brackets[0].comparison?.previous.medianPrice).toBe(38000);
   });
 
-  it("한쪽 표본이라도 5건 미만이면 전기 대비를 null로 둔다(양쪽 다 있어도 값을 반쯤 만들지 않음)", () => {
+  it("한쪽 표본이라도 5건 미만이면 전년 동기 대비를 null로 둔다(양쪽 다 있어도 값을 반쯤 만들지 않음)", () => {
     const trades = [
       ...Array.from({ length: 5 }, () => makeTrade({ dealDate: "2026-08-01" })), // current만 충분
-      makeTrade({ dealDate: "2025-09-01" }), // previous는 1건뿐
+      makeTrade({ dealDate: "2025-08-01" }), // 전년 동기(2025.03~2025.08)는 1건뿐
     ];
     const brackets = buildComplexAreaBrackets(trades, NOW);
     expect(brackets[0].comparison).toBeNull();

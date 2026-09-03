@@ -24,8 +24,12 @@ export const dynamic = "force-dynamic";
 
 const MOLIT_PUBLIC_SYSTEM_URL = "https://rt.molit.go.kr";
 const RECENT_MONTHS = 6;
-/** MOLIT 18개월 조회 + 전년 동기 비교(최근 6개월 vs 그 직전 6개월)에 필요한 최소 기간. */
-const MARKET_DATA_MONTHS_BACK = 18;
+/**
+ * 전년 동기 비교(최근 6개월 vs 정확히 1년 전 같은 6개월, 예: 2026.03~08
+ * vs 2025.03~08)에 필요한 최소 기간은 19개월(현재 기준 offset 1 + 전년
+ * 동기 offset 13 + 폭 6 - 1)이지만, 24로 여유를 둡니다.
+ */
+const MARKET_DATA_MONTHS_BACK = 24;
 
 /** 최근 거래 내역 화면에 몇 건까지 펼쳐 보여줄지. */
 const MAX_RECENT_TRADES_SHOWN = 10;
@@ -169,7 +173,10 @@ export default async function SisePage() {
             )}
 
             <div className="mt-6">
-              <SiseExplorer complexes={entries} />
+              <SiseExplorer
+                complexes={entries}
+                marketDataMonthsBack={MARKET_DATA_MONTHS_BACK}
+              />
             </div>
 
             <ul className="mt-10 list-disc space-y-1 pl-4 text-xs leading-relaxed text-navy-800/50">

@@ -101,9 +101,10 @@ function formatYearMonth(date: Date): string {
 /**
  * "이번 달은 아직 신고가 다 안 끝났을 수 있다"고 보고 이번 달은 제외한,
  * monthsBack개월짜리 기간을 만듭니다. monthsAgoOffset(기본 1)을 더 크게
- * 주면 그만큼 더 과거로 밀린 같은 길이의 기간이 됩니다 — 전년 동기 비교에
- * 씁니다(예: monthsBack=6, offset=1이면 최근 기간, offset=7이면 그 바로
- * 직전 6개월).
+ * 주면 그만큼 더 과거로 밀린 같은 길이의 기간이 됩니다(예: monthsBack=6,
+ * offset=1이면 최근 기간, offset=7이면 그 바로 직전 6개월, offset=13이면
+ * 정확히 1년 전의 같은 6개월 — comparePeriods는 전년 동기 비교를 위해
+ * offset=13을 씁니다, 계절이 다른 offset=7과 헷갈리지 말 것).
  */
 export function getPeriodRange(
   now: Date,
@@ -131,15 +132,23 @@ function filterTradesInRange(
 export interface PeriodComparison {
   current: { label: string; medianPrice: number; count: number };
   previous: { label: string; medianPrice: number; count: number };
-  /** current 대비 previous의 변화율(%). 반올림 안 함 — 화면에서 소수 자리 결정. */
+  /** previous 대비 current의 변화율(%). 반올림 안 함 — 화면에서 소수 자리 결정. */
   changePercent: number;
 }
 
+/** 전년 동기 비교의 "동기"를 얼마나 과거로 밀지(개월). */
+const YEAR_OVER_YEAR_OFFSET_MONTHS = 12;
+
 /**
- * "최근 기간 vs 그 직전 같은 길이의 기간" 비교. 양쪽 다 MIN_SAMPLE_SIZE 이상일
- * 때만 결과를 돌려주고, 하나라도 부족하면 null입니다 — 표본이 적은 비교는
- * 아예 보여주지 않습니다("한 건 빠지면 크게 흔들리는 값을 단단해 보이게
- * 만들지 않는다"는 원칙).
+ * "최근 기간 vs 정확히 1년 전 같은 달들(전년 동기)" 비교입니다. 예를 들어
+ * monthsBack=6이면 "2026.03~2026.08" vs "2025.03~2025.08"처럼 같은
+ * 계절끼리 비교합니다 — 원래는 "그 직전 같은 길이의 기간"(예: 2025.09~
+ * 2026.02 vs 2026.03~2026.08)이었는데, 이러면 이사철(봄·여름)과 비수기
+ * (가을·겨울)를 비교하게 돼서 계절성이 시세 변동처럼 보이는 문제가
+ * 있었습니다. 양쪽 다 MIN_SAMPLE_SIZE 이상일 때만 결과를 돌려주고,
+ * 하나라도 부족하면 null입니다 — 표본이 적은 비교는 아예 보여주지
+ * 않습니다("한 건 빠지면 크게 흔들리는 값을 단단해 보이게 만들지
+ * 않는다"는 원칙).
  */
 function comparePeriods(
   allTrades: MolitAptTradeItem[],
@@ -147,7 +156,11 @@ function comparePeriods(
   monthsBack: number,
 ): PeriodComparison | null {
   const currentRange = getPeriodRange(now, monthsBack, 1);
-  const previousRange = getPeriodRange(now, monthsBack, monthsBack + 1);
+  const previousRange = getPeriodRange(
+    now,
+    monthsBack,
+    1 + YEAR_OVER_YEAR_OFFSET_MONTHS,
+  );
 
   const currentSummary = summarizeMedianPrice(filterTradesInRange(allTrades, currentRange));
   const previousSummary = summarizeMedianPrice(filterTradesInRange(allTrades, previousRange));
@@ -179,14 +192,15 @@ export interface AreaBracket {
   recentPeriod: PeriodRange;
   recent: MedianPriceSummary;
   comparison: PeriodComparison | null;
-  /** 계약일 내림차순, 상세 화면의 "최근 거래 내역"용. recent 기간 밖의 거래도 포함(18개월 전체). */
+  /** 계약일 내림차순, 상세 화면의 "최근 거래 내역"용. recent 기간 밖의 거래도 포함(호출부가 넘긴 조회 기간 전체 — 전년 동기 비교를 하려면 24개월 필요). */
   trades: MolitAptTradeItem[];
 }
 
 /**
- * 이미 한 단지(aptSeq)로 좁혀진 18개월치 거래를 전용면적 구간으로 나누고,
- * 구간별로 중앙값 요약과 전기 대비를 계산합니다. 거래건수 많은 순으로
- * 정렬합니다.
+ * 이미 한 단지(aptSeq)로 좁혀진 거래(전년 동기 비교를 하려면 24개월치가
+ * 필요합니다 — 호출부인 app/sise/page.tsx의 MARKET_DATA_MONTHS_BACK 참고)를
+ * 전용면적 구간으로 나누고, 구간별로 중앙값 요약과 전년 동기 대비를
+ * 계산합니다. 거래건수 많은 순으로 정렬합니다.
  */
 export function buildComplexAreaBrackets(
   complexTrades: MolitAptTradeItem[],
