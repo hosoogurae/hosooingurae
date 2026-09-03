@@ -97,7 +97,9 @@ function pad2(value: unknown): string {
   return String(value ?? "").trim().padStart(2, "0");
 }
 
-function getYearMonthsBack(months: number): string[] {
+/** "이번 달부터 거슬러 N개월"의 YYYYMM 목록(최신 달이 먼저). fetchRecentAptTrades와
+ * 화면에 "조회 대상 기간"을 보여줘야 하는 호출부(siseMarketData.ts 등)가 공유합니다. */
+export function getYearMonthsBack(months: number): string[] {
   const result: string[] = [];
   const now = new Date();
 
@@ -111,6 +113,9 @@ function getYearMonthsBack(months: number): string[] {
   return result;
 }
 
+/** 1시간 — 최근 달은 신고가 계속 들어와 자주 바뀔 수 있어 짧게 잡습니다. */
+const DEFAULT_REVALIDATE_SECONDS = 60 * 60;
+
 /**
  * 국토교통부 아파트매매 실거래자료(상세) API에서 특정 지역(LAWD_CD)·월(DEAL_YMD)의
  * 거래 목록을 조회해 JSON으로 변환합니다.
@@ -118,6 +123,7 @@ function getYearMonthsBack(months: number): string[] {
 export async function fetchAptTrades(
   lawdCode: string,
   dealYmd: string,
+  options: { revalidateSeconds?: number } = {},
 ): Promise<MolitAptTradeItem[]> {
   const serviceKey = process.env.MOLIT_API_KEY;
 
@@ -141,8 +147,10 @@ export async function fetchAptTrades(
         // 게이트웨이가 User-Agent 없는 요청을 차단하는 경우가 있어 명시적으로 지정합니다.
         "User-Agent": "Mozilla/5.0 (compatible; HosooRealtyBot/1.0)",
       },
-      // 실거래가는 월 단위로만 갱신되므로 1시간 캐시로 불필요한 재호출을 줄입니다.
-      next: { revalidate: 60 * 60 },
+      // 실거래가는 월 단위로만 갱신되므로 캐시로 불필요한 재호출을 줄입니다.
+      // 호출하는 쪽이 달의 "나이"에 따라 revalidateSeconds를 다르게 넘길 수
+      // 있습니다(fetchRecentAptTrades 참고) — 지정 안 하면 1시간 기본값.
+      next: { revalidate: options.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS },
     });
   } catch (error) {
     throw new MolitApiError(
@@ -225,10 +233,17 @@ export function isCanceledTrade(trade: MolitAptTradeItem): boolean {
   return trade.cdealType === "O";
 }
 
+/** 이 개수만큼의 최근 달(오늘 포함)은 뒤늦은 신고·정정이 계속 들어올 수 있어 짧게(1시간) 캐시합니다. */
+const RECENT_MONTHS_SHORT_CACHE = 2;
+/** 그보다 오래된 달은 신고가 사실상 끝난 것으로 보고 길게(24시간) 캐시해 호출을 줄입니다. */
+const OLD_MONTH_REVALIDATE_SECONDS = 60 * 60 * 24;
+
 /**
  * 최근 N개월(기본 12개월)의 아파트매매 실거래자료를 지역코드 기준으로 조회해 합칩니다.
  * 국토부 API는 한 번에 한 달치만 조회할 수 있어 월별로 나눠 호출하며,
- * 일부 달 조회가 실패해도 나머지 달의 데이터는 최대한 반환합니다.
+ * 일부 달 조회가 실패해도 나머지 달의 데이터는 최대한 반환합니다. 최근
+ * RECENT_MONTHS_SHORT_CACHE개월만 짧게 캐시하고 나머지는 길게 캐시해,
+ * 이미 신고가 끝난 옛날 달까지 매시간 다시 불러오지 않게 합니다.
  */
 export async function fetchRecentAptTrades(
   lawdCode: string,
@@ -237,7 +252,14 @@ export async function fetchRecentAptTrades(
   const yearMonths = getYearMonthsBack(months);
 
   const results = await Promise.allSettled(
-    yearMonths.map((dealYmd) => fetchAptTrades(lawdCode, dealYmd)),
+    yearMonths.map((dealYmd, index) =>
+      fetchAptTrades(lawdCode, dealYmd, {
+        revalidateSeconds:
+          index < RECENT_MONTHS_SHORT_CACHE
+            ? DEFAULT_REVALIDATE_SECONDS
+            : OLD_MONTH_REVALIDATE_SECONDS,
+      }),
+    ),
   );
 
   const succeeded = results.filter(
