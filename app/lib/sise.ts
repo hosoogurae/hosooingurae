@@ -7,63 +7,8 @@ import { isCanceledTrade, type MolitAptTradeItem } from "./molit";
  */
 const AREA_TOLERANCE = 1;
 
-/**
- * "e편한세상"/"이편한세상" 표기 통일, 끝의 "아파트" 제거, 공백 제거만 하는
- * 좁은 정규화입니다. 국토부 데이터에 같은 단지가 표기 차이로 서로 다른
- * aptSeq에 중복 등록된 경우(실사례: "호수마을e편한세상아파트"(41570-744)와
- * "호수마을이편한세상"(41570-763)이 실제로는 같은 단지)를 하나로 합치기
- * 위함입니다. "2단지"/"3차" 같은 구분자는 건드리지 않으므로 실제로 다른
- * 단지끼리는 정규화 후에도 여전히 분리됩니다 — 퍼지 매칭은 하지 않습니다.
- */
-function normalizeComplexName(name: string): string {
-  return name
-    .replace(/이편한세상/g, "e편한세상")
-    .replace(/아파트$/, "")
-    .replace(/\s+/g, "")
-    .trim();
-}
-
-export interface ComplexAreaRow {
-  /** 그룹 내 전용면적 평균(㎡, 소수 첫째 자리 반올림). */
-  representativeArea: number;
-  tradeCount: number;
-  /** 만원 단위. */
-  averagePrice: number;
-  highestPrice: number;
-  lowestPrice: number;
-  /** YYYY-MM-DD, 그룹 내 가장 최근 계약일. */
-  latestDealDate: string;
-  /** 계약일 내림차순. */
-  trades: MolitAptTradeItem[];
-}
-
-export interface ComplexGroup {
-  /**
-   * 정규화 후 이름이 같아 하나로 묶인 거래 중, 거래건수가 가장 많은 쪽의
-   * aptSeq/aptNm을 대표값으로 씁니다(표기가 여러 개면 다수결).
-   */
-  aptSeq: string;
-  aptNm: string;
-  /** 단지 전체(모든 평형 합산) 거래건수. */
-  tradeCount: number;
-  /** 단지 전체(모든 평형 중) 가장 최근 계약일. */
-  latestDealDate: string;
-  /**
-   * 거래건수 많은 순 — areaRows[0]이 "대표 평형"입니다. 카드 요약에는 이
-   * 대표 평형의 평균가만 보여줍니다(전체 평형을 섞은 평균은 84㎡/59㎡처럼
-   * 서로 다른 시세를 뭉개서 오해를 부르므로 쓰지 않습니다).
-   */
-  areaRows: ComplexAreaRow[];
-}
-
-export interface SiseSummary {
-  tradeCount: number;
-  /** 만원 단위. 거래가 없으면 null. */
-  averagePrice: number | null;
-  highestTrade: MolitAptTradeItem | null;
-  /** 단지 총 거래건수 많은 순. */
-  complexGroups: ComplexGroup[];
-}
+/** 통계(중앙값 등)를 보여줄 최소 표본 수. 이보다 적으면 수치를 감추고 안내 문구로 대체합니다. */
+export const MIN_SAMPLE_SIZE = 5;
 
 /** 해제(취소) 신고를 제외하고, 지정한 법정동(umdNm)의 거래만 남깁니다. */
 export function filterValidDongTrades(
@@ -73,7 +18,7 @@ export function filterValidDongTrades(
   return trades.filter((trade) => trade.umdNm === dongName && !isCanceledTrade(trade));
 }
 
-/** 이미 한 단지로 좁혀진 거래 목록을, 전용면적이 비슷한(±tolerance㎡) 것끼리 묶습니다. */
+/** 거래 목록을, 전용면적이 비슷한(±tolerance㎡) 것끼리 묶습니다. */
 function groupByArea(
   trades: MolitAptTradeItem[],
   tolerance: number,
@@ -95,89 +40,177 @@ function groupByArea(
   return groups;
 }
 
-function summarizeAreaRow(
-  trades: MolitAptTradeItem[],
-  representativeArea: number,
-): ComplexAreaRow {
-  const sortedByDateDesc = [...trades].sort((a, b) => b.dealDate.localeCompare(a.dealDate));
-  const prices = trades.map((trade) => trade.dealAmount);
+/** 가격(만원) 배열의 중앙값. 짝수 개면 가운데 두 값의 평균(표준적인 중앙값 정의)을 반올림합니다. */
+export function medianPrice(prices: number[]): number {
+  const sorted = [...prices].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
 
+export type MedianPriceSummary =
+  | { hidden: true; count: number }
+  | { hidden: false; count: number; medianPrice: number; minPrice: number; maxPrice: number };
+
+/**
+ * 표본이 MIN_SAMPLE_SIZE 미만이면 수치를 숨깁니다(CLAUDE.md 1-3 — "거래가
+ * 적어 산출 어려움"은 화면이 표시하고, 이 함수는 hidden 플래그만 돌려줍니다).
+ */
+export function summarizeMedianPrice(trades: MolitAptTradeItem[]): MedianPriceSummary {
+  const count = trades.length;
+  if (count < MIN_SAMPLE_SIZE) return { hidden: true, count };
+
+  const prices = trades.map((trade) => trade.dealAmount);
   return {
-    representativeArea,
-    tradeCount: trades.length,
-    averagePrice: Math.round(
-      prices.reduce((sum, price) => sum + price, 0) / prices.length,
-    ),
-    highestPrice: Math.max(...prices),
-    lowestPrice: Math.min(...prices),
-    latestDealDate: sortedByDateDesc[0].dealDate,
-    trades: sortedByDateDesc,
+    hidden: false,
+    count,
+    medianPrice: medianPrice(prices),
+    minPrice: Math.min(...prices),
+    maxPrice: Math.max(...prices),
   };
 }
 
+export interface PeriodRange {
+  /** YYYY-MM-DD, 이 날짜 이상. */
+  startDate: string;
+  /** YYYY-MM-DD, 이 날짜 이하(그 달의 말일). */
+  endDate: string;
+  /** "2026.03~2026.08" 형태. */
+  label: string;
+}
+
+function monthsAgo(now: Date, n: number): Date {
+  return new Date(now.getFullYear(), now.getMonth() - n, 1);
+}
+
+function lastDayOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function toDateString(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatYearMonth(date: Date): string {
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /**
- * 법정동 실거래 목록(이미 filterValidDongTrades를 거친 것을 넘겨야 함)을
- * 단지별로 묶고, 그 안에서 다시 평형별로 묶어 요약합니다. 단지는 이름을
- * normalizeComplexName으로 정규화한 값을 기준으로 묶여(표기 차이로 인한
- * 중복 등록 통합), 같은 단지라도 전용면적이 다르면(84㎡/59㎡ 등) 평형별로
- * 별도 행이 됩니다. 결과는 단지 총 거래건수가 많은 순으로 정렬됩니다.
+ * "이번 달은 아직 신고가 다 안 끝났을 수 있다"고 보고 이번 달은 제외한,
+ * monthsBack개월짜리 기간을 만듭니다. monthsAgoOffset(기본 1)을 더 크게
+ * 주면 그만큼 더 과거로 밀린 같은 길이의 기간이 됩니다 — 전년 동기 비교에
+ * 씁니다(예: monthsBack=6, offset=1이면 최근 기간, offset=7이면 그 바로
+ * 직전 6개월).
  */
-export function summarizeDongTrades(trades: MolitAptTradeItem[]): SiseSummary {
-  if (trades.length === 0) {
-    return { tradeCount: 0, averagePrice: null, highestTrade: null, complexGroups: [] };
-  }
+export function getPeriodRange(
+  now: Date,
+  monthsBack: number,
+  monthsAgoOffset = 1,
+): PeriodRange {
+  const endMonth = monthsAgo(now, monthsAgoOffset);
+  const startMonth = monthsAgo(now, monthsAgoOffset + monthsBack - 1);
+  return {
+    startDate: toDateString(startMonth),
+    endDate: toDateString(lastDayOfMonth(endMonth)),
+    label: `${formatYearMonth(startMonth)}~${formatYearMonth(endMonth)}`,
+  };
+}
 
-  const byNormalizedName = new Map<string, MolitAptTradeItem[]>();
-  for (const trade of trades) {
-    const key = normalizeComplexName(trade.aptNm);
-    const group = byNormalizedName.get(key) ?? [];
-    group.push(trade);
-    byNormalizedName.set(key, group);
-  }
-
-  const complexGroups: ComplexGroup[] = [];
-  for (const complexTrades of byNormalizedName.values()) {
-    const aptSeqCounts = new Map<string, number>();
-    for (const trade of complexTrades) {
-      aptSeqCounts.set(trade.aptSeq, (aptSeqCounts.get(trade.aptSeq) ?? 0) + 1);
-    }
-    const [representativeAptSeq] = [...aptSeqCounts.entries()].sort(
-      (a, b) => b[1] - a[1],
-    )[0];
-    const representativeAptNm = complexTrades.find(
-      (trade) => trade.aptSeq === representativeAptSeq,
-    )!.aptNm;
-
-    const areaRows = groupByArea(complexTrades, AREA_TOLERANCE)
-      .map((group) => summarizeAreaRow(group.trades, group.representativeArea))
-      .sort((a, b) => b.tradeCount - a.tradeCount);
-
-    const latestDealDate = [...complexTrades].sort((a, b) =>
-      b.dealDate.localeCompare(a.dealDate),
-    )[0].dealDate;
-
-    complexGroups.push({
-      aptSeq: representativeAptSeq,
-      aptNm: representativeAptNm,
-      tradeCount: complexTrades.length,
-      latestDealDate,
-      areaRows,
-    });
-  }
-
-  complexGroups.sort((a, b) => b.tradeCount - a.tradeCount);
-
-  const allPrices = trades.map((trade) => trade.dealAmount);
-  const highestTrade = trades.reduce((max, trade) =>
-    trade.dealAmount > max.dealAmount ? trade : max,
+function filterTradesInRange(
+  trades: MolitAptTradeItem[],
+  range: PeriodRange,
+): MolitAptTradeItem[] {
+  return trades.filter(
+    (trade) => trade.dealDate >= range.startDate && trade.dealDate <= range.endDate,
   );
+}
+
+export interface PeriodComparison {
+  current: { label: string; medianPrice: number; count: number };
+  previous: { label: string; medianPrice: number; count: number };
+  /** current 대비 previous의 변화율(%). 반올림 안 함 — 화면에서 소수 자리 결정. */
+  changePercent: number;
+}
+
+/**
+ * "최근 기간 vs 그 직전 같은 길이의 기간" 비교. 양쪽 다 MIN_SAMPLE_SIZE 이상일
+ * 때만 결과를 돌려주고, 하나라도 부족하면 null입니다 — 표본이 적은 비교는
+ * 아예 보여주지 않습니다("한 건 빠지면 크게 흔들리는 값을 단단해 보이게
+ * 만들지 않는다"는 원칙).
+ */
+function comparePeriods(
+  allTrades: MolitAptTradeItem[],
+  now: Date,
+  monthsBack: number,
+): PeriodComparison | null {
+  const currentRange = getPeriodRange(now, monthsBack, 1);
+  const previousRange = getPeriodRange(now, monthsBack, monthsBack + 1);
+
+  const currentSummary = summarizeMedianPrice(filterTradesInRange(allTrades, currentRange));
+  const previousSummary = summarizeMedianPrice(filterTradesInRange(allTrades, previousRange));
+
+  if (currentSummary.hidden || previousSummary.hidden) return null;
+
+  const changePercent =
+    ((currentSummary.medianPrice - previousSummary.medianPrice) / previousSummary.medianPrice) *
+    100;
 
   return {
-    tradeCount: trades.length,
-    averagePrice: Math.round(
-      allPrices.reduce((sum, price) => sum + price, 0) / allPrices.length,
-    ),
-    highestTrade,
-    complexGroups,
+    current: {
+      label: currentRange.label,
+      medianPrice: currentSummary.medianPrice,
+      count: currentSummary.count,
+    },
+    previous: {
+      label: previousRange.label,
+      medianPrice: previousSummary.medianPrice,
+      count: previousSummary.count,
+    },
+    changePercent,
   };
+}
+
+export interface AreaBracket {
+  /** 그룹 내 전용면적 평균(㎡, 소수 첫째 자리 반올림). 호가(우리 매물) 쪽도 같은 값으로 구간을 맞춥니다. */
+  representativeArea: number;
+  recentPeriod: PeriodRange;
+  recent: MedianPriceSummary;
+  comparison: PeriodComparison | null;
+  /** 계약일 내림차순, 상세 화면의 "최근 거래 내역"용. recent 기간 밖의 거래도 포함(18개월 전체). */
+  trades: MolitAptTradeItem[];
+}
+
+/**
+ * 이미 한 단지(aptSeq)로 좁혀진 18개월치 거래를 전용면적 구간으로 나누고,
+ * 구간별로 중앙값 요약과 전기 대비를 계산합니다. 거래건수 많은 순으로
+ * 정렬합니다.
+ */
+export function buildComplexAreaBrackets(
+  complexTrades: MolitAptTradeItem[],
+  now: Date,
+  recentMonths = 6,
+): AreaBracket[] {
+  const recentPeriod = getPeriodRange(now, recentMonths, 1);
+
+  return groupByArea(complexTrades, AREA_TOLERANCE)
+    .map((group) => ({
+      representativeArea: group.representativeArea,
+      recentPeriod,
+      recent: summarizeMedianPrice(filterTradesInRange(group.trades, recentPeriod)),
+      comparison: comparePeriods(group.trades, now, recentMonths),
+      trades: [...group.trades].sort((a, b) => b.dealDate.localeCompare(a.dealDate)),
+    }))
+    .sort((a, b) => b.trades.length - a.trades.length);
+}
+
+/** 단지 목록 화면의 "최근 N개월 M건" 배지용 — 구간 나누기 전, 단지 전체 거래건수. */
+export function countRecentTrades(
+  complexTrades: MolitAptTradeItem[],
+  now: Date,
+  recentMonths = 6,
+): number {
+  return filterTradesInRange(complexTrades, getPeriodRange(now, recentMonths, 1)).length;
 }

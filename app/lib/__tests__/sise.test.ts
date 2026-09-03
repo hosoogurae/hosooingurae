@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { MolitAptTradeItem } from "../molit";
-import { filterValidDongTrades, summarizeDongTrades } from "../sise";
+import {
+  MIN_SAMPLE_SIZE,
+  buildComplexAreaBrackets,
+  countRecentTrades,
+  filterValidDongTrades,
+  getPeriodRange,
+  medianPrice,
+  summarizeMedianPrice,
+} from "../sise";
 
 function makeTrade(overrides: Partial<MolitAptTradeItem> = {}): MolitAptTradeItem {
   return {
@@ -19,6 +27,9 @@ function makeTrade(overrides: Partial<MolitAptTradeItem> = {}): MolitAptTradeIte
   };
 }
 
+/** "지금"을 2026-09-03으로 고정 — 기간 계산 테스트를 재현 가능하게 합니다. */
+const NOW = new Date(2026, 8, 3);
+
 describe("filterValidDongTrades", () => {
   it("해제(취소) 신고된 거래를 제외한다", () => {
     const trades = [makeTrade({ cdealType: "" }), makeTrade({ cdealType: "O" })];
@@ -35,135 +46,148 @@ describe("filterValidDongTrades", () => {
   });
 });
 
-describe("summarizeDongTrades", () => {
-  it("거래가 없으면 빈 요약을 반환한다", () => {
-    const summary = summarizeDongTrades([]);
-    expect(summary.tradeCount).toBe(0);
-    expect(summary.averagePrice).toBeNull();
-    expect(summary.highestTrade).toBeNull();
-    expect(summary.complexGroups).toEqual([]);
+describe("medianPrice", () => {
+  it("홀수 개면 가운데 값이다", () => {
+    expect(medianPrice([40000, 50000, 60000])).toBe(50000);
   });
 
-  it("전체 거래건수/평균가/최고가 거래를 계산한다", () => {
+  it("짝수 개면 가운데 두 값의 평균이다", () => {
+    expect(medianPrice([40000, 50000, 60000, 70000])).toBe(55000);
+  });
+
+  it("극단값 하나에 덜 흔들린다(평균과 비교)", () => {
+    const prices = [40000, 41000, 42000, 43000, 100000];
+    const average = prices.reduce((a, b) => a + b, 0) / prices.length;
+    expect(medianPrice(prices)).toBe(42000);
+    expect(medianPrice(prices)).toBeLessThan(average);
+  });
+});
+
+describe("summarizeMedianPrice", () => {
+  it(`표본이 ${MIN_SAMPLE_SIZE}건 미만이면 수치를 감춘다`, () => {
+    const trades = Array.from({ length: MIN_SAMPLE_SIZE - 1 }, () => makeTrade());
+    const result = summarizeMedianPrice(trades);
+    expect(result.hidden).toBe(true);
+    expect(result.count).toBe(MIN_SAMPLE_SIZE - 1);
+  });
+
+  it(`표본이 ${MIN_SAMPLE_SIZE}건 이상이면 중앙값·최저·최고를 계산한다`, () => {
     const trades = [
-      makeTrade({ dealAmount: 40000, dealDate: "2026-05-01" }),
-      makeTrade({ dealAmount: 44000, dealDate: "2026-06-01" }),
-      makeTrade({ dealAmount: 42000, dealDate: "2026-04-01" }),
+      makeTrade({ dealAmount: 40000 }),
+      makeTrade({ dealAmount: 41000 }),
+      makeTrade({ dealAmount: 42000 }),
+      makeTrade({ dealAmount: 43000 }),
+      makeTrade({ dealAmount: 100000 }),
     ];
-    const summary = summarizeDongTrades(trades);
-    expect(summary.tradeCount).toBe(3);
-    expect(summary.averagePrice).toBe(42000);
-    expect(summary.highestTrade?.dealAmount).toBe(44000);
+    const result = summarizeMedianPrice(trades);
+    if (result.hidden) throw new Error("hidden이면 안 됨");
+    expect(result.count).toBe(5);
+    expect(result.medianPrice).toBe(42000);
+    expect(result.minPrice).toBe(40000);
+    expect(result.maxPrice).toBe(100000);
+  });
+});
+
+describe("getPeriodRange", () => {
+  it("이번 달(진행 중일 수 있는 달)은 제외하고, 그 직전 N개월을 잡는다", () => {
+    const range = getPeriodRange(NOW, 6, 1);
+    expect(range.startDate).toBe("2026-03-01");
+    expect(range.endDate).toBe("2026-08-31");
+    expect(range.label).toBe("2026.03~2026.08");
   });
 
-  it("같은 단지라도 전용면적이 크게 다르면(84㎡ vs 59㎡) 평형별로 별도 행으로 나눈다", () => {
+  it("offset을 늘리면 그만큼 더 과거로 밀린 같은 길이의 기간이 된다", () => {
+    const range = getPeriodRange(NOW, 6, 7);
+    expect(range.startDate).toBe("2025-09-01");
+    expect(range.endDate).toBe("2026-02-28");
+    expect(range.label).toBe("2025.09~2026.02");
+  });
+});
+
+describe("buildComplexAreaBrackets", () => {
+  it("전용면적이 크게 다르면(84㎡ vs 59㎡) 별도 구간으로 나눈다", () => {
     const trades = [
-      makeTrade({ aptSeq: "A", excluUseAr: 84.86 }),
-      makeTrade({ aptSeq: "A", excluUseAr: 84.93 }),
-      makeTrade({ aptSeq: "A", excluUseAr: 59.9 }),
+      makeTrade({ excluUseAr: 84.86, dealDate: "2026-08-01" }),
+      makeTrade({ excluUseAr: 84.93, dealDate: "2026-08-02" }),
+      makeTrade({ excluUseAr: 59.9, dealDate: "2026-08-03" }),
     ];
-    const summary = summarizeDongTrades(trades);
-    expect(summary.complexGroups).toHaveLength(1);
-    expect(summary.complexGroups[0].tradeCount).toBe(3);
-    expect(summary.complexGroups[0].areaRows).toHaveLength(2);
-    const areas = summary.complexGroups[0].areaRows
-      .map((row) => row.representativeArea)
-      .sort((a, b) => a - b);
-    expect(areas[0]).toBeCloseTo(59.9);
-    expect(areas[1]).toBeCloseTo(84.9, 1);
+    const brackets = buildComplexAreaBrackets(trades, NOW);
+    expect(brackets).toHaveLength(2);
   });
 
-  it("전용면적이 ±1㎡ 이내로 미세하게만 다르면 같은 평형 행으로 묶는다", () => {
+  it("±1㎡ 이내 차이는 같은 구간으로 묶는다", () => {
     const trades = [
-      makeTrade({ aptSeq: "A", excluUseAr: 84.86 }),
-      makeTrade({ aptSeq: "A", excluUseAr: 84.6 }),
+      makeTrade({ excluUseAr: 84.86, dealDate: "2026-08-01" }),
+      makeTrade({ excluUseAr: 84.6, dealDate: "2026-08-02" }),
     ];
-    const summary = summarizeDongTrades(trades);
-    expect(summary.complexGroups[0].areaRows).toHaveLength(1);
-    expect(summary.complexGroups[0].areaRows[0].tradeCount).toBe(2);
+    const brackets = buildComplexAreaBrackets(trades, NOW);
+    expect(brackets).toHaveLength(1);
+    expect(brackets[0].trades).toHaveLength(2);
   });
 
-  it("다른 단지(aptSeq, 이름도 다름)는 서로 섞이지 않는다", () => {
+  it("거래건수 많은 구간이 먼저 온다", () => {
     const trades = [
-      makeTrade({ aptSeq: "A", aptNm: "A단지" }),
-      makeTrade({ aptSeq: "B", aptNm: "B단지" }),
+      ...Array.from({ length: 3 }, () => makeTrade({ excluUseAr: 59.9 })),
+      ...Array.from({ length: 1 }, () => makeTrade({ excluUseAr: 84.9 })),
     ];
-    const summary = summarizeDongTrades(trades);
-    expect(summary.complexGroups).toHaveLength(2);
+    const brackets = buildComplexAreaBrackets(trades, NOW);
+    expect(brackets[0].representativeArea).toBeCloseTo(59.9);
   });
 
-  it("단지별 areaRows의 평균가/최고가/최저가/최근거래일을 그룹 기준으로 계산한다", () => {
+  it("recent 기간 안의 거래만 표본으로 세고, 5건 미만이면 감춘다", () => {
     const trades = [
-      makeTrade({ dealAmount: 40000, dealDate: "2026-01-01", excluUseAr: 84.8 }),
-      makeTrade({ dealAmount: 44000, dealDate: "2026-06-01", excluUseAr: 84.9 }),
+      makeTrade({ dealDate: "2026-08-01" }), // recent(03~08) 안
+      makeTrade({ dealDate: "2025-01-01" }), // recent 밖(18개월 조회 범위지만 기간 밖)
     ];
-    const summary = summarizeDongTrades(trades);
-    const row = summary.complexGroups[0].areaRows[0];
-    expect(row.tradeCount).toBe(2);
-    expect(row.averagePrice).toBe(42000);
-    expect(row.highestPrice).toBe(44000);
-    expect(row.lowestPrice).toBe(40000);
-    expect(row.latestDealDate).toBe("2026-06-01");
+    const brackets = buildComplexAreaBrackets(trades, NOW);
+    expect(brackets[0].recent.hidden).toBe(true);
+    expect(brackets[0].recent.count).toBe(1);
+    // 거래 내역 자체(trades)는 기간과 무관하게 전체를 담고 있어야 상세화면에서 볼 수 있다.
+    expect(brackets[0].trades).toHaveLength(2);
   });
 
-  it("단지는 총 거래건수 많은 순으로 정렬된다", () => {
+  it("현재·직전 기간 둘 다 5건 이상이어야 전기 대비를 계산한다", () => {
+    const enoughTrades = [
+      ...Array.from({ length: 5 }, (_, i) =>
+        makeTrade({ dealDate: `2026-0${3 + (i % 6)}-01`, dealAmount: 40000 + i * 1000 }),
+      ),
+      ...Array.from({ length: 5 }, (_, i) =>
+        makeTrade({ dealDate: `2025-${9 + (i % 4 === 0 ? 0 : 0)}-01`, dealAmount: 38000 }),
+      ),
+    ];
+    // 직전 기간(2025.09~2026.02)에 5건을 명시적으로 채운다.
+    const previousPeriodTrades = [
+      makeTrade({ dealDate: "2025-09-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2025-10-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2025-11-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2025-12-01", dealAmount: 38000 }),
+      makeTrade({ dealDate: "2026-01-01", dealAmount: 38000 }),
+    ];
+    const brackets = buildComplexAreaBrackets(
+      [...enoughTrades.slice(0, 5), ...previousPeriodTrades],
+      NOW,
+    );
+    expect(brackets[0].comparison).not.toBeNull();
+    expect(brackets[0].comparison?.previous.count).toBe(5);
+    expect(brackets[0].comparison?.current.count).toBe(5);
+  });
+
+  it("한쪽 표본이라도 5건 미만이면 전기 대비를 null로 둔다(양쪽 다 있어도 값을 반쯤 만들지 않음)", () => {
     const trades = [
-      makeTrade({ aptSeq: "A", aptNm: "A단지" }),
-      makeTrade({ aptSeq: "B", aptNm: "B단지" }),
-      makeTrade({ aptSeq: "B", aptNm: "B단지" }),
-      makeTrade({ aptSeq: "B", aptNm: "B단지" }),
+      ...Array.from({ length: 5 }, () => makeTrade({ dealDate: "2026-08-01" })), // current만 충분
+      makeTrade({ dealDate: "2025-09-01" }), // previous는 1건뿐
     ];
-    const summary = summarizeDongTrades(trades);
-    expect(summary.complexGroups[0].aptNm).toBe("B단지");
-    expect(summary.complexGroups[0].tradeCount).toBe(3);
+    const brackets = buildComplexAreaBrackets(trades, NOW);
+    expect(brackets[0].comparison).toBeNull();
   });
+});
 
-  it("한 단지 안에서 평형은 거래건수 많은 순으로 정렬된다", () => {
+describe("countRecentTrades", () => {
+  it("최근 기간 밖의 거래는 세지 않는다", () => {
     const trades = [
-      makeTrade({ aptSeq: "A", excluUseAr: 59.9 }),
-      makeTrade({ aptSeq: "A", excluUseAr: 84.8 }),
-      makeTrade({ aptSeq: "A", excluUseAr: 84.8 }),
-      makeTrade({ aptSeq: "A", excluUseAr: 84.8 }),
+      makeTrade({ dealDate: "2026-08-01" }),
+      makeTrade({ dealDate: "2024-01-01" }),
     ];
-    const summary = summarizeDongTrades(trades);
-    const areaRows = summary.complexGroups[0].areaRows;
-    expect(areaRows[0].representativeArea).toBeCloseTo(84.8);
-    expect(areaRows[0].tradeCount).toBe(3);
-    expect(areaRows[1].tradeCount).toBe(1);
-  });
-
-  it("단지의 latestDealDate는 대표 평형이 아니라도 전체 평형 중 가장 최근 날짜를 쓴다", () => {
-    const trades = [
-      makeTrade({ aptSeq: "A", excluUseAr: 84.8, dealDate: "2026-01-01" }),
-      makeTrade({ aptSeq: "A", excluUseAr: 84.8, dealDate: "2026-02-01" }),
-      makeTrade({ aptSeq: "A", excluUseAr: 59.9, dealDate: "2026-06-01" }),
-    ];
-    const summary = summarizeDongTrades(trades);
-    expect(summary.complexGroups[0].latestDealDate).toBe("2026-06-01");
-  });
-
-  describe("단지명 정규화 통합(실제 사례: 호수마을e편한세상)", () => {
-    it("\"이편한세상\"과 \"e편한세상\" 표기가 다른 같은 단지를(다른 aptSeq여도) 하나로 합친다", () => {
-      const trades = [
-        makeTrade({ aptSeq: "41570-744", aptNm: "호수마을e편한세상아파트" }),
-        makeTrade({ aptSeq: "41570-744", aptNm: "호수마을e편한세상아파트" }),
-        makeTrade({ aptSeq: "41570-763", aptNm: "호수마을이편한세상" }),
-      ];
-      const summary = summarizeDongTrades(trades);
-      expect(summary.complexGroups).toHaveLength(1);
-      expect(summary.complexGroups[0].tradeCount).toBe(3);
-      // 거래건수가 더 많은 41570-744 쪽이 대표값이 됩니다.
-      expect(summary.complexGroups[0].aptSeq).toBe("41570-744");
-      expect(summary.complexGroups[0].aptNm).toBe("호수마을e편한세상아파트");
-    });
-
-    it("번호가 다른 단지(2차/3차 등)는 정규화 후에도 서로 합쳐지지 않는다", () => {
-      const trades = [
-        makeTrade({ aptSeq: "41570-1013", aptNm: "호반베르디움더레이크2차" }),
-        makeTrade({ aptSeq: "41570-1023", aptNm: "호반베르디움더레이크3차" }),
-      ];
-      const summary = summarizeDongTrades(trades);
-      expect(summary.complexGroups).toHaveLength(2);
-    });
+    expect(countRecentTrades(trades, NOW)).toBe(1);
   });
 });
