@@ -13,7 +13,7 @@ export default function ValuationCta() {
         </p>
         <div className="mt-8">
           <Link
-            href="/valuation"
+            href="/sise"
             className="inline-block rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-8 py-3 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.01]"
           >
             우리 집 시세 확인하기

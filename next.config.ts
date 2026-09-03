@@ -60,6 +60,19 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // /valuation과 /sise("우리 집 시세")를 하나로 합치면서 /valuation은
+  // 없앴습니다. 검색엔진에 아직 등록된 적이 없어 지금이 바꾸기 가장 싼
+  // 시점이라 판단해 영구 리다이렉트로 처리합니다(쿼리스트링은 Next.js가
+  // 자동으로 새 경로에 그대로 실어 보냅니다).
+  async redirects() {
+    return [
+      {
+        source: "/valuation",
+        destination: "/sise",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
