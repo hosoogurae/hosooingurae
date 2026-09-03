@@ -8,6 +8,15 @@
  *     > app/lib/supabase/database.types.ts
  */
 
+/** jsonb 컬럼 왕복용 재귀 타입 — 가격/날짜/배열/객체 등 어떤 JSON 값이든 그대로 담습니다. */
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | Json[]
+  | { [key: string]: Json | undefined };
+
 export interface Database {
   public: {
     Tables: {
@@ -466,6 +475,193 @@ export interface Database {
         >;
         Relationships: [];
       };
+      customers: {
+        Row: {
+          id: string;
+          name: string;
+          phone: string | null;
+          phone_normalized: string | null;
+          memo: string | null;
+          desired_transaction_type: "매매" | "전세" | "월세" | null;
+          desired_area: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          phone?: string | null;
+          phone_normalized?: string | null;
+          memo?: string | null;
+          desired_transaction_type?: "매매" | "전세" | "월세" | null;
+          desired_area?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["customers"]["Insert"]>;
+        Relationships: [];
+      };
+      consultations: {
+        Row: {
+          id: string;
+          customer_id: string | null;
+          started_at: string;
+          ended_at: string | null;
+          duration_seconds: number | null;
+          mode: "manual" | "free" | "openai";
+          status: "in_progress" | "ended" | "discarded";
+          transcript: string | null;
+          corrected_transcript: string | null;
+          summary: string | null;
+          extracted_conditions: Record<string, unknown>;
+          uncertain_fields: string[];
+          follow_up_tasks: string[];
+          sms_draft: string | null;
+          internal_memo: string | null;
+          tags: string[];
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_id?: string | null;
+          started_at?: string;
+          ended_at?: string | null;
+          duration_seconds?: number | null;
+          mode?: "manual" | "free" | "openai";
+          status?: "in_progress" | "ended" | "discarded";
+          transcript?: string | null;
+          corrected_transcript?: string | null;
+          summary?: string | null;
+          extracted_conditions?: Record<string, unknown>;
+          uncertain_fields?: string[];
+          follow_up_tasks?: string[];
+          sms_draft?: string | null;
+          internal_memo?: string | null;
+          tags?: string[];
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["consultations"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "consultations_customer_id_fkey";
+            columns: ["customer_id"];
+            isOneToOne: false;
+            referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      consultation_transcripts: {
+        Row: {
+          id: string;
+          consultation_id: string;
+          speaker: "agent" | "customer" | "unknown";
+          text: string;
+          corrected_text: string | null;
+          sort_order: number;
+          finalized_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          consultation_id: string;
+          speaker?: "agent" | "customer" | "unknown";
+          text: string;
+          corrected_text?: string | null;
+          sort_order?: number;
+          finalized_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["consultation_transcripts"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "consultation_transcripts_consultation_id_fkey";
+            columns: ["consultation_id"];
+            isOneToOne: false;
+            referencedRelation: "consultations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      consultation_extracted_fields: {
+        Row: {
+          id: string;
+          consultation_id: string;
+          field_key: string;
+          field_value: Json;
+          confidence: "confirmed" | "uncertain";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          consultation_id: string;
+          field_key: string;
+          field_value: Json;
+          confidence?: "confirmed" | "uncertain";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["consultation_extracted_fields"]["Insert"]
+        >;
+        Relationships: [
+          {
+            foreignKeyName: "consultation_extracted_fields_consultation_id_fkey";
+            columns: ["consultation_id"];
+            isOneToOne: false;
+            referencedRelation: "consultations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      consultation_tasks: {
+        Row: {
+          id: string;
+          consultation_id: string | null;
+          customer_id: string | null;
+          task_type: string;
+          description: string;
+          due_date: string | null;
+          status: "open" | "done";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          consultation_id?: string | null;
+          customer_id?: string | null;
+          task_type?: string;
+          description: string;
+          due_date?: string | null;
+          status?: "open" | "done";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["consultation_tasks"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "consultation_tasks_consultation_id_fkey";
+            columns: ["consultation_id"];
+            isOneToOne: false;
+            referencedRelation: "consultations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "consultation_tasks_customer_id_fkey";
+            columns: ["customer_id"];
+            isOneToOne: false;
+            referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -505,6 +701,23 @@ export type AdminSmsTemplateRow =
   Database["public"]["Tables"]["admin_sms_templates"]["Row"];
 export type AdminSmsTemplateInsert =
   Database["public"]["Tables"]["admin_sms_templates"]["Insert"];
+export type CustomerRow = Database["public"]["Tables"]["customers"]["Row"];
+export type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
+export type ConsultationRow = Database["public"]["Tables"]["consultations"]["Row"];
+export type ConsultationInsert =
+  Database["public"]["Tables"]["consultations"]["Insert"];
+export type ConsultationTranscriptRow =
+  Database["public"]["Tables"]["consultation_transcripts"]["Row"];
+export type ConsultationTranscriptInsert =
+  Database["public"]["Tables"]["consultation_transcripts"]["Insert"];
+export type ConsultationExtractedFieldRow =
+  Database["public"]["Tables"]["consultation_extracted_fields"]["Row"];
+export type ConsultationExtractedFieldInsert =
+  Database["public"]["Tables"]["consultation_extracted_fields"]["Insert"];
+export type ConsultationTaskRow =
+  Database["public"]["Tables"]["consultation_tasks"]["Row"];
+export type ConsultationTaskInsert =
+  Database["public"]["Tables"]["consultation_tasks"]["Insert"];
 export type ContactRequestRow =
   Database["public"]["Tables"]["contact_requests"]["Row"];
 export type ContactRequestInsert =
