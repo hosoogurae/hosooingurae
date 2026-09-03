@@ -48,15 +48,43 @@ function CategoryCard({
   count: number | null;
   highlight?: boolean;
 }) {
+  const cardClassName = `flex flex-col justify-between rounded-xl border p-5 transition-colors ${
+    highlight && (count ?? 0) > 0
+      ? "border-red-400 bg-red-50 hover:bg-red-100"
+      : "border-navy-900/10 bg-white hover:border-gold-500"
+  }`;
+
+  // no-floorplan만 "일괄 정리" 화면으로 가는 별도 링크가 더 있어서, 카드
+  // 전체를 <Link>로 감싸면 <a> 안에 <a>가 중첩돼 버립니다. 그래서 이
+  // 카테고리만 바깥은 일반 div로 두고 안쪽에 링크 두 개를 나란히 둡니다.
+  if (category === "no-floorplan") {
+    return (
+      <div className={cardClassName}>
+        <Link href={`/admin/listings?filter=${category}`} className="block">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-bold text-navy-950">
+              {INSPECTION_CATEGORY_LABELS[category]}
+            </h2>
+            <span className="shrink-0 text-2xl font-black text-navy-950">
+              {count === null ? "-" : `${count}건`}
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-navy-800/60">
+            {CATEGORY_DESCRIPTIONS[category]}
+          </p>
+        </Link>
+        <Link
+          href="/admin/listing-inspection/floor-plan-cleanup"
+          className="mt-3 inline-block text-xs font-bold text-gold-600 hover:underline"
+        >
+          평면도 일괄 연결 화면 열기 →
+        </Link>
+      </div>
+    );
+  }
+
   return (
-    <Link
-      href={`/admin/listings?filter=${category}`}
-      className={`flex flex-col justify-between rounded-xl border p-5 transition-colors ${
-        highlight && (count ?? 0) > 0
-          ? "border-red-400 bg-red-50 hover:bg-red-100"
-          : "border-navy-900/10 bg-white hover:border-gold-500"
-      }`}
-    >
+    <Link href={`/admin/listings?filter=${category}`} className={cardClassName}>
       <div>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-bold text-navy-950">
