@@ -38,9 +38,9 @@ export const metadata: Metadata = {
   },
   // 검색엔진 소유확인용 공개 태그입니다(비밀값 아님, 환경변수로 뺄 필요
   // 없음). 루트 layout에서 한 번만 설정하면 하위 세그먼트가 자체
-  // verification을 쓰지 않는 한 모든 페이지에 그대로 상속됩니다. 구글
-  // 서치콘솔 값이 나오면 google 필드에 같이 추가하세요.
+  // verification을 쓰지 않는 한 모든 페이지에 그대로 상속됩니다.
   verification: {
+    google: "lSoo1KruW8qVXEFObosBXguy3ZSAltft4mqzWVsJSrw",
     other: {
       "naver-site-verification": "e14cebd9d56eb879a47c601c016319914140b637",
     },
