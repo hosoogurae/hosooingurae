@@ -17,6 +17,8 @@ interface PendingFile {
   previewUrl: string;
   /** 공급면적을 파일명에서 읽었는지("파일명에서 읽음" 표시용). 사람이 직접 고치면 false로 바뀝니다. */
   supplyAreaFromFileName: boolean;
+  /** 같은 단지·같은 공급면적 매물들의 전용면적 제안(자동 입력 아님, 텍스트 안내만). */
+  exclusiveAreaSuggestion: { exclusiveArea: number; count: number } | null;
 }
 
 interface ApiErrorDetail {
@@ -111,22 +113,59 @@ export default function FloorPlanManager({ complexId }: { complexId: string }) {
 
   function handleFilesSelected(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
-    const next: PendingFile[] = Array.from(fileList).map((file) => {
-      const parsed = parseFloorPlanFileName(file.name);
-      return {
-        key: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
-        file,
-        // 숫자만 읽혔을 땐 타입명을 비워둡니다 — 파일명을 그대로 타입명으로
-        // 쓰면 "108.6B" 같은 값이 저장되는 문제가 반복됩니다. 평형 이름은
-        // 사람이 직접 넣습니다.
-        unitType: parsed.typeName ?? "",
-        supplyArea: parsed.supplyArea !== null ? String(parsed.supplyArea) : "",
-        supplyAreaFromFileName: parsed.supplyArea !== null,
-        exclusiveArea: "",
-        previewUrl: URL.createObjectURL(file),
-      };
-    });
+    const parsedFiles = Array.from(fileList).map((file) => ({
+      file,
+      parsed: parseFloorPlanFileName(file.name),
+    }));
+    const next: PendingFile[] = parsedFiles.map(({ file, parsed }) => ({
+      key: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+      file,
+      // 숫자만 읽혔을 땐 타입명을 비워둡니다 — 파일명을 그대로 타입명으로
+      // 쓰면 "108.6B" 같은 값이 저장되는 문제가 반복됩니다. 평형 이름은
+      // 사람이 직접 넣습니다.
+      unitType: parsed.typeName ?? "",
+      supplyArea: parsed.supplyArea !== null ? String(parsed.supplyArea) : "",
+      supplyAreaFromFileName: parsed.supplyArea !== null,
+      exclusiveArea: "",
+      exclusiveAreaSuggestion: null,
+      previewUrl: URL.createObjectURL(file),
+    }));
     setPendingFiles((prev) => [...prev, ...next]);
+
+    // 공급면적을 파일명에서 읽어낸 것만 제안을 조회합니다("읽어냈으면"이라는
+    // 요청 조건 그대로 — 사람이 직접 타이핑한 값은 이 시점에 물어보지 않습니다).
+    if (complexId) {
+      parsedFiles.forEach(({ parsed }, index) => {
+        if (parsed.supplyArea !== null) {
+          fetchExclusiveAreaSuggestion(next[index].key, complexId, parsed.supplyArea);
+        }
+      });
+    }
+  }
+
+  async function fetchExclusiveAreaSuggestion(
+    key: string,
+    targetComplexId: string,
+    supplyArea: number,
+  ) {
+    try {
+      const response = await fetch(
+        `/api/admin/floor-plans/suggest-exclusive-area?complexId=${encodeURIComponent(targetComplexId)}&supplyArea=${supplyArea}`,
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const suggestion = data.suggestion as
+        | { exclusiveArea: number; count: number }
+        | null;
+      if (!suggestion) return;
+      setPendingFiles((prev) =>
+        prev.map((item) =>
+          item.key === key ? { ...item, exclusiveAreaSuggestion: suggestion } : item,
+        ),
+      );
+    } catch {
+      // 제안은 부가 정보라 실패해도 조용히 넘어갑니다(입력 자체는 그대로 가능).
+    }
   }
 
   function updatePendingUnitType(key: string, value: string) {
@@ -385,16 +424,24 @@ export default function FloorPlanManager({ complexId }: { complexId: string }) {
                         </p>
                       )}
                     </div>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={item.exclusiveArea}
-                      onChange={(event) =>
-                        updatePendingExclusiveArea(item.key, event.target.value)
-                      }
-                      placeholder="전용면적 ㎡ (선택)"
-                      className={`${inputClass} w-full`}
-                    />
+                    <div className="w-full">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={item.exclusiveArea}
+                        onChange={(event) =>
+                          updatePendingExclusiveArea(item.key, event.target.value)
+                        }
+                        placeholder="전용면적 ㎡ (선택)"
+                        className={`${inputClass} w-full`}
+                      />
+                      {item.exclusiveAreaSuggestion && (
+                        <p className="mt-0.5 text-[11px] text-navy-800/50">
+                          전용면적 {item.exclusiveAreaSuggestion.exclusiveArea} 인 것
+                          같습니다 ({item.exclusiveAreaSuggestion.count}건 기준)
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <button

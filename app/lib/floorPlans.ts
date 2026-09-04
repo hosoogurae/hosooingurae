@@ -460,6 +460,50 @@ export async function findMatchingUnitTypes(
   );
 }
 
+export interface ExclusiveAreaSuggestion {
+  exclusiveArea: number;
+  /** 이 전용면적을 가진 매물 건수(제안의 근거로 화면에 표시). */
+  count: number;
+}
+
+/**
+ * 평면도 업로드 화면 전용: 새로 올리는 평면도의 공급면적과 같은(±0.05㎡)
+ * 매물이 그 단지에 있으면, 그 매물들의 전용면적을 "제안"으로 돌려줍니다.
+ * 자동 입력이 아니라 제안이라, 전용면적 값이 하나로 모이지 않으면(매물이
+ * 없거나 서로 다른 전용면적이 섞여 있으면) null을 돌려주고 화면은 아무것도
+ * 표시하지 않습니다 — 애매한 걸 그럴듯하게 골라주지 않습니다.
+ */
+export async function suggestExclusiveAreaFromListings(
+  complexId: string,
+  supplyArea: number,
+): Promise<ExclusiveAreaSuggestion | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("listings")
+    .select("exclusive_area")
+    .eq("complex_id", complexId)
+    .eq("property_type", "아파트")
+    .not("exclusive_area", "is", null)
+    .gte("supply_area", supplyArea - AREA_MATCH_TOLERANCE)
+    .lte("supply_area", supplyArea + AREA_MATCH_TOLERANCE);
+
+  if (error || !data || data.length === 0) {
+    if (error) console.error("[floorPlans] 전용면적 제안 조회 실패", error);
+    return null;
+  }
+
+  const distinctAreas = new Set(data.map((row) => row.exclusive_area));
+  if (distinctAreas.size !== 1) {
+    // 매물마다 전용면적이 다르게 갈리면(같은 공급면적이라도 실제로는 다른
+    // 평형일 수 있음) 하나로 단정할 수 없으니 제안하지 않습니다.
+    return null;
+  }
+
+  return { exclusiveArea: [...distinctAreas][0]!, count: data.length };
+}
+
 interface UnitTypeBuildingOverride {
   /** 면적만으로는 구분 안 되는 후보 타입 집합(순서 무관, 정확히 일치해야 적용). */
   candidates: string[];
