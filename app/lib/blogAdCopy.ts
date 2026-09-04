@@ -18,7 +18,6 @@ import {
  * 흐름에서 매번 문구가 바뀌면 혼란스러우므로).
  */
 
-const PRODUCTION_SITE_URL = "https://hosooingurae.vercel.app";
 const CASUAL_BRAND_NAME = "호수부동산";
 
 function hashSeed(seed: string): number {
@@ -368,7 +367,7 @@ export function buildBlogAdCopy(input: AdCopyListingInput): string {
     [
       CASUAL_BRAND_NAME,
       `☎ ${PHONE_NUMBER}`,
-      `자세히 보기: ${PRODUCTION_SITE_URL}/listings/${input.id}`,
+      `자세히 보기: ${process.env.NEXT_PUBLIC_SITE_URL}/listings/${input.id}`,
     ].join("\n"),
   );
 
