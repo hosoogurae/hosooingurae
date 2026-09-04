@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   title: "구래동 아파트 시세 | 호수공인중개사사무소",
   description:
     "국토교통부 실거래가 공개시스템 기준, 구래동 아파트 단지·평형별 실거래 시세와 현재 매물을 함께 확인하세요.",
+  alternates: { canonical: "/sise" },
 };
 
 // 데이터는 siseMarketData의 1시간/24시간 tiered 캐시로 관리되므로, 이 페이지

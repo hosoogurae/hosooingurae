@@ -19,6 +19,7 @@ import CompareToggle from "../components/CompareToggle";
 export const metadata: Metadata = {
   title: "전체 매물 | 호수공인중개사사무소",
   description: "호수공인중개사사무소가 확인한 김포 구래동 실제 매물을 모두 확인하세요.",
+  alternates: { canonical: "/listings" },
 };
 
 // 매물 데이터를 Supabase에서 매 요청마다 새로 읽어오므로 정적 캐싱을 끕니다.

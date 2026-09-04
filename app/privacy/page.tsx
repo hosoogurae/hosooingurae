@@ -9,6 +9,7 @@ import {
 export const metadata: Metadata = {
   title: `개인정보처리방침 | ${COMPANY_NAME}`,
   robots: { index: false, follow: false },
+  alternates: { canonical: "/privacy" },
 };
 
 function Section({

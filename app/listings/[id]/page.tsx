@@ -73,6 +73,7 @@ export async function generateMetadata({
   return {
     title: `${formatComplexAndBuilding(listing.complex.name, listing.building)} ${listing.transactionType} ${listing.priceLabel} | 호수공인중개사사무소`,
     description: listing.shortDescription,
+    alternates: { canonical: `/listings/${listing.id}` },
   };
 }
 
