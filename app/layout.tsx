@@ -25,6 +25,17 @@ export const metadata: Metadata = {
   title: "호수공인중개사사무소 | 김포 구래동 부동산",
   description: "김포 구래동 아파트·오피스텔·상가 전문. 호수공인중개사사무소.",
   alternates: { canonical: "/" },
+  openGraph: {
+    siteName: "호수공인중개사사무소",
+    title: "호수공인중개사사무소 | 김포 구래동 부동산",
+    description: "김포 구래동 아파트·오피스텔·상가 전문. 호수공인중개사사무소.",
+    locale: "ko_KR",
+    type: "website",
+    // 매물별 페이지는 각자 대표사진으로 덮어씁니다. 이건 그 외 모든
+    // 페이지(메인·시세·매물목록 등)의 기본값이자, 대표사진이 없는
+    // 매물의 폴백 이미지이기도 합니다.
+    images: ["/office.jpg"],
+  },
 };
 
 // Header의 "아파트" 드롭다운이 매 요청마다 현재 공개 매물 건수를 반영해야 하므로

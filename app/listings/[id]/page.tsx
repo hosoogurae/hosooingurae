@@ -70,10 +70,20 @@ export async function generateMetadata({
     return { title: "매물을 찾을 수 없습니다 | 호수공인중개사사무소" };
   }
 
+  const title = `${formatComplexAndBuilding(listing.complex.name, listing.building)} ${listing.transactionType} ${listing.priceLabel} | 호수공인중개사사무소`;
+  // 대표사진(매물 개별 사진)이 없으면 사무소 실사진(/office.jpg)으로
+  // 대체합니다 — 카카오톡 등으로 공유했을 때 og:image가 비지 않도록.
+  const ogImage = resolveListingHeroImage(listing) ?? "/office.jpg";
+
   return {
-    title: `${formatComplexAndBuilding(listing.complex.name, listing.building)} ${listing.transactionType} ${listing.priceLabel} | 호수공인중개사사무소`,
+    title,
     description: listing.shortDescription,
     alternates: { canonical: `/listings/${listing.id}` },
+    openGraph: {
+      title,
+      description: listing.shortDescription,
+      images: [ogImage],
+    },
   };
 }
 
