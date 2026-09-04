@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FloorPlanImage } from "../../data/floorPlans";
+import { parseFloorPlanFileName } from "../../lib/floorPlanFileName";
 
 const inputClass =
   "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-gold-500";
@@ -14,11 +15,8 @@ interface PendingFile {
   supplyArea: string;
   exclusiveArea: string;
   previewUrl: string;
-}
-
-function stripExtension(fileName: string): string {
-  const dot = fileName.lastIndexOf(".");
-  return dot > 0 ? fileName.slice(0, dot) : fileName;
+  /** 공급면적을 파일명에서 읽었는지("파일명에서 읽음" 표시용). 사람이 직접 고치면 false로 바뀝니다. */
+  supplyAreaFromFileName: boolean;
 }
 
 interface ApiErrorDetail {
@@ -113,14 +111,21 @@ export default function FloorPlanManager({ complexId }: { complexId: string }) {
 
   function handleFilesSelected(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
-    const next: PendingFile[] = Array.from(fileList).map((file) => ({
-      key: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
-      file,
-      unitType: stripExtension(file.name),
-      supplyArea: "",
-      exclusiveArea: "",
-      previewUrl: URL.createObjectURL(file),
-    }));
+    const next: PendingFile[] = Array.from(fileList).map((file) => {
+      const parsed = parseFloorPlanFileName(file.name);
+      return {
+        key: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+        file,
+        // 숫자만 읽혔을 땐 타입명을 비워둡니다 — 파일명을 그대로 타입명으로
+        // 쓰면 "108.6B" 같은 값이 저장되는 문제가 반복됩니다. 평형 이름은
+        // 사람이 직접 넣습니다.
+        unitType: parsed.typeName ?? "",
+        supplyArea: parsed.supplyArea !== null ? String(parsed.supplyArea) : "",
+        supplyAreaFromFileName: parsed.supplyArea !== null,
+        exclusiveArea: "",
+        previewUrl: URL.createObjectURL(file),
+      };
+    });
     setPendingFiles((prev) => [...prev, ...next]);
   }
 
@@ -132,7 +137,11 @@ export default function FloorPlanManager({ complexId }: { complexId: string }) {
 
   function updatePendingSupplyArea(key: string, value: string) {
     setPendingFiles((prev) =>
-      prev.map((item) => (item.key === key ? { ...item, supplyArea: value } : item)),
+      prev.map((item) =>
+        item.key === key
+          ? { ...item, supplyArea: value, supplyAreaFromFileName: false }
+          : item,
+      ),
     );
   }
 
@@ -157,12 +166,6 @@ export default function FloorPlanManager({ complexId }: { complexId: string }) {
       setUploadErrors(["단지를 먼저 선택해주세요."]);
       return;
     }
-    const missingType = pendingFiles.find((item) => item.unitType.trim() === "");
-    if (missingType) {
-      setUploadErrors(["모든 파일에 타입명을 입력해주세요."]);
-      return;
-    }
-
     setUploading(true);
     setUploadErrors(null);
     const failed: string[] = [];
@@ -321,8 +324,10 @@ export default function FloorPlanManager({ complexId }: { complexId: string }) {
       <div className="rounded-xl border border-navy-900/10 p-6 sm:p-8">
         <p className="text-sm font-semibold text-navy-900">새 평면도 업로드</p>
         <p className="mt-1 text-xs text-navy-800/50">
-          여러 파일을 한 번에 선택할 수 있습니다. 파일명이 타입명으로 자동으로
-          채워지니, 필요하면 아래에서 직접 고쳐주세요(예: 84a → 84A).
+          여러 파일을 한 번에 선택할 수 있습니다. 파일명에서 평형 이름·공급면적을
+          읽을 수 있으면 미리 채워두니, 아래에서 확인하고 필요하면 고쳐주세요.
+          숫자만 있는 파일명(예: 131.65.jpg)은 면적만 채워지고 타입명은 직접
+          넣어야 합니다.
         </p>
         <input
           type="file"
@@ -357,17 +362,29 @@ export default function FloorPlanManager({ complexId }: { complexId: string }) {
                     placeholder="타입명 (예: 108B)"
                     className={`${inputClass} mt-1 w-full`}
                   />
+                  {item.unitType.trim() === "" && (
+                    <p className="mt-0.5 text-[11px] text-amber-700">
+                      타입명이 비어 있습니다. 네이버에 적힌 평형 이름을 넣어주세요.
+                    </p>
+                  )}
                   <div className="mt-1 flex gap-1">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={item.supplyArea}
-                      onChange={(event) =>
-                        updatePendingSupplyArea(item.key, event.target.value)
-                      }
-                      placeholder="공급면적 ㎡ (선택)"
-                      className={`${inputClass} w-full`}
-                    />
+                    <div className="w-full">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={item.supplyArea}
+                        onChange={(event) =>
+                          updatePendingSupplyArea(item.key, event.target.value)
+                        }
+                        placeholder="공급면적 ㎡ (선택)"
+                        className={`${inputClass} w-full`}
+                      />
+                      {item.supplyAreaFromFileName && (
+                        <p className="mt-0.5 text-[11px] text-navy-800/50">
+                          파일명에서 읽음
+                        </p>
+                      )}
+                    </div>
                     <input
                       type="number"
                       step="0.01"
