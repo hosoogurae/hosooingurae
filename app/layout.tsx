@@ -46,6 +46,8 @@ const structuredData = {
   "@context": "https://schema.org",
   "@type": "RealEstateAgent",
   name: COMPANY_NAME,
+  url: process.env.NEXT_PUBLIC_SITE_URL,
+  image: `${process.env.NEXT_PUBLIC_SITE_URL}/office.jpg`,
   founder: {
     "@type": "Person",
     name: CEO_NAME,
