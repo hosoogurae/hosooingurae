@@ -36,6 +36,15 @@ export const metadata: Metadata = {
     // 매물의 폴백 이미지이기도 합니다.
     images: ["/office.jpg"],
   },
+  // 검색엔진 소유확인용 공개 태그입니다(비밀값 아님, 환경변수로 뺄 필요
+  // 없음). 루트 layout에서 한 번만 설정하면 하위 세그먼트가 자체
+  // verification을 쓰지 않는 한 모든 페이지에 그대로 상속됩니다. 구글
+  // 서치콘솔 값이 나오면 google 필드에 같이 추가하세요.
+  verification: {
+    other: {
+      "naver-site-verification": "e14cebd9d56eb879a47c601c016319914140b637",
+    },
+  },
 };
 
 // Header의 "아파트" 드롭다운이 매 요청마다 현재 공개 매물 건수를 반영해야 하므로
