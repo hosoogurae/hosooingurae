@@ -3,10 +3,13 @@
  * 서버 전용 코드를 여기 섞지 않습니다). 클라이언트 컴포넌트(문자 작성
  * 화면)에서 그대로 import해서 씁니다.
  *
- * {홈페이지URL}/{부동산전화번호}는 도메인이 바뀌어도 문자 양식을 일일이
- * 고치지 않도록 환경변수(NEXT_PUBLIC_SITE_URL/NEXT_PUBLIC_OFFICE_PHONE)에서
- * 읽습니다. NEXT_PUBLIC_ 접두어라 빌드 시 클라이언트 번들에 인라인됩니다.
+ * 사무소명·주소·전화번호는 app/data/contact.ts 값만 씁니다 — 출처를
+ * 한 곳으로 유지하기 위해 별도 환경변수나 하드코딩을 두지 않습니다.
+ * {홈페이지URL}만 예외로, 도메인이 바뀌어도 양식을 일일이 안 고치도록
+ * NEXT_PUBLIC_SITE_URL에서 읽습니다(빌드 시 클라이언트 번들에 인라인됨).
  */
+
+import { ADDRESS_LINES, COMPANY_NAME, PHONE_NUMBER } from "../data/contact";
 
 export interface DefaultSmsTemplate {
   id: string;
@@ -55,7 +58,9 @@ export function resolveSmsTemplate(body: string, variables: SmsTemplateVariables
     "{매물주소}": variables.address,
     "{매물페이지URL}": variables.listingPageUrl,
     "{홈페이지URL}": process.env.NEXT_PUBLIC_SITE_URL,
-    "{부동산전화번호}": process.env.NEXT_PUBLIC_OFFICE_PHONE,
+    "{사무소명}": COMPANY_NAME,
+    "{사무소주소}": ADDRESS_LINES[0],
+    "{부동산전화번호}": PHONE_NUMBER,
   };
 
   let text = body;

@@ -254,8 +254,8 @@ export default function AdminSmsTemplatesPage() {
               />
               <span className="mt-1.5 block text-xs font-normal text-navy-800/50">
                 {"{단지명}"}, {"{매물주소}"}, {"{매물페이지URL}"}, {"{홈페이지URL}"},{" "}
-                {"{부동산전화번호}"}처럼 중괄호 안에 이름을 넣으면, 문자 작성 화면에서 값이
-                없을 때 그대로 남아 직접 채울 수 있습니다.
+                {"{사무소명}"}, {"{사무소주소}"}, {"{부동산전화번호}"}처럼 중괄호 안에 이름을
+                넣으면, 문자 작성 화면에서 값이 없을 때 그대로 남아 직접 채울 수 있습니다.
               </span>
             </label>
 
