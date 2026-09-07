@@ -8,20 +8,18 @@ import { AdminLogoutButton } from "./AdminLogoutButton";
 import { AdminInstallPwaButton } from "./AdminInstallPwaButton";
 import { AdminPushToggleButton } from "./AdminPushToggleButton";
 
-/** 폰에서 가장 자주 쓰는 상담 도우미·문의함을 앞에 둬서 스크롤 없이 바로 보이게 합니다. */
+/**
+ * href는 눌렀을 때 가는 곳(그룹의 기본 탭), activePrefix는 "지금 이 메뉴
+ * 안에 있다"고 판단할 기준입니다 — 예를 들어 "매물"은 접수/등록/관리/점검
+ * 탭 중 어디에 있든 activePrefix("/admin/listings")로 활성 표시됩니다.
+ */
 const NAV_ITEMS = [
-  { label: "상담 도우미", href: "/admin/consult-helper" },
-  { label: "문의함", href: "/admin/contacts" },
-  { label: "대시보드", href: "/admin" },
-  { label: "문자양식", href: "/admin/sms-templates" },
-  { label: "계약 준비물 문자", href: "/admin/contract-prep-sms" },
-  { label: "매물 접수", href: "/admin/listing-submissions" },
-  { label: "매물 등록", href: "/admin/listings/new" },
-  { label: "매물 관리", href: "/admin/listings" },
-  { label: "매물 점검", href: "/admin/listing-inspection" },
-  { label: "광고용 도구", href: "/admin/ad-copy" },
-  { label: "단지 관리", href: "/admin/complexes" },
-  { label: "평면도 관리", href: "/admin/floor-plans" },
+  { label: "대시보드", href: "/admin", activePrefix: "/admin" },
+  { label: "매물", href: "/admin/listings/manage", activePrefix: "/admin/listings" },
+  { label: "단지", href: "/admin/complexes", activePrefix: "/admin/complexes" },
+  { label: "문자", href: "/admin/sms/compose", activePrefix: "/admin/sms" },
+  { label: "문의함", href: "/admin/contacts", activePrefix: "/admin/contacts" },
+  { label: "도구", href: "/admin/tools/consult-helper", activePrefix: "/admin/tools" },
 ];
 
 const TOUCH_TARGET = "flex min-h-[44px] items-center";
@@ -88,36 +86,46 @@ export function AdminNav() {
     <div className="sticky top-0 z-40 border-b border-navy-900/10 bg-white">
       {/* 상단 바: 사무소명 + 알림/설치/로그아웃 */}
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-2 sm:px-6">
-        <span className="truncate text-sm font-black text-navy-950 sm:text-base">
+        <span className="min-w-0 truncate text-sm font-black text-navy-950 sm:text-base">
           호수공인중개사사무소 관리자
         </span>
-        <div className="flex flex-wrap items-center justify-end gap-1">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-[36px] shrink-0 items-center whitespace-nowrap rounded-md px-2 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5"
+          >
+            홈페이지
+          </a>
           <AdminPushToggleButton />
           <AdminInstallPwaButton />
           <AdminLogoutButton />
         </div>
       </div>
 
-      {/* 하단 바: 메뉴 — 폰에서 가로 스크롤, 뒤에 더 있으면 가장자리에 그라데이션 힌트 */}
+      {/* 하단 바: 6개 메뉴가 390px 폭에서도 가로 스크롤 없이 한 줄에 들어가도록
+          여백을 좁게 잡았습니다(예전 12개 항목일 때 쓰던 스크롤+그라데이션
+          힌트 UI는 이제 필요 없지만, 라벨이 길어지는 경우를 대비해 남겨둡니다). */}
       <div className="relative border-t border-navy-900/10">
         <nav
           ref={scrollRef}
-          className="mx-auto flex max-w-5xl items-center gap-1 overflow-x-auto px-4 py-1.5 sm:px-6"
+          className="mx-auto flex max-w-5xl items-center gap-0.5 overflow-x-auto px-4 py-1.5 sm:px-6"
         >
           {NAV_ITEMS.map((item) => {
             const isActive =
-              item.href === "/admin"
+              item.activePrefix === "/admin"
                 ? pathname === "/admin"
-                : pathname.startsWith(item.href);
+                : pathname.startsWith(item.activePrefix);
             const showContactBadge =
-              item.href === "/admin/contacts" && (newContactCount ?? 0) > 0;
+              item.label === "문의함" && (newContactCount ?? 0) > 0;
             const showSuspectedBadge =
-              item.href === "/admin/listing-inspection" && (suspectedCount ?? 0) > 0;
+              item.label === "매물" && (suspectedCount ?? 0) > 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`${TOUCH_TARGET} shrink-0 gap-1.5 whitespace-nowrap rounded-md px-3 text-sm font-bold transition-colors ${
+                className={`${TOUCH_TARGET} shrink-0 gap-1 whitespace-nowrap rounded-md px-2 text-sm font-bold transition-colors ${
                   isActive
                     ? "bg-navy-950 text-white"
                     : "text-navy-800 hover:bg-navy-900/5"
@@ -126,7 +134,7 @@ export function AdminNav() {
                 {item.label}
                 {showContactBadge && (
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                    className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
                       isActive
                         ? "bg-gold-400 text-navy-950"
                         : "bg-red-500 text-white"
@@ -136,21 +144,13 @@ export function AdminNav() {
                   </span>
                 )}
                 {showSuspectedBadge && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${isActive ? "bg-gold-400 text-navy-950" : "bg-purple-600 text-white"}`}>
+                  <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${isActive ? "bg-gold-400 text-navy-950" : "bg-purple-600 text-white"}`}>
                     {suspectedCount}
                   </span>
                 )}
               </Link>
             );
           })}
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${TOUCH_TARGET} shrink-0 whitespace-nowrap rounded-md px-3 text-sm font-bold text-navy-800 transition-colors hover:bg-navy-900/5`}
-          >
-            홈페이지 보기
-          </a>
         </nav>
 
         {showLeftFade && (

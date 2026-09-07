@@ -118,12 +118,12 @@ export default function AdminDashboardPage() {
     {
       title: "상담 도우미",
       description: "고객과 대면 상담할 때 마이크로 들은 말을 큰 글씨 자막으로 보여줍니다.",
-      href: "/admin/consult-helper",
+      href: "/admin/tools/consult-helper",
     },
     {
       title: "신규 매물 접수",
       description: "홈페이지로 들어온 매물 접수를 확인하고 연락하세요.",
-      href: "/admin/listing-submissions",
+      href: "/admin/listings/submissions",
       badge: submissions === null ? undefined : `신규 ${newCount}건`,
       highlight: newCount > 0,
     },
@@ -135,28 +135,23 @@ export default function AdminDashboardPage() {
     {
       title: "등록된 매물 관리",
       description: "등록된 매물을 수정하거나 공개 상태를 바꿉니다.",
-      href: "/admin/listings",
+      href: "/admin/listings/manage",
       badge: stats === null ? undefined : `등록 매물 ${stats.total}건`,
     },
     {
       title: "매물 점검 센터",
       description: "사진 없는 매물, 오래 미확인 매물 등을 자동으로 찾아줍니다.",
-      href: "/admin/listing-inspection",
+      href: "/admin/listings/inspection",
     },
     {
       title: "광고용 도구",
       description: "등록된 매물 정보로 문자·블로그·SNS 광고문구를 만듭니다.",
-      href: "/admin/ad-copy",
+      href: "/admin/tools/ad-copy",
     },
     {
       title: "단지 정보 관리",
-      description: "단지명·주소 등 단지 기본 정보를 관리합니다.",
+      description: "단지명·주소 등 단지 기본 정보를 관리합니다. 단지 편집 화면에서 평면도도 함께 관리합니다.",
       href: "/admin/complexes",
-    },
-    {
-      title: "평면도 관리",
-      description: "단지·타입별 평면도 이미지를 등록/관리합니다.",
-      href: "/admin/floor-plans",
     },
     {
       title: "홈페이지 바로가기",
@@ -207,7 +202,7 @@ export default function AdminDashboardPage() {
           </p>
         </div>
         <Link
-          href="/admin/listings?urgent=1"
+          href="/admin/listings/manage?urgent=1"
           className={`rounded-xl border p-5 transition-colors ${
             (stats?.needsVerification ?? 0) > 0
               ? "border-red-400 bg-red-50 hover:bg-red-100"
@@ -312,7 +307,7 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
                   <Link
-                    href="/admin/listing-submissions"
+                    href="/admin/listings/submissions"
                     className="shrink-0 rounded-md border border-navy-900/15 px-4 py-2 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
                   >
                     접수 확인

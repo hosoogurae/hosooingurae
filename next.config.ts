@@ -64,6 +64,14 @@ const nextConfig: NextConfig = {
   // 없앴습니다. 검색엔진에 아직 등록된 적이 없어 지금이 바꾸기 가장 싼
   // 시점이라 판단해 영구 리다이렉트로 처리합니다(쿼리스트링은 Next.js가
   // 자동으로 새 경로에 그대로 실어 보냅니다).
+  //
+  // 관리자 메뉴 정리(문자/매물/도구를 탭 구조로 합침)로 옮겨진 화면들도
+  // 같은 방식으로 이전 주소를 살려둡니다 — 관리자 화면은 noindex라
+  // SEO상 permanent 여부가 중요하진 않지만, 폰에 설치된 관리자 PWA의
+  // 푸시 알림·즐겨찾기 등 옛 주소를 여는 곳이 있을 수 있어 그대로
+  // 작동하게 합니다. 그룹의 "기본 탭" 리다이렉트(예: /admin/sms →
+  // /admin/sms/compose)는 나중에 기본 탭이 바뀔 수 있어 permanent를
+  // 끕니다.
   async redirects() {
     return [
       {
@@ -71,6 +79,43 @@ const nextConfig: NextConfig = {
         destination: "/sise",
         permanent: true,
       },
+      // 문자
+      { source: "/admin/sms", destination: "/admin/sms/compose", permanent: false },
+      { source: "/admin/sms-compose", destination: "/admin/sms/compose", permanent: true },
+      { source: "/admin/sms-templates", destination: "/admin/sms/templates", permanent: true },
+      {
+        source: "/admin/contract-prep-sms",
+        destination: "/admin/sms/contract-prep",
+        permanent: true,
+      },
+      // 매물
+      { source: "/admin/listings", destination: "/admin/listings/manage", permanent: false },
+      {
+        source: "/admin/listing-submissions",
+        destination: "/admin/listings/submissions",
+        permanent: true,
+      },
+      {
+        source: "/admin/listing-inspection",
+        destination: "/admin/listings/inspection",
+        permanent: true,
+      },
+      {
+        source: "/admin/listing-inspection/floor-plan-cleanup",
+        destination: "/admin/listings/inspection/floor-plan-cleanup",
+        permanent: true,
+      },
+      // 도구
+      { source: "/admin/tools", destination: "/admin/tools/consult-helper", permanent: false },
+      {
+        source: "/admin/consult-helper",
+        destination: "/admin/tools/consult-helper",
+        permanent: true,
+      },
+      { source: "/admin/ad-copy", destination: "/admin/tools/ad-copy", permanent: true },
+      // 단지: 평면도 관리 단독 화면은 단지 편집 화면과 완전히 중복이라
+      // 없앴습니다(같은 FloorPlanManager 컴포넌트).
+      { source: "/admin/floor-plans", destination: "/admin/complexes", permanent: true },
     ];
   },
 };
