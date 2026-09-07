@@ -1,52 +1,46 @@
 import sharp from "sharp";
 
-/**
- * 업로드되는 평면도 이미지는 상단 정보 배너(면적배지/key map/면적표)와 탭
- * 메뉴까지 포함한 전체 캡처 템플릿입니다(실측 확인: 여러 장 모두 동일 비율).
- * 그 부분을 제외하면 실제 3D 도면 + 하단 워터마크만 남습니다. 원본 자체를
- * 수정하지 않고, 카드/썸네일 표시에만 쓸 미리보기 이미지를 이 비율로 잘라
- * 만듭니다.
- */
-const HEADER_CROP_RATIO = 0.28;
+/** 카드/썸네일 표시용 미리보기의 긴 변 기준 최대 픽셀. 원본이 이보다 작으면 확대하지 않습니다. */
+const MAX_DIMENSION = 1600;
 
 /**
- * 평면도 썸네일 미리보기 생성: 위쪽 HEADER_CROP_RATIO만큼 잘라내고 나머지
- * (3D 도면 + 워터마크)를 그대로 반환합니다. 확대 보기에는 쓰지 않고 원본을
- * 그대로 보여줍니다.
+ * 평면도 미리보기 생성: 잘라내지 않고 비율을 유지한 채 축소만 합니다
+ * (resizeListingPhoto와 동일한 방식 — fit: "inside" + withoutEnlargement).
+ * 평면도는 어느 부분이든 잘리면 방 이름·구조선 같은 정보가 사라지므로,
+ * 상단에 면적배지 등 배너가 딸려 있어도 그대로 둡니다 — 잘려서 정보를
+ * 잃는 것보다 배너가 보이는 편이 낫습니다. 이 리사이즈는 카드/썸네일
+ * 용량을 줄이기 위한 것일 뿐이고, 확대 보기는 이 함수를 거치지 않은
+ * 원본을 그대로 보여줍니다.
  */
-export async function cropFloorPlanPreview(
+export async function resizeFloorPlanPreview(
   input: Buffer | Uint8Array,
 ): Promise<Buffer> {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  const metadata = await sharp(buffer).metadata();
 
-  const width = metadata.width ?? 0;
-  const height = metadata.height ?? 0;
-  if (width === 0 || height === 0) {
-    throw new Error("이미지 크기를 확인할 수 없습니다.");
-  }
-
-  const top = Math.round(height * HEADER_CROP_RATIO);
-
-  const cropped = await sharp(buffer)
-    .extract({ left: 0, top, width, height: height - top })
+  const resized = await sharp(buffer)
+    .resize({
+      width: MAX_DIMENSION,
+      height: MAX_DIMENSION,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
     .toBuffer();
 
   // sharp/libvips가 드물게 손상된 결과를 조용히 반환하는 경우가 있어(예외 없이
   // 헤더만 깨진 파일), 업로드하기 전에 실제로 다시 디코딩되는지 확인합니다.
   // 확인에 실패하면 깨진 이미지를 저장/노출하지 않도록 에러를 던집니다.
   try {
-    const verifyMetadata = await sharp(cropped).metadata();
+    const verifyMetadata = await sharp(resized).metadata();
     if (!verifyMetadata.width || !verifyMetadata.height) {
       throw new Error("검증 결과 크기 정보가 없습니다.");
     }
   } catch (verifyError) {
     throw new Error(
-      `크롭된 이미지가 손상되어 검증에 실패했습니다: ${
+      `리사이즈된 이미지가 손상되어 검증에 실패했습니다: ${
         verifyError instanceof Error ? verifyError.message : String(verifyError)
       }`,
     );
   }
 
-  return cropped;
+  return resized;
 }

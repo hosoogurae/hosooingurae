@@ -1,6 +1,6 @@
 import type { FloorPlanImage } from "../data/floorPlans";
 import { NO_FLOOR_PLAN_UNIT_TYPE } from "../data/listings";
-import { cropFloorPlanPreview } from "./floorPlanImageProcessing";
+import { resizeFloorPlanPreview } from "./floorPlanImageProcessing";
 import { getSupabaseAdminClient, getSupabaseClient } from "./supabase/client";
 import type { FloorPlanImageRow } from "./supabase/database.types";
 
@@ -286,14 +286,15 @@ export async function uploadFloorPlanImage(input: UploadFloorPlanInput): Promise
     data: { publicUrl },
   } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
-  // 카드/썸네일에서 상단 정보 배너를 잘라낸 미리보기를 별도로 만들어 올립니다.
+  // 카드/썸네일 용량을 줄이기 위해 비율 유지 축소본을 별도로 만들어 올립니다
+  // (잘라내지 않음 — 평면도는 잘리면 방 정보가 사라집니다).
   // 실패해도 업로드 자체는 막지 않고(원본은 이미 저장됨), 표시할 때 원본으로 대체됩니다.
   let previewUrl: string | null = null;
   try {
     const originalBuffer = Buffer.isBuffer(input.bytes)
       ? input.bytes
       : Buffer.from(input.bytes as ArrayBuffer);
-    const previewBuffer = await cropFloorPlanPreview(originalBuffer);
+    const previewBuffer = await resizeFloorPlanPreview(originalBuffer);
     const previewPath = path.replace(/(\.[^./]+)$/, "-preview$1");
 
     // Node Buffer를 그대로 넘기면 일부 런타임(Vercel 서버리스 등)의 fetch
@@ -557,7 +558,7 @@ export interface ReprocessResult {
 
 /**
  * 이미 업로드된 평면도 원본은 그대로 두고, 카드/썸네일용 미리보기 이미지만
- * 새로 만들어(cropFloorPlanPreview) 업로드하고 preview_url을 채웁니다.
+ * 새로 만들어(resizeFloorPlanPreview) 업로드하고 preview_url을 채웁니다.
  * floor_plan_images.url(원본)이나 매물/평면도 연결 관계는 전혀 바뀌지
  * 않습니다. 관리자 화면 버튼이나 일회성 스크립트에서 호출하는 용도입니다.
  */
@@ -602,7 +603,7 @@ export async function reprocessAllFloorPlanImages(): Promise<{
       }
 
       const originalBuffer = Buffer.from(await fileData.arrayBuffer());
-      const previewBuffer = await cropFloorPlanPreview(originalBuffer);
+      const previewBuffer = await resizeFloorPlanPreview(originalBuffer);
 
       const { error: previewUploadError } = await supabase.storage
         .from(BUCKET)
@@ -674,7 +675,7 @@ export async function deleteFloorPlanImage(
   }
 
   // Storage 파일도 함께 정리합니다(실패해도 DB 삭제 자체는 이미 끝났으므로 경고만 남김).
-  // url(원본 이미지)과 preview_url(크롭된 미리보기, 없을 수 있음) 둘 다 같은
+  // url(원본 이미지)과 preview_url(축소된 미리보기, 없을 수 있음) 둘 다 같은
   // 버킷에 저장되므로 한 번에 지웁니다.
   const marker = `/object/public/${BUCKET}/`;
   const paths = [existing.url, existing.preview_url]

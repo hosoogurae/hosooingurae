@@ -69,7 +69,7 @@ export default function FloorPlanImage({
 }: {
   /** 확대(라이트박스)에 쓰는 원본. 면적표 등 원문 전체를 그대로 보여줍니다. */
   url: string;
-  /** 카드/썸네일에 쓰는 미리보기(상단 정보 배너를 잘라낸 버전). 없으면 원본을 씁니다. */
+  /** 카드/썸네일에 쓰는 미리보기(용량을 줄이려고 비율 유지 축소만 한 버전, 잘라내지 않음). 없으면 원본을 씁니다. */
   previewUrl?: string;
   unitType: string;
   className?: string;

@@ -26,7 +26,7 @@ export async function resizeListingPhoto(
     .jpeg({ quality: JPEG_QUALITY })
     .toBuffer();
 
-  // 평면도 크롭과 동일하게, 저장하기 전에 실제로 다시 디코딩되는지 확인해서
+  // 평면도 리사이즈와 동일하게, 저장하기 전에 실제로 다시 디코딩되는지 확인해서
   // 손상된 결과를 조용히 업로드하지 않게 합니다.
   try {
     const verifyMetadata = await sharp(resized).metadata();

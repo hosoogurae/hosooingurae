@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * deleteFloorPlanImage가 url뿐 아니라 preview_url(크롭된 미리보기, 있는 경우만)의
+ * deleteFloorPlanImage가 url뿐 아니라 preview_url(축소된 미리보기, 있는 경우만)의
  * Storage 파일도 함께 지우는지 확인합니다. 이전에는 url만 지우고 preview_url은
  * Storage에 고아 파일로 남았습니다.
  */
