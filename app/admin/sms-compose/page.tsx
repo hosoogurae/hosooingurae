@@ -242,6 +242,12 @@ function AdminSmsComposeInner() {
         >
           내 양식 관리 →
         </Link>
+        <Link
+          href="/admin/contract-prep-sms"
+          className="mt-1 block text-right text-sm font-bold text-gold-600 underline-offset-2 hover:underline"
+        >
+          계약 준비물 문자 만들기 →
+        </Link>
       </section>
 
       <section className="mt-6">

@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: "문의함", href: "/admin/contacts" },
   { label: "대시보드", href: "/admin" },
   { label: "문자양식", href: "/admin/sms-templates" },
+  { label: "계약 준비물 문자", href: "/admin/contract-prep-sms" },
   { label: "매물 접수", href: "/admin/listing-submissions" },
   { label: "매물 등록", href: "/admin/listings/new" },
   { label: "매물 관리", href: "/admin/listings" },
