@@ -245,7 +245,7 @@ export default function AdminContactsPage() {
                       <div className="flex flex-wrap gap-1.5">
                         <Link
                           href={{
-                            pathname: "/admin/sms-compose",
+                            pathname: "/admin/sms/compose",
                             query: {
                               phone: request.phone,
                               contactRequestId: request.id,

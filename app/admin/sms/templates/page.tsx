@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AdminSmsTemplate } from "../../lib/smsTemplates";
-import { DEFAULT_SMS_TEMPLATES } from "../../lib/smsTemplateText";
+import type { AdminSmsTemplate } from "../../../lib/smsTemplates";
+import {
+  DEFAULT_SMS_TEMPLATES,
+  resolveSmsTemplate,
+} from "../../../lib/smsTemplateText";
 
 type EditingState = { mode: "new" | "edit"; id?: string; name: string; body: string } | null;
 
@@ -149,7 +152,7 @@ export default function AdminSmsTemplatesPage() {
             >
               <p className="text-sm font-bold text-navy-950">{template.label}</p>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-navy-800/70">
-                {template.body}
+                {resolveSmsTemplate(template.body, {})}
               </p>
               <button
                 type="button"
@@ -197,7 +200,7 @@ export default function AdminSmsTemplatesPage() {
             <li key={template.id} className="rounded-xl border border-navy-900/10 bg-white p-4">
               <p className="text-sm font-bold text-navy-950">{template.name}</p>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-navy-800/70">
-                {template.body}
+                {resolveSmsTemplate(template.body, {})}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button

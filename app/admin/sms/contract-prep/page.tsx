@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { buildSmsHref } from "../../lib/listingInquiry";
-import { normalizePhone } from "../../lib/phoneNormalize";
-import { buildContractPrepSms } from "../../lib/contractPrepSms";
-import type { ContractPrepItem } from "../../lib/contractPrepItems";
+import { buildSmsHref } from "../../../lib/listingInquiry";
+import { normalizePhone } from "../../../lib/phoneNormalize";
+import { buildContractPrepSms } from "../../../lib/contractPrepSms";
+import type { ContractPrepItem } from "../../../lib/contractPrepItems";
 
 const ROLES = ["매수인", "매도인", "임차인", "임대인"] as const;
 type Role = (typeof ROLES)[number];
@@ -318,7 +318,7 @@ export default function ContractPrepSmsPage() {
         넣지 않습니다.
       </p>
       <Link
-        href="/admin/sms-compose"
+        href="/admin/sms/compose"
         className="mt-2 inline-block text-sm font-bold text-gold-600 underline-offset-2 hover:underline"
       >
         일반 문자 작성 →

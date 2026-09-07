@@ -3,16 +3,16 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { ContactRequestStatus } from "../../data/contactRequests";
-import { buildSmsHref } from "../../lib/listingInquiry";
-import { normalizePhone } from "../../lib/phoneNormalize";
-import type { AdminSmsTemplate } from "../../lib/smsTemplates";
+import type { ContactRequestStatus } from "../../../data/contactRequests";
+import { buildSmsHref } from "../../../lib/listingInquiry";
+import { normalizePhone } from "../../../lib/phoneNormalize";
+import type { AdminSmsTemplate } from "../../../lib/smsTemplates";
 import {
   DEFAULT_SMS_TEMPLATES,
   findUnresolvedSmsTokens,
   resolveSmsTemplate,
-} from "../../lib/smsTemplateText";
-import type { ListingWithComplex } from "../../lib/listings";
+} from "../../../lib/smsTemplateText";
+import type { ListingWithComplex } from "../../../lib/listings";
 
 const CUSTOM_ENTRY_ID = "custom";
 
@@ -237,13 +237,13 @@ function AdminSmsComposeInner() {
           <p className="mt-2 text-xs text-red-600">{myTemplatesError}</p>
         )}
         <Link
-          href="/admin/sms-templates"
+          href="/admin/sms/templates"
           className="mt-2 block text-right text-sm font-bold text-gold-600 underline-offset-2 hover:underline"
         >
           내 양식 관리 →
         </Link>
         <Link
-          href="/admin/contract-prep-sms"
+          href="/admin/sms/contract-prep"
           className="mt-1 block text-right text-sm font-bold text-gold-600 underline-offset-2 hover:underline"
         >
           계약 준비물 문자 만들기 →
