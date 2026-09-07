@@ -466,6 +466,28 @@ export interface Database {
         >;
         Relationships: [];
       };
+      contract_prep_items: {
+        Row: {
+          id: string;
+          role: string;
+          label: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          role: string;
+          label: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["contract_prep_items"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -505,6 +527,10 @@ export type AdminSmsTemplateRow =
   Database["public"]["Tables"]["admin_sms_templates"]["Row"];
 export type AdminSmsTemplateInsert =
   Database["public"]["Tables"]["admin_sms_templates"]["Insert"];
+export type ContractPrepItemRow =
+  Database["public"]["Tables"]["contract_prep_items"]["Row"];
+export type ContractPrepItemInsert =
+  Database["public"]["Tables"]["contract_prep_items"]["Insert"];
 export type ContactRequestRow =
   Database["public"]["Tables"]["contact_requests"]["Row"];
 export type ContactRequestInsert =
