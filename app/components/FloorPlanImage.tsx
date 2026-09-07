@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { formatUnitTypeLabel } from "../lib/format/listingFields";
 
 function FloorPlanLightbox({
   url,
@@ -63,6 +64,8 @@ export default function FloorPlanImage({
   previewUrl,
   unitType,
   className = "",
+  fit = "fill",
+  showBadge = true,
 }: {
   /** 확대(라이트박스)에 쓰는 원본. 면적표 등 원문 전체를 그대로 보여줍니다. */
   url: string;
@@ -70,26 +73,45 @@ export default function FloorPlanImage({
   previewUrl?: string;
   unitType: string;
   className?: string;
+  /**
+   * "fill"(기본값): 부모가 정해진 높이를 가지고 있을 때(예: aspect-ratio
+   * 박스) 그 안을 object-contain으로 가득 채웁니다 — 대표 이미지처럼
+   * 정해진 자리를 채워야 하는 곳에 씁니다.
+   * "natural": 높이를 강제하지 않고 최대 높이만 두어 원본 비율 그대로
+   * 보여줍니다(잘림 방지). 상세 페이지의 "평면도" 섹션처럼 읽는 게
+   * 목적인 큰 이미지에 씁니다.
+   */
+  fit?: "fill" | "natural";
+  showBadge?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const thumbnailUrl = previewUrl || url;
+  const label = formatUnitTypeLabel(unitType);
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`group relative block h-full w-full cursor-zoom-in overflow-hidden bg-white ${className}`}
+        className={`group relative block cursor-zoom-in overflow-hidden bg-white ${
+          fit === "fill" ? "h-full w-full" : "w-full"
+        } ${className}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={thumbnailUrl}
-          alt={`${unitType} 평면도`}
-          className="h-full w-full object-contain"
+          alt={`${label} 평면도`}
+          className={
+            fit === "fill"
+              ? "h-full w-full object-contain"
+              : "mx-auto block h-auto max-h-[70vh] w-auto max-w-full object-contain"
+          }
         />
-        <span className="absolute right-2 top-2 rounded-full bg-navy-950/70 px-2 py-0.5 text-[10px] font-bold text-gold-400 opacity-70 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
-          {unitType} 평면도
-        </span>
+        {showBadge && (
+          <span className="absolute right-2 top-2 rounded-full bg-navy-950/70 px-2 py-0.5 text-[10px] font-bold text-gold-400 opacity-70 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
+            {label} 평면도
+          </span>
+        )}
         <span className="absolute inset-x-0 bottom-2 mx-auto w-fit rounded-full bg-navy-950/70 px-3 py-1 text-[11px] font-medium text-white opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
           클릭하여 크게 보기
         </span>
@@ -98,7 +120,7 @@ export default function FloorPlanImage({
       {open && (
         <FloorPlanLightbox
           url={url}
-          unitType={unitType}
+          unitType={label}
           onClose={() => setOpen(false)}
         />
       )}

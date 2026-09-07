@@ -76,6 +76,17 @@ export function formatParking(value: number | null | undefined): string {
 }
 
 /**
+ * 평형 타입명(예: "108B")을 화면에 보여줄 때 씁니다. 평면도 파일명을 그대로
+ * 타입명으로 저장하던 시절의 흔적(예: "131.65B_")이 앞뒤에 남아 있을 수
+ * 있어, 화면에 나가는 문자열에서는 앞뒤 "_"와 공백만 정리합니다. 실제
+ * 저장된 값 자체는 바꾸지 않습니다 — 편집 화면의 입력칸에는 원본 그대로
+ * 보여줘야 관리자가 무엇이 잘못 저장됐는지 알 수 있습니다.
+ */
+export function formatUnitTypeLabel(unitType: string): string {
+  return unitType.trim().replace(/^_+|_+$/g, "");
+}
+
+/**
  * 문의 문구(SMS·전화 상담 메시지)처럼 문장 안에 자연스럽게 이어 쓸 때는
  * "층 정보 문의" 같은 안내문 대신 그 항목 자체를 생략하는 게 자연스럽
  * 습니다. 값을 확인할 수 없으면 null을 반환하니, 호출부에서 조건부로

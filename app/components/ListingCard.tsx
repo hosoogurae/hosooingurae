@@ -8,6 +8,7 @@ import {
   formatFloor,
   formatFloorRange,
   formatRooms,
+  formatUnitTypeLabel,
 } from "../lib/format/listingFields";
 import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
 
@@ -90,14 +91,14 @@ export default function ListingCard({
           <div className="relative h-full w-full bg-white p-3">
             <Image
               src={floorPlanThumbnail}
-              alt={`${listing.unitType} 평면도`}
+              alt={`${formatUnitTypeLabel(listing.unitType ?? "")} 평면도`}
               fill
               sizes={CARD_IMAGE_SIZES}
               loading={loading}
               className="object-contain"
             />
             <span className="absolute right-2 top-2 z-10 rounded-full bg-navy-950/70 px-2 py-0.5 text-[10px] font-bold text-gold-400 backdrop-blur">
-              {listing.unitType} 평면도
+              {formatUnitTypeLabel(listing.unitType ?? "")} 평면도
             </span>
           </div>
         ) : complexImageUrl ? (

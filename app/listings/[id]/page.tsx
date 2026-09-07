@@ -40,6 +40,7 @@ import {
   formatFloorRange,
   formatParking,
   formatRooms,
+  formatUnitTypeLabel,
 } from "../../lib/format/listingFields";
 import { buildAbsoluteUrl } from "../../lib/requestUrl";
 import { getUnitTypeImages } from "../../lib/unitTypeImages";
@@ -393,19 +394,21 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             style={{ animationDelay: "180ms" }}
           >
             <h2 className="text-lg font-bold text-navy-950">
-              평면도 ({listing.unitType})
+              평면도 ({formatUnitTypeLabel(listing.unitType ?? "")})
             </h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="mt-4 flex flex-col gap-4">
               {floorPlanImages.map((image) => (
                 <div
                   key={image.id}
-                  className="aspect-[4/3] overflow-hidden rounded-lg border border-navy-900/10 bg-white p-1.5 sm:p-2"
+                  className="flex items-center justify-center overflow-hidden rounded-lg border border-navy-900/10 bg-white p-1.5 sm:p-2"
                 >
                   <FloorPlanImage
                     url={image.url}
                     previewUrl={image.previewUrl}
                     unitType={listing.unitType ?? ""}
                     className="rounded-md"
+                    fit="natural"
+                    showBadge={false}
                   />
                 </div>
               ))}

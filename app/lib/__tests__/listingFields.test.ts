@@ -7,7 +7,23 @@ import {
   formatMaintenanceFee,
   formatParking,
   formatRooms,
+  formatUnitTypeLabel,
 } from "../format/listingFields";
+
+describe("formatUnitTypeLabel", () => {
+  it("앞뒤 밑줄을 정리한다(평면도 파일명을 그대로 저장하던 흔적)", () => {
+    expect(formatUnitTypeLabel("131.65B_")).toBe("131.65B");
+    expect(formatUnitTypeLabel("_108B")).toBe("108B");
+  });
+
+  it("정상 값은 그대로 둔다", () => {
+    expect(formatUnitTypeLabel("108B")).toBe("108B");
+  });
+
+  it("앞뒤 공백도 정리한다", () => {
+    expect(formatUnitTypeLabel("  108B  ")).toBe("108B");
+  });
+});
 
 describe("formatFloor", () => {
   it("0을 층 정보 문의로 표시한다", () => {
