@@ -248,7 +248,7 @@ export default function TransactionPriceChart({
     );
   }
 
-  const { latest, highestRecent, lowestRecent, averageRecentPrice } =
+  const { latest, highestRecent, lowestRecent, medianRecentPrice, recentSampleSize } =
     getTransactionSummary(transactions);
 
   // 모바일 X축은 겹치지 않게 처음/중간/마지막, 최대 3개만 표시합니다.
@@ -288,13 +288,23 @@ export default function TransactionPriceChart({
         <SummaryCard label="최근 12개월 최저가" transaction={lowestRecent} />
         <div className="rounded-xl border border-navy-900/10 p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy-800/50">
-            최근 12개월 평균가
+            최근 12개월 중앙값
           </p>
-          <p className="mt-2 whitespace-nowrap tracking-tight text-lg font-black text-navy-950 sm:text-xl">
-            {averageRecentPrice !== null
-              ? formatPriceFull(averageRecentPrice)
-              : "-"}
-          </p>
+          {medianRecentPrice !== null ? (
+            <>
+              <p className="mt-2 whitespace-nowrap tracking-tight text-lg font-black text-navy-950 sm:text-xl">
+                {formatPriceFull(medianRecentPrice)}
+              </p>
+              <p className="mt-1 text-xs text-navy-800/50">
+                {recentSampleSize}건 기준
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-navy-800/50">
+              거래가 적어 산출 어려움
+              {recentSampleSize > 0 && ` (${recentSampleSize}건)`}
+            </p>
+          )}
         </div>
       </div>
 

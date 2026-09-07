@@ -2,6 +2,7 @@ import {
   complexTransactions,
   type ComplexTransaction,
 } from "../data/complexTransactions";
+import { medianPrice, MIN_SAMPLE_SIZE } from "./sise";
 
 const DEFAULT_RECENT_MONTHS = 12;
 
@@ -18,8 +19,15 @@ export interface TransactionSummary {
   latest: ComplexTransaction | null;
   highestRecent: ComplexTransaction | null;
   lowestRecent: ComplexTransaction | null;
-  /** monthsWindow 기준 평균가 (만원, 반올림). 데이터가 없으면 null. */
-  averageRecentPrice: number | null;
+  /**
+   * monthsWindow 기준 중앙값(만원). /sise 페이지와 같은 계산(app/lib/sise.ts의
+   * medianPrice)을 재사용합니다 — 같은 단지·평형인데 평균/중앙값이 갈려서
+   * 서로 다른 화면이 다른 숫자를 보여주는 걸 막기 위함(CLAUDE.md 1-3).
+   * 표본이 MIN_SAMPLE_SIZE 미만이면 null(화면은 "거래가 적어 산출 어려움" 안내).
+   */
+  medianRecentPrice: number | null;
+  /** 위 중앙값 계산에 쓰인 표본 수. 값이 null이어도(표본 부족) 그대로 노출해 안내문에 씁니다. */
+  recentSampleSize: number;
 }
 
 /**
@@ -36,7 +44,8 @@ export function getTransactionSummary(
       latest: null,
       highestRecent: null,
       lowestRecent: null,
-      averageRecentPrice: null,
+      medianRecentPrice: null,
+      recentSampleSize: 0,
     };
   }
 
@@ -57,11 +66,13 @@ export function getTransactionSummary(
   const lowestRecent = pool.reduce((min, transaction) =>
     transaction.price < min.price ? transaction : min,
   );
-  const averageRecentPrice = Math.round(
-    pool.reduce((sum, transaction) => sum + transaction.price, 0) / pool.length,
-  );
+  const recentSampleSize = pool.length;
+  const medianRecentPrice =
+    recentSampleSize >= MIN_SAMPLE_SIZE
+      ? medianPrice(pool.map((transaction) => transaction.price))
+      : null;
 
-  return { latest, highestRecent, lowestRecent, averageRecentPrice };
+  return { latest, highestRecent, lowestRecent, medianRecentPrice, recentSampleSize };
 }
 
 /** 만원 단위 가격을 "4억 800만원" 형태의 한국식 금액 문자열로 변환합니다. */
