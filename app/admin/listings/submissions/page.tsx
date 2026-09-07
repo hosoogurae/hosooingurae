@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type {
   ListingSubmission,
   ListingSubmissionStatus,
-} from "../../data/listingSubmissions";
+} from "../../../data/listingSubmissions";
 
 const STATUS_META: Record<
   ListingSubmissionStatus,

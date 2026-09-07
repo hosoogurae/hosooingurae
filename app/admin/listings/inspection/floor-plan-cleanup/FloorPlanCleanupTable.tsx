@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { NO_FLOOR_PLAN_UNIT_TYPE } from "../../../data/listings";
+import { NO_FLOOR_PLAN_UNIT_TYPE } from "../../../../data/listings";
 import type {
   FloorPlanCleanupReason,
   FloorPlanCleanupRow,
-} from "../../../lib/floorPlanCleanup";
-import type { BulkFloorPlanResult } from "../../../api/admin/listings/bulk-floor-plan/route";
+} from "../../../../lib/floorPlanCleanup";
+import type { BulkFloorPlanResult } from "../../../../api/admin/listings/bulk-floor-plan/route";
 
 const REASON_LABELS: Record<FloorPlanCleanupReason, string> = {
   "no-floor-plans": "이 단지에 등록된 평면도가 없습니다",
@@ -172,7 +172,7 @@ export default function FloorPlanCleanupTable({
             <p className="text-sm font-semibold text-navy-800/60">되돌렸습니다.</p>
           )}
           <Link
-            href="/admin/listing-inspection"
+            href="/admin/listings/inspection"
             className="rounded-md border border-navy-900/15 px-5 py-2 text-sm font-bold text-navy-800"
           >
             점검 센터로 돌아가기

@@ -106,7 +106,7 @@ export default function EditListingPage({
           ADMIN
         </p>
         <Link
-          href="/admin/listings"
+          href="/admin/listings/manage"
           className="text-sm font-medium text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
         >
           ← 매물 관리
@@ -178,7 +178,7 @@ export default function EditListingPage({
               {saving ? "저장 중..." : "저장하기"}
             </button>
             <Link
-              href="/admin/listings"
+              href="/admin/listings/manage"
               className="rounded-md border border-navy-900/15 px-6 py-2.5 text-center text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
             >
               목록으로

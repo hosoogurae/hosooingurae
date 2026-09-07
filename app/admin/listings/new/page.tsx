@@ -472,7 +472,7 @@ export default function AdminRegisterPage() {
               매물 하나 더 등록하기
             </button>
             <Link
-              href="/admin/listings"
+              href="/admin/listings/manage"
               className="rounded-md border border-navy-900/15 px-6 py-2.5 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
             >
               전체 매물 관리

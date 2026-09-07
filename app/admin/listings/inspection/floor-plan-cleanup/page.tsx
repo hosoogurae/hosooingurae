@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getFloorPlanCleanupRows } from "../../../lib/floorPlanCleanup";
+import { getFloorPlanCleanupRows } from "../../../../lib/floorPlanCleanup";
 import FloorPlanCleanupTable from "./FloorPlanCleanupTable";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export default async function FloorPlanCleanupPage() {
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold tracking-wide text-gold-600">ADMIN</p>
         <Link
-          href="/admin/listing-inspection"
+          href="/admin/listings/inspection"
           className="text-sm font-medium text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
         >
           ← 점검 센터

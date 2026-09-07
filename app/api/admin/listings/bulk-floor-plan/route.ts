@@ -21,7 +21,7 @@ export interface BulkFloorPlanResult {
 }
 
 /**
- * /admin/listing-inspection/floor-plan-cleanup 전용 일괄 적용 API입니다.
+ * /admin/listings/inspection/floor-plan-cleanup 전용 일괄 적용 API입니다.
  * 화면에서 어떤 후보를 골랐든, 여기서 resolveListingUnitType으로 다시
  * 검증합니다(그 단지에 실제로 없는 타입명이 저장되지 않도록 — API를
  * 직접 호출해도 마찬가지입니다). 한 항목이 실패해도 나머지는 계속

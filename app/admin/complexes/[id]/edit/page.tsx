@@ -75,7 +75,7 @@ function DangerZone({
             먼저 매물을 다른 단지로 옮기거나 삭제해주세요.
           </p>
           <Link
-            href={`/admin/listings?complexId=${complex.id}`}
+            href={`/admin/listings/manage?complexId=${complex.id}`}
             className="mt-1 inline-block font-bold underline"
           >
             연결된 매물 보기 →

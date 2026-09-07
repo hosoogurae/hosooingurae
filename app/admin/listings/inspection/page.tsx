@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ListingWithComplex } from "../../lib/listings";
+import type { ListingWithComplex } from "../../../lib/listings";
 import {
   countInspectionCategories,
   INSPECTION_CATEGORIES,
@@ -10,7 +10,7 @@ import {
   PRIORITY_INSPECTION_CATEGORIES,
   type InspectionCategory,
   type InspectionCounts,
-} from "../../lib/listingInspection";
+} from "../../../lib/listingInspection";
 
 const CATEGORY_DESCRIPTIONS: Record<InspectionCategory, string> = {
   "no-photo": "공개 중인데 대표 사진이 한 장도 없는 매물입니다. 고객에게 가장 먼저 보이는 정보라 우선순위가 가장 높습니다.",
@@ -60,7 +60,7 @@ function CategoryCard({
   if (category === "no-floorplan") {
     return (
       <div className={cardClassName}>
-        <Link href={`/admin/listings?filter=${category}`} className="block">
+        <Link href={`/admin/listings/manage?filter=${category}`} className="block">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-base font-bold text-navy-950">
               {INSPECTION_CATEGORY_LABELS[category]}
@@ -74,7 +74,7 @@ function CategoryCard({
           </p>
         </Link>
         <Link
-          href="/admin/listing-inspection/floor-plan-cleanup"
+          href="/admin/listings/inspection/floor-plan-cleanup"
           className="mt-3 inline-block text-xs font-bold text-gold-600 hover:underline"
         >
           평면도 일괄 연결 화면 열기 →
@@ -84,7 +84,7 @@ function CategoryCard({
   }
 
   return (
-    <Link href={`/admin/listings?filter=${category}`} className={cardClassName}>
+    <Link href={`/admin/listings/manage?filter=${category}`} className={cardClassName}>
       <div>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-bold text-navy-950">
@@ -169,7 +169,7 @@ export default function ListingInspectionPage() {
         우선 확인이 필요한 항목
       </p>
       <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Link href="/admin/listings?filter=suspected" className={`rounded-xl border p-5 transition-colors ${(suspectedCount ?? 0) > 0 ? "border-purple-400 bg-purple-50 hover:bg-purple-100" : "border-navy-900/10 bg-white hover:border-gold-500"}`}>
+        <Link href="/admin/listings/manage?filter=suspected" className={`rounded-xl border p-5 transition-colors ${(suspectedCount ?? 0) > 0 ? "border-purple-400 bg-purple-50 hover:bg-purple-100" : "border-navy-900/10 bg-white hover:border-gold-500"}`}>
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-bold text-navy-950">거래 의심</h2>
             <span className="text-2xl font-black text-purple-700">{suspectedCount === null ? "-" : `${suspectedCount}건`}</span>

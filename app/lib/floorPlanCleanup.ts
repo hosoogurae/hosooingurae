@@ -5,7 +5,7 @@ import { getAllListings } from "./listings";
 import { matchesInspectionCategory } from "./listingInspection";
 
 /**
- * /admin/listing-inspection의 "평형타입 또는 평면도 연결이 부족한 매물"을
+ * /admin/listings/inspection의 "평형타입 또는 평면도 연결이 부족한 매물"을
  * 일괄로 검토·연결하는 화면(floor-plan-cleanup) 전용 데이터 계산입니다.
  * 자동으로 연결하지는 않습니다 — 면적으로 후보가 정확히 1개로 좁혀질 때만
  * 화면에서 기본 체크해두고, 그 외에는 사람이 직접 고르게 합니다.

@@ -126,7 +126,7 @@ export async function getListingSubmissionById(
   return rowToListingSubmission(data, photosByid.get(id) ?? []);
 }
 
-/** 관리자 화면(/admin/listing-submissions) 전용. 신규 건이 먼저 보이도록 정렬합니다. */
+/** 관리자 화면(/admin/listings/submissions) 전용. 신규 건이 먼저 보이도록 정렬합니다. */
 export async function getAllListingSubmissions(): Promise<ListingSubmission[]> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) return [];

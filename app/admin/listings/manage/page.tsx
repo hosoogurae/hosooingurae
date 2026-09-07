@@ -3,11 +3,11 @@
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { DealStatus, Listing } from "../../data/listings";
-import type { ListingStats, ListingWithComplex } from "../../lib/listings";
-import { isUnknownListingNumber } from "../../lib/format/listingFields";
-import { getVerificationUrgency } from "../../lib/listingUrgency";
-import { ADMIN_LISTING_SORT_OPTIONS } from "../../lib/listingSort";
+import type { DealStatus, Listing } from "../../../data/listings";
+import type { ListingStats, ListingWithComplex } from "../../../lib/listings";
+import { isUnknownListingNumber } from "../../../lib/format/listingFields";
+import { getVerificationUrgency } from "../../../lib/listingUrgency";
+import { ADMIN_LISTING_SORT_OPTIONS } from "../../../lib/listingSort";
 import {
   describeLowInfoReason,
   describeMissingFieldsReason,
@@ -15,11 +15,11 @@ import {
   INSPECTION_CATEGORY_LABELS,
   matchesInspectionCategory,
   type InspectionCategory,
-} from "../../lib/listingInspection";
-import { DEAL_STATUS_BADGE_CLASS, DEAL_STATUS_LABELS } from "../ListingFields";
-import { patchListingFields } from "../quickListingActions";
-import ListingSortSelect from "../../components/ListingSortSelect";
-import type { SuspectedMatch } from "../../lib/suspectedTransactionMatch";
+} from "../../../lib/listingInspection";
+import { DEAL_STATUS_BADGE_CLASS, DEAL_STATUS_LABELS } from "../../ListingFields";
+import { patchListingFields } from "../../quickListingActions";
+import ListingSortSelect from "../../../components/ListingSortSelect";
+import type { SuspectedMatch } from "../../../lib/suspectedTransactionMatch";
 
 function formatDealDate(dealDate: string): string {
   const date = new Date(dealDate);
@@ -428,7 +428,7 @@ function AdminListingsView() {
       </div>
 
       {suspectedMatches && suspectedMatches.size > 0 && (
-        <Link href="/admin/listings?filter=suspected" className="mt-4 block rounded-md border border-purple-300 bg-purple-50 px-3 py-2 text-sm text-purple-800 transition-colors hover:bg-purple-100">
+        <Link href="/admin/listings/manage?filter=suspected" className="mt-4 block rounded-md border border-purple-300 bg-purple-50 px-3 py-2 text-sm text-purple-800 transition-colors hover:bg-purple-100">
           <strong>거래 의심 매물 {suspectedMatches.size}건</strong> — 국토부
           실거래와 조건이 비슷한 매물이 있습니다. 클릭하여 매물 점검 목록에서 확인하세요.
         </Link>
@@ -443,7 +443,7 @@ function AdminListingsView() {
       {activeFilter && (
         <div className="mt-6 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <span>{INSPECTION_CATEGORY_LABELS[activeFilter]}만 보고 있습니다.</span>
-          <Link href="/admin/listings" className="font-bold underline">
+          <Link href="/admin/listings/manage" className="font-bold underline">
             전체 보기
           </Link>
         </div>
@@ -456,7 +456,7 @@ function AdminListingsView() {
               ? `‘${listings[0].complex.name}’ 단지의 매물만 보고 있습니다.`
               : "특정 단지의 매물만 보고 있습니다."}
           </span>
-          <Link href="/admin/listings" className="font-bold underline">
+          <Link href="/admin/listings/manage" className="font-bold underline">
             전체 보기
           </Link>
         </div>
@@ -466,7 +466,7 @@ function AdminListingsView() {
         <div className="mt-6 rounded-md border border-purple-200 bg-purple-50 px-3 py-3 text-sm text-purple-800">
           <div className="flex items-center justify-between gap-3">
             <strong>매물 점검 &gt; 거래 의심</strong>
-            <Link href="/admin/listing-inspection" className="font-bold underline">점검 센터로</Link>
+            <Link href="/admin/listings/inspection" className="font-bold underline">점검 센터로</Link>
           </div>
           <p className="mt-1 text-xs">판정 기준: 같은 단지의 매매 · 전용면적 ±0.5㎡ · 층 일치(양쪽에 정보가 있는 경우) · 가격 ±10% · 해제 거래 제외</p>
         </div>
@@ -551,7 +551,21 @@ function AdminListingsView() {
             return (
               <li
                 key={listing.id}
-                className="flex flex-col gap-3 rounded-xl border border-navy-900/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+                role="link"
+                tabIndex={0}
+                aria-label={`${listing.complex.name} ${listing.priceLabel} 매물 수정`}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                  router.push(`/admin/listings/${listing.id}/edit`);
+                }}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    router.push(`/admin/listings/${listing.id}/edit`);
+                  }
+                }}
+                className="flex cursor-pointer flex-col gap-3 rounded-xl border border-navy-900/10 p-4 transition-colors hover:border-gold-500 hover:bg-gold-500/[0.03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-500 sm:flex-row sm:items-center sm:justify-between sm:p-5"
               >
                 <div>
                   <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-navy-800/50">

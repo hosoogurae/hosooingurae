@@ -102,7 +102,7 @@ export async function sendNewSuspectedMatchesPush(count: number): Promise<void> 
   const payload: PushPayload = {
     title: "거래 의심 매물",
     body: `새로운 거래 의심 매물 ${count}건이 발견되었습니다.`,
-    url: "/admin/listings?filter=suspected",
+    url: "/admin/listings/manage?filter=suspected",
   };
   await Promise.all(subscriptions.map((sub) => sendToOne(sub, payload)));
 }
