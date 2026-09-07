@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ListingWithComplex } from "../../lib/listings";
-import type { AdCopyFormats } from "../../lib/adCopy";
+import type { ListingWithComplex } from "../../../lib/listings";
+import type { AdCopyFormats } from "../../../lib/adCopy";
 
 type FormatKey = keyof AdCopyFormats;
 
