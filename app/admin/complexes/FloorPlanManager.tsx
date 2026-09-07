@@ -41,10 +41,11 @@ function formatErrorDetail(detail: ApiErrorDetail | undefined): string {
 }
 
 /**
- * 단지 하나의 평면 타입/평면도 이미지를 관리하는 UI. 원래 /admin/floor-plans
- * 페이지 전체였던 것을 complexId를 프롭으로 받는 컴포넌트로 추출했습니다 —
- * /admin/floor-plans(자체 단지 선택 select 유지)와 /admin/complexes/[id]/edit
- * (단지가 이미 고정된 화면) 양쪽에서 같은 코드를 그대로 재사용합니다.
+ * 단지 하나의 평면 타입/평면도 이미지를 관리하는 UI. complexId를 프롭으로
+ * 받는 컴포넌트라 /admin/complexes/[id]/edit에서 그대로 씁니다. 예전에는
+ * 단지를 직접 고르는 독립 화면(/admin/floor-plans)도 따로 있었는데,
+ * 여기와 완전히 겹치는 기능이라(같은 컴포넌트, 단지 진입 경로만 다름)
+ * 정리했습니다 — 평면도는 항상 단지 편집 화면에서 관리합니다.
  */
 export default function FloorPlanManager({ complexId }: { complexId: string }) {
   const [images, setImages] = useState<FloorPlanImage[] | null>(null);

@@ -4,7 +4,7 @@ import {
   uploadFloorPlanImage,
 } from "../../../lib/floorPlans";
 
-/** 관리자 화면(/admin/floor-plans)에서 특정 단지의 평면도 전체 목록을 볼 때 사용합니다. */
+/** 관리자 화면(/admin/complexes/[id]/edit)에서 특정 단지의 평면도 전체 목록을 볼 때 사용합니다. */
 export async function GET(request: NextRequest) {
   const complexId = request.nextUrl.searchParams.get("complexId");
   if (!complexId) {
