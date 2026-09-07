@@ -88,7 +88,14 @@ export default function ListingCard({
             className="object-cover"
           />
         ) : floorPlanThumbnail ? (
-          <div className="relative h-full w-full bg-white p-3">
+          // 평면도는 실사진과 달리 잘리면 정보가 사라집니다(방 이름·치수가
+          // 잘려나감) — object-cover 대신 object-contain으로 전체를 담고,
+          // 남는 자리는 모든 카드가 같은 배경색(bg-white)이 되게 합니다.
+          // 원본 도면마다 배경(흰색/베이지 등)이 달라 목록이 들쭉날쭉해
+          // 보이는 문제는, 여백(p-4)을 넉넉히 둬 우리 쪽 흰 배경이 항상
+          // 눈에 띄게 보이도록 완화합니다(도면 자체의 배경색까지 통일할
+          // 수는 없음 — 원본 파일의 실제 픽셀이라 서버에서 못 바꿉니다).
+          <div className="relative h-full w-full bg-white p-4">
             <Image
               src={floorPlanThumbnail}
               alt={`${formatUnitTypeLabel(listing.unitType ?? "")} 평면도`}
@@ -116,11 +123,6 @@ export default function ListingCard({
             className="h-full w-full"
           />
         )}
-        {listing.verifiedDate && (
-          <span className="absolute left-3 top-3 rounded-full bg-navy-950/90 px-3 py-1 text-xs font-semibold text-gold-400">
-            확인매물 {formatVerifiedDate(listing.verifiedDate)}
-          </span>
-        )}
         {listing.dealStatus === "negotiating" && (
           <span className="absolute right-3 top-3 rounded-full bg-blue-600/90 px-3 py-1 text-xs font-semibold text-white">
             계약 진행중
@@ -129,9 +131,18 @@ export default function ListingCard({
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-6">
-        <span className="w-fit rounded-full bg-navy-900/5 px-3 py-1 text-xs font-semibold text-navy-800">
-          {listing.propertyType}
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="w-fit rounded-full bg-navy-900/5 px-3 py-1 text-xs font-semibold text-navy-800">
+            {listing.propertyType}
+          </span>
+          {/* 이미지(특히 평면도) 위에 겹쳐 방 이름을 가리던 배지를 정보
+              영역으로 옮겼습니다 — 도면은 가려지면 정보 자체가 사라지므로. */}
+          {listing.verifiedDate && (
+            <span className="text-xs font-semibold text-navy-800/50">
+              확인매물 {formatVerifiedDate(listing.verifiedDate)}
+            </span>
+          )}
+        </div>
 
         <h3 className="text-lg font-bold leading-snug text-navy-950">
           {listing.complex.name}
