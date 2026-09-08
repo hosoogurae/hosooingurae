@@ -1,9 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import type {
   DuplicateSuspectGroup,
   DuplicateSuspectListing,
   DuplicateSuspectSeverity,
 } from "../../lib/duplicateSuspectedMatch";
+import { removeListingFromGroups } from "../../lib/duplicateSuspectedMatch";
 
 const SEVERITY_META: Record<
   DuplicateSuspectSeverity,
@@ -61,7 +65,31 @@ const COMPARE_ROWS: CompareRowDef[] = [
   { label: "마지막 확인일", render: (l) => formatDate(l.lastVerifiedAt) },
 ];
 
-function DuplicateSuspectGroupCard({ group }: { group: DuplicateSuspectGroup }) {
+/**
+ * 삭제 확인창에 보여줄 문구. 두 매물이 거의 똑같이 생겨서, 여기에 정보가
+ * 없으면 어느 쪽을 누른 건지 알 수 없습니다 — 단지·동·층·가격·등록일·
+ * 마지막 확인일을 전부 넣습니다.
+ */
+function buildDeleteConfirmMessage(
+  group: DuplicateSuspectGroup,
+  listing: DuplicateSuspectListing,
+): string {
+  return (
+    `${group.complexName} ${group.building} ${formatFloor(listing)} (${listing.priceLabel})\n` +
+    `등록일 ${formatDate(listing.registeredAt)} · 마지막 확인 ${formatDate(listing.lastVerifiedAt)}\n\n` +
+    `이 매물을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?`
+  );
+}
+
+function DuplicateSuspectGroupCard({
+  group,
+  deletingId,
+  onDelete,
+}: {
+  group: DuplicateSuspectGroup;
+  deletingId: string | null;
+  onDelete: (group: DuplicateSuspectGroup, listing: DuplicateSuspectListing) => void;
+}) {
   const meta = SEVERITY_META[group.severity];
 
   return (
@@ -83,8 +111,9 @@ function DuplicateSuspectGroupCard({ group }: { group: DuplicateSuspectGroup }) 
       </div>
 
       <p className="mt-3 text-xs font-semibold text-amber-700">
-        의심일 뿐 확정이 아닙니다 — 같은 층에도 여러 호수가 있을 수 있습니다. 자동으로
-        합치거나 지우지 않습니다. 아래 내용을 직접 비교해 판단해주세요.
+        의심일 뿐 확정이 아닙니다 — 같은 층에도 여러 호수가 있을 수 있습니다.
+        어느 쪽이 맞는지는 시스템이 판단하지 않습니다. 아래 내용을 직접 비교해
+        중복이 맞다고 확인되면 지울 매물을 직접 골라주세요.
       </p>
 
       <div className="mt-3 overflow-x-auto rounded-md border border-navy-900/10 bg-white">
@@ -130,13 +159,23 @@ function DuplicateSuspectGroupCard({ group }: { group: DuplicateSuspectGroup }) 
             {listing.shortDescription && (
               <p className="mt-1 text-navy-800/70">{listing.shortDescription}</p>
             )}
-            <Link
-              href={listing.editUrl}
-              target="_blank"
-              className="mt-2 inline-block font-semibold text-gold-600 underline-offset-4 hover:underline"
-            >
-              이 매물 관리 화면 열기 →
-            </Link>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <Link
+                href={listing.editUrl}
+                target="_blank"
+                className="font-semibold text-gold-600 underline-offset-4 hover:underline"
+              >
+                이 매물 관리 화면 열기 →
+              </Link>
+              <button
+                type="button"
+                onClick={() => onDelete(group, listing)}
+                disabled={deletingId === listing.id}
+                className="rounded-md border border-red-200 px-3 py-1 font-bold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingId === listing.id ? "삭제 중..." : "이 매물 삭제"}
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -145,18 +184,49 @@ function DuplicateSuspectGroupCard({ group }: { group: DuplicateSuspectGroup }) 
 }
 
 export default function DuplicateSuspectPanel({
-  groups,
+  groups: initialGroups,
   excludedMissingBuildingCount,
 }: {
   groups: DuplicateSuspectGroup[];
   excludedMissingBuildingCount: number;
 }) {
+  // 삭제하면 그 매물이 속한 그룹(들)에서 즉시 빠져야 해서(새로고침 없이),
+  // 서버가 내려준 초기 목록을 그대로 로컬 상태로 들고 직접 갱신합니다.
+  const [groups, setGroups] = useState(initialGroups);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(
+    group: DuplicateSuspectGroup,
+    listing: DuplicateSuspectListing,
+  ) {
+    if (!window.confirm(buildDeleteConfirmMessage(group, listing))) return;
+
+    setDeletingId(listing.id);
+    try {
+      const response = await fetch(`/api/listings/${listing.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        alert(data?.errors?.[0] ?? "삭제에 실패했습니다.");
+        return;
+      }
+
+      setGroups((prev) => removeListingFromGroups(prev, listing.id));
+    } catch {
+      alert("네트워크 오류로 삭제에 실패했습니다.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="mt-6">
       <div className="rounded-md border border-navy-900/10 bg-navy-900/[0.02] px-4 py-3 text-sm text-navy-800/80">
         같은 매물이 실수로 두 번 등록된 것 같은 경우를 사람이 확인하도록 모아
-        보여줍니다. <strong>자동으로 합치거나 삭제하지 않습니다.</strong>{" "}
-        아래 매물이 정말 같은 집인지는 특징 문구 등을 직접 읽고 판단해주세요.
+        보여줍니다. <strong>어느 쪽이 진짜인지, 합칠지 지울지는 시스템이
+        판단하지 않습니다.</strong> 특징 문구 등을 직접 읽고 중복이 맞다고
+        확인되면 지울 매물을 골라 아래에서 바로 삭제할 수 있습니다.
       </div>
 
       {groups.length === 0 ? (
@@ -166,7 +236,12 @@ export default function DuplicateSuspectPanel({
       ) : (
         <div className="mt-4 flex flex-col gap-4">
           {groups.map((group) => (
-            <DuplicateSuspectGroupCard key={group.key} group={group} />
+            <DuplicateSuspectGroupCard
+              key={group.key}
+              group={group}
+              deletingId={deletingId}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}

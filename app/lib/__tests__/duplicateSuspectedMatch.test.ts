@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ListingWithComplex } from "../listings";
-import { findDuplicateSuspectGroups } from "../duplicateSuspectedMatch";
+import {
+  findDuplicateSuspectGroups,
+  removeListingFromGroups,
+  type DuplicateSuspectGroup,
+} from "../duplicateSuspectedMatch";
 
 let nextId = 1;
 
@@ -169,5 +173,80 @@ describe("findDuplicateSuspectGroups — 정렬(강함이 먼저)", () => {
       strongB,
     ]);
     expect(groups.map((g) => g.severity)).toEqual(["strong", "weak", "floor-unknown"]);
+  });
+});
+
+describe("removeListingFromGroups — 관리자가 매물을 삭제한 뒤 화면 갱신용", () => {
+  function makeGroup(
+    key: string,
+    listingIds: string[],
+    overrides: Partial<DuplicateSuspectGroup> = {},
+  ): DuplicateSuspectGroup {
+    return {
+      key,
+      severity: "strong",
+      complexName: "테스트단지",
+      building: "101동",
+      floor: 5,
+      transactionType: "매매",
+      listings: listingIds.map((id) => ({
+        id,
+        priceLabel: "4억원",
+        supplyArea: 100,
+        exclusiveArea: 80,
+        floor: 5,
+        totalFloors: 20,
+        direction: "남향",
+        features: [],
+        shortDescription: "",
+        editUrl: `/admin/listings/${id}/edit`,
+      })),
+      ...overrides,
+    };
+  }
+
+  it("3건짜리 그룹에서 하나를 지우면 그룹은 남고 나머지 둘만 남는다", () => {
+    const groups = [makeGroup("g1", ["a", "b", "c"])];
+    const result = removeListingFromGroups(groups, "a");
+    expect(result).toHaveLength(1);
+    expect(result[0].listings.map((l) => l.id)).toEqual(["b", "c"]);
+  });
+
+  it("2건짜리 그룹에서 하나를 지우면 그룹 자체가 사라진다", () => {
+    const groups = [makeGroup("g1", ["a", "b"])];
+    const result = removeListingFromGroups(groups, "a");
+    expect(result).toHaveLength(0);
+  });
+
+  it("같은 매물이 두 그룹에 동시에 걸려있으면 두 그룹 모두에서 지운다", () => {
+    // 층을 아는 그룹(strong/weak)과 층미상 그룹 양쪽에 동시에 속할 수 있는
+    // 실제 상황을 흉내냅니다.
+    const groups = [
+      makeGroup("floor-known", ["a", "b"]),
+      makeGroup("floor-unknown", ["a", "c"], { severity: "floor-unknown" }),
+    ];
+    const result = removeListingFromGroups(groups, "a");
+    // 두 그룹 다 2건 미만으로 줄어들어 전부 사라집니다.
+    expect(result).toHaveLength(0);
+  });
+
+  it("삭제한 매물과 무관한 그룹은 그대로 둔다", () => {
+    const groups = [
+      makeGroup("g1", ["a", "b", "c"]),
+      makeGroup("g2", ["x", "y"]),
+    ];
+    const result = removeListingFromGroups(groups, "a");
+    expect(result).toHaveLength(2);
+    expect(result.find((g) => g.key === "g2")?.listings.map((l) => l.id)).toEqual([
+      "x",
+      "y",
+    ]);
+  });
+
+  it("어느 그룹에도 없는 id를 지워도 아무 것도 안 바뀐다", () => {
+    const groups = [makeGroup("g1", ["a", "b"])];
+    const result = removeListingFromGroups(groups, "z");
+    expect(result).toHaveLength(1);
+    expect(result[0].listings.map((l) => l.id)).toEqual(["a", "b"]);
   });
 });

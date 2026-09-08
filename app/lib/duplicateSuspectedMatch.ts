@@ -178,3 +178,22 @@ export function findDuplicateSuspectGroups(
 
   return { groups, excludedMissingBuildingCount };
 }
+
+/**
+ * 관리자가 화면에서 매물 하나를 삭제한 뒤(app/admin/listings/DuplicateSuspectPanel.tsx),
+ * 새로고침 없이 그 매물을 모든 그룹에서 지우고 화면을 갱신하는 데 씁니다.
+ * 한 매물이 층을 아는 그룹과 층미상 그룹 양쪽에 동시에 걸려있을 수 있어서
+ * (findDuplicateSuspectGroups 참고) 모든 그룹에서 지웁니다. 지운 뒤 2건
+ * 미만으로 줄어든 그룹은 "의심"이라 부를 근거가 없어져 목록에서 사라집니다.
+ */
+export function removeListingFromGroups(
+  groups: DuplicateSuspectGroup[],
+  listingId: string,
+): DuplicateSuspectGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      listings: group.listings.filter((listing) => listing.id !== listingId),
+    }))
+    .filter((group) => group.listings.length >= 2);
+}
