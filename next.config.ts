@@ -74,6 +74,26 @@ const nextConfig: NextConfig = {
   // 끕니다.
   async redirects() {
     return [
+      // 도메인 정리: Vercel이 프로덕션 배포에 자동으로 붙여주는 고정 별칭
+      // hosooingurae.vercel.app으로 들어와도 손님에게는 항상 진짜 주소
+      // (hosoobudongsan.kr)만 보여야 합니다 — 예전에 이 별칭으로 접속한
+      // 상태에서 문의 텍스트를 만들면 그 주소가 그대로 손님에게 전달되는
+      // 사고가 있었습니다(app/lib/siteUrl.ts에서 코드는 이미 고쳤지만,
+      // 링크·검색엔진 색인·주소창에 남아있을 옛 vercel.app 주소까지
+      // 막으려면 이 리다이렉트가 필요합니다).
+      //
+      // host 값을 ^...$ 로 정확히 고정해서 hosooingurae.vercel.app 딱
+      // 그 도메인만 걸립니다 — 브랜치/PR 미리보기 배포(예:
+      // hosooingurae-git-<branch>-<team>.vercel.app)는 완전히 다른
+      // 호스트라 이 규칙에 안 걸리고 그대로 동작합니다. 경로와 쿼리는
+      // Next.js가 자동으로 그대로 옮겨줍니다(예:
+      // /listings/4-3-000-mtsmg96g?foo=bar → 새 도메인의 같은 경로+쿼리).
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "^hosooingurae\\.vercel\\.app$" }],
+        destination: "https://hosoobudongsan.kr/:path*",
+        permanent: true,
+      },
       {
         source: "/valuation",
         destination: "/sise",
