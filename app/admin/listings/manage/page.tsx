@@ -42,6 +42,17 @@ function formatDealAmount(manwon: number): string {
 const selectClass =
   "rounded-md border border-navy-900/15 bg-white px-3 py-2 text-sm font-medium text-navy-900 outline-none focus:border-gold-500";
 
+/**
+ * 목록의 상태 선택 드롭다운에 실제로 고를 수 있게 보여주는 값들. "계약진행"
+ * (negotiating)은 지금 쓰는 매물이 0건이라 뺐습니다 — DealStatus 타입·DB
+ * 값은 그대로 두고(다른 화면에서 여전히 참조), 이 목록 화면의 선택지에서만
+ * 제외합니다. 혹시라도 negotiating 값을 가진 매물이 생기면(과거 데이터,
+ * 다른 경로로 저장된 값 등) renderDealStatusOptions가 그 값을 옵션에
+ * disabled로 끼워 넣어 그대로 보여주므로, select가 빈 칸이 되거나 다른
+ * 값으로 잘못 표시되는 일은 없습니다.
+ */
+const STATUS_SELECT_VALUES: DealStatus[] = ["advertising", "completed", "hold"];
+
 function formatUpdatedAt(iso: string | undefined): string {
   if (!iso) return "-";
   const date = new Date(iso);
@@ -624,79 +635,160 @@ function AdminListingsView() {
                     router.push(`/admin/listings/${listing.id}/edit`);
                   }
                 }}
-                className="flex cursor-pointer flex-col gap-3 rounded-xl border border-navy-900/10 p-4 transition-colors hover:border-gold-500 hover:bg-gold-500/[0.03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-500 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+                className="flex cursor-pointer flex-col gap-2 rounded-xl border border-navy-900/10 p-4 transition-colors hover:border-gold-500 hover:bg-gold-500/[0.03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-500 sm:grid sm:grid-cols-[1fr_auto] sm:items-center sm:gap-x-4 sm:gap-y-1.5 sm:p-5"
               >
-                <div>
-                  <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-navy-800/50">
+                {/* 1줄: 단지명·동·층·거래유형+가격 — 전부 같은 크기·굵기로,
+                    구분은 순서와 " · " 간격으로만 합니다(무엇 하나만 강조하면
+                    나머지를 놓치기 쉬워서). */}
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm font-semibold text-navy-900 sm:col-start-1 sm:row-start-1">
+                  <span>{listing.complex.name}</span>
+                  <span className="text-navy-800/30">·</span>
+                  <span>{listing.building || "동 정보 없음"}</span>
+                  <span className="text-navy-800/30">·</span>
+                  {isFloorMissing ? (
+                    <span className="font-bold text-amber-600">층수 미입력</span>
+                  ) : (
                     <span>
-                      {listing.complex.name} · {listing.propertyType} ·{" "}
-                      {listing.transactionType}
+                      {listing.floor}/{listing.totalFloors}층
                     </span>
-                    {listing.status === "draft" ? (
-                      <span className="rounded-full bg-navy-900/10 px-2 py-0.5 text-navy-800">
-                        임시저장
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-green-700">
-                        공개중
-                      </span>
-                    )}
-                    {listing.isFeatured && (
-                      <span className="rounded-full bg-gold-500/10 px-2 py-0.5 text-gold-600">
-                        대표매물
-                      </span>
-                    )}
+                  )}
+                  <span className="text-navy-800/30">·</span>
+                  <span>
+                    {listing.transactionType} {listing.priceLabel}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 sm:col-start-2 sm:row-start-1 sm:justify-self-end">
+                  {listing.status === "published" && (
+                    <Link
+                      href={`/listings/${listing.id}`}
+                      target="_blank"
+                      className="rounded-md border border-navy-900/15 px-3 py-1.5 text-xs font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+                    >
+                      보기
+                    </Link>
+                  )}
+                  <Link
+                    href={`/admin/listings/${listing.id}/edit`}
+                    className="rounded-md border border-navy-900/15 px-3 py-1.5 text-xs font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+                  >
+                    수정
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleVerifyToday(listing)}
+                    disabled={verifyingId === listing.id}
+                    className="rounded-md border border-navy-900/15 px-3 py-1.5 text-xs font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {verifyingId === listing.id ? "확인 중..." : "오늘 확인"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(listing)}
+                    disabled={deletingId === listing.id}
+                    className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {deletingId === listing.id ? "삭제 중..." : "삭제"}
+                  </button>
+                </div>
+
+                {/* 2줄: 배지(실제로 쓰는 정보라 크기 그대로 유지) + 확인일·매물번호.
+                    dealStatus는 오른쪽 드롭다운이 이미 보여주므로 배지를 따로 안 둡니다. */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-navy-800/50 sm:col-start-1 sm:row-start-2">
+                  <span className="rounded-full bg-navy-900/5 px-2 py-0.5 text-navy-800">
+                    {listing.propertyType}
+                  </span>
+                  {listing.status === "draft" ? (
+                    <span className="rounded-full bg-navy-900/10 px-2 py-0.5 text-navy-800">
+                      임시저장
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-green-700">
+                      공개중
+                    </span>
+                  )}
+                  {listing.isFeatured && (
+                    <span className="rounded-full bg-gold-500/10 px-2 py-0.5 text-gold-600">
+                      대표매물
+                    </span>
+                  )}
+                  {urgencyBadge && (
                     <span
-                      className={`rounded-full px-2 py-0.5 ${
-                        DEAL_STATUS_BADGE_CLASS[listing.dealStatus]
+                      className={`rounded-full px-2 py-0.5 font-bold ${urgencyBadge.className}`}
+                    >
+                      {urgencyBadge.label}
+                    </span>
+                  )}
+                  {!listing.image && (
+                    <span className="rounded-full bg-red-500/10 px-2 py-0.5 font-bold text-red-700">
+                      사진 없음
+                    </span>
+                  )}
+                  {lowInfoReason && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-700">
+                      {lowInfoReason}
+                    </span>
+                  )}
+                  {missingFieldsReason && (
+                    <span
+                      className="rounded-full bg-amber-500/10 px-2 py-0.5 font-bold text-amber-700"
+                      title={missingFieldsReason}
+                    >
+                      정보 미입력
+                    </span>
+                  )}
+                  {suspectedMatch && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedMatchListingId(isMatchExpanded ? null : listing.id)
+                      }
+                      className={`rounded-full px-2 py-0.5 font-bold transition-colors ${
+                        suspectedMatch.confidence === "high"
+                          ? "bg-purple-500/15 text-purple-800 hover:bg-purple-500/25"
+                          : "bg-purple-500/5 text-purple-600 hover:bg-purple-500/15"
                       }`}
                     >
-                      {DEAL_STATUS_LABELS[listing.dealStatus]}
-                    </span>
-                    {urgencyBadge && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 font-bold ${urgencyBadge.className}`}
-                      >
-                        {urgencyBadge.label}
-                      </span>
-                    )}
-                    {!listing.image && (
-                      <span className="rounded-full bg-red-500/10 px-2 py-0.5 font-bold text-red-700">
-                        사진 없음
-                      </span>
-                    )}
-                    {lowInfoReason && (
-                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-700">
-                        {lowInfoReason}
-                      </span>
-                    )}
-                    {missingFieldsReason && (
-                      <span
-                        className="rounded-full bg-amber-500/10 px-2 py-0.5 font-bold text-amber-700"
-                        title={missingFieldsReason}
-                      >
-                        정보 미입력
-                      </span>
-                    )}
-                    {suspectedMatch && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedMatchListingId(isMatchExpanded ? null : listing.id)
-                        }
-                        className={`rounded-full px-2 py-0.5 font-bold transition-colors ${
-                          suspectedMatch.confidence === "high"
-                            ? "bg-purple-500/15 text-purple-800 hover:bg-purple-500/25"
-                            : "bg-purple-500/5 text-purple-600 hover:bg-purple-500/15"
-                        }`}
-                      >
-                        거래 의심{suspectedMatch.confidence === "high" ? "(확인필요)" : "(참고)"}
-                      </button>
-                    )}
-                  </p>
+                      거래 의심{suspectedMatch.confidence === "high" ? "(확인필요)" : "(참고)"}
+                    </button>
+                  )}
+                  <span className="font-normal">
+                    {formatLastVerified(listing.lastVerifiedAt)} · 최근 수정{" "}
+                    {formatUpdatedAt(listing.updatedAt)}
+                  </span>
+                  {/* 매물번호: 검색에 쓰이니 지우지 않되, 판단에 중요하지 않아 작고 흐리게. */}
+                  <span className="font-normal text-navy-800/30">· {listing.id}</span>
+                </div>
 
-                  {suspectedMatch && isMatchExpanded && (
-                    <div className="mt-3 rounded-md border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900">
+                <div className="sm:col-start-2 sm:row-start-2 sm:justify-self-end">
+                  <select
+                    value={listing.dealStatus}
+                    onChange={(event) =>
+                      handleQuickStatusChange(listing, event.target.value as DealStatus)
+                    }
+                    disabled={quickActionId === listing.id}
+                    onClick={(event) => event.stopPropagation()}
+                    className={`rounded-md border px-2 py-1 text-xs font-bold outline-none focus:border-gold-500 disabled:cursor-not-allowed disabled:opacity-60 ${DEAL_STATUS_BADGE_CLASS[listing.dealStatus]}`}
+                  >
+                    {/* negotiating처럼 선택지에는 없는 값을 가진 매물이 있으면, 그 값을
+                        선택 불가 옵션으로 끼워 넣어 그대로 보여줍니다 — select가 빈 칸이
+                        되거나 다른 값으로 표시되는 일이 없게 합니다(관리자 모르게 값이
+                        바뀌면 안 됨). */}
+                    {!STATUS_SELECT_VALUES.includes(listing.dealStatus) && (
+                      <option value={listing.dealStatus} disabled>
+                        {DEAL_STATUS_LABELS[listing.dealStatus]} (더 이상 쓰지 않음)
+                      </option>
+                    )}
+                    {STATUS_SELECT_VALUES.map((value) => (
+                      <option key={value} value={value}>
+                        {DEAL_STATUS_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {suspectedMatch && isMatchExpanded && (
+                  <div className="sm:col-span-2 sm:row-start-3 mt-1 rounded-md border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900">
                       <p className="font-bold">{suspectedMatch.reason}</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         <div className="rounded-md bg-white p-3">
@@ -735,81 +827,6 @@ function AdminListingsView() {
                       </div>
                     </div>
                   )}
-                  <p className="mt-1 font-bold text-navy-950">
-                    {listing.priceLabel}
-                    {isFloorMissing ? (
-                      <span className="ml-2 font-bold text-amber-600">
-                        층수 미입력
-                      </span>
-                    ) : (
-                      <span className="ml-2 font-normal text-navy-800/50">
-                        {listing.floor}층/{listing.totalFloors}층
-                      </span>
-                    )}
-                  </p>
-                  <p className="mt-0.5 text-xs text-navy-800/50">{listing.id}</p>
-                  <p className="mt-1 text-xs text-navy-800/50">
-                    {formatLastVerified(listing.lastVerifiedAt)} · 최근 수정{" "}
-                    {formatUpdatedAt(listing.updatedAt)}
-                  </p>
-
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {(Object.keys(DEAL_STATUS_LABELS) as DealStatus[]).map(
-                      (value) => {
-                        const isCurrent = value === listing.dealStatus;
-                        return (
-                          <button
-                            key={value}
-                            type="button"
-                            disabled={isCurrent || quickActionId === listing.id}
-                            onClick={() => handleQuickStatusChange(listing, value)}
-                            className={`rounded-full px-2.5 py-1 text-xs font-bold transition-colors disabled:cursor-not-allowed ${
-                              isCurrent
-                                ? `${DEAL_STATUS_BADGE_CLASS[value]} opacity-70`
-                                : "border border-navy-900/15 text-navy-800/60 hover:border-gold-500 hover:text-gold-600"
-                            }`}
-                          >
-                            {DEAL_STATUS_LABELS[value]}
-                          </button>
-                        );
-                      },
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {listing.status === "published" && (
-                    <Link
-                      href={`/listings/${listing.id}`}
-                      target="_blank"
-                      className="rounded-md border border-navy-900/15 px-4 py-2 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
-                    >
-                      보기
-                    </Link>
-                  )}
-                  <Link
-                    href={`/admin/listings/${listing.id}/edit`}
-                    className="rounded-md border border-navy-900/15 px-4 py-2 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
-                  >
-                    수정
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleVerifyToday(listing)}
-                    disabled={verifyingId === listing.id}
-                    className="rounded-md border border-navy-900/15 px-4 py-2 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {verifyingId === listing.id ? "확인 중..." : "오늘 확인"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(listing)}
-                    disabled={deletingId === listing.id}
-                    className="rounded-md border border-red-200 px-4 py-2 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {deletingId === listing.id ? "삭제 중..." : "삭제"}
-                  </button>
-                </div>
               </li>
             );
           })}
