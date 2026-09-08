@@ -4,9 +4,11 @@ import { useState } from "react";
 import { Share2 } from "lucide-react";
 
 // canonical 도메인 하나만 가리켜야 하는 값이라 NEXT_PUBLIC_SITE_URL을
-// 씁니다(요청 host 기반 origin이 아님 — app/lib/requestUrl.ts 참고).
-// 빌드 시 클라이언트 번들에 그대로 인라인되므로 모듈 최상단에서 바로 읽어도
-// 됩니다(ContactActions.tsx의 KAKAO_CHANNEL_URL과 동일한 패턴).
+// 씁니다(요청 host 기반 origin이 아님 — app/lib/siteUrl.ts의 buildSiteUrl과
+// 같은 원칙. 이 컴포넌트는 클라이언트라 그 서버 전용 함수 대신 env를
+// 직접 읽습니다). 빌드 시 클라이언트 번들에 그대로 인라인되므로 모듈
+// 최상단에서 바로 읽어도 됩니다(ContactActions.tsx의 KAKAO_CHANNEL_URL과
+// 동일한 패턴).
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || undefined;
 
 /**

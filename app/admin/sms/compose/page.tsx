@@ -89,9 +89,13 @@ function AdminSmsComposeInner() {
     () => ({
       complexName: listing?.complex.name,
       address: listing?.complex.address,
+      // 손님에게 문자로 나가는 링크라 지금 관리자가 접속한 도메인이 아니라
+      // NEXT_PUBLIC_SITE_URL을 씁니다(예전엔 window.location.origin을 써서,
+      // 관리자가 vercel.app 미리보기로 접속해 있으면 그 주소가 그대로
+      // 손님에게 전달되는 문제가 있었습니다).
       listingPageUrl:
-        listingId && typeof window !== "undefined"
-          ? `${window.location.origin}/listings/${listingId}`
+        listingId && process.env.NEXT_PUBLIC_SITE_URL
+          ? `${process.env.NEXT_PUBLIC_SITE_URL}/listings/${listingId}`
           : undefined,
       recipientName: recipientName.trim() || undefined,
     }),

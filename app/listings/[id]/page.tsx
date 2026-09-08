@@ -43,7 +43,7 @@ import {
   formatRooms,
   formatUnitTypeLabel,
 } from "../../lib/format/listingFields";
-import { buildAbsoluteUrl } from "../../lib/requestUrl";
+import { buildSiteUrl } from "../../lib/siteUrl";
 import { getUnitTypeImages } from "../../lib/unitTypeImages";
 import {
   BUILDING_UNKNOWN_LABEL,
@@ -168,7 +168,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const heroImage = resolveListingHeroImage(listing);
   const hasHeroVisual = Boolean(heroImage || floorPlanImages[0] || complexImages[0]);
 
-  const pageUrl = await buildAbsoluteUrl(`/listings/${listing.id}`);
+  const pageUrl = buildSiteUrl(`/listings/${listing.id}`);
 
   const inquiryMessage = buildInquiryMessage({
     complexName: complex.name,

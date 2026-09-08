@@ -5,7 +5,7 @@ import type { ListingWithComplex } from "../lib/listings";
 import { getListingById } from "../lib/listings";
 import { buildCompareInquiryMessage } from "../lib/listingInquiry";
 import { getComplexRepresentativeImages } from "../lib/complexImages";
-import { buildAbsoluteUrl } from "../lib/requestUrl";
+import { buildSiteUrl } from "../lib/siteUrl";
 import { formatArea, formatFloorRange, formatRooms } from "../lib/format/listingFields";
 import { formatSubwayTransportation } from "../lib/format/transportation";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
@@ -158,9 +158,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
 
   const pageUrl =
     validListings.length > 0
-      ? await buildAbsoluteUrl(
-          `/compare?ids=${validListings.map((l) => l.id).join(",")}`,
-        )
+      ? buildSiteUrl(`/compare?ids=${validListings.map((l) => l.id).join(",")}`)
       : undefined;
 
   const inquiryMobileNumber =

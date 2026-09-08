@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildAllAdCopyFormats, type AdCopyListingInput } from "../../../../../lib/adCopy";
 import { getListingById } from "../../../../../lib/listings";
-import { buildAbsoluteUrl } from "../../../../../lib/requestUrl";
+import { buildSiteUrl } from "../../../../../lib/siteUrl";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "매물을 찾을 수 없습니다." }, { status: 404 });
   }
 
-  const pageUrl = await buildAbsoluteUrl(`/listings/${listing.id}`);
+  const pageUrl = buildSiteUrl(`/listings/${listing.id}`);
 
   const input: AdCopyListingInput = {
     id: listing.id,
