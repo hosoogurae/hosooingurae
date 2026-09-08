@@ -27,6 +27,7 @@ import {
 import BrokerageInfo from "../../components/BrokerageInfo";
 import ContactActions from "../../components/ContactActions";
 import FloorPlanImage from "../../components/FloorPlanImage";
+import ShareButton from "../../components/ShareButton";
 import { getComplexImages } from "../../lib/complexImages";
 import { getFloorPlanImages } from "../../lib/floorPlans";
 import { formatSubwayTransportation } from "../../lib/format/transportation";
@@ -223,6 +224,14 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   계약 진행중
                 </span>
               )}
+
+              <div className="mt-4">
+                <ShareButton
+                  title={`${complex.name} ${listing.transactionType} ${listing.priceLabel}`}
+                  text={`${complex.name} · ${listing.transactionType} · ${listing.priceLabel}`}
+                  path={`/listings/${listing.id}`}
+                />
+              </div>
 
               <div className="mt-8">
                 <ContactActions
