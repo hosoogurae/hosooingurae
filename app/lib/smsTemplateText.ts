@@ -45,6 +45,8 @@ export interface SmsTemplateVariables {
   complexName?: string;
   address?: string;
   listingPageUrl?: string;
+  /** 연락처에서 가져온 받는 사람 이름(있으면). 양식에 {이름} 자리가 있으면 채웁니다. */
+  recipientName?: string;
 }
 
 /**
@@ -57,6 +59,7 @@ export function resolveSmsTemplate(body: string, variables: SmsTemplateVariables
     "{단지명}": variables.complexName,
     "{매물주소}": variables.address,
     "{매물페이지URL}": variables.listingPageUrl,
+    "{이름}": variables.recipientName,
     "{홈페이지URL}": process.env.NEXT_PUBLIC_SITE_URL,
     "{사무소명}": COMPANY_NAME,
     "{사무소주소}": ADDRESS_LINES[0],

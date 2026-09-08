@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { ContactRequestStatus } from "../../../data/contactRequests";
+import ContactPickerButton from "../../ContactPickerButton";
 import { buildSmsHref } from "../../../lib/listingInquiry";
 import { normalizePhone } from "../../../lib/phoneNormalize";
 import type { AdminSmsTemplate } from "../../../lib/smsTemplates";
@@ -24,6 +25,7 @@ function AdminSmsComposeInner() {
   const listingId = searchParams.get("listingId");
 
   const [phone, setPhone] = useState(initialPhone);
+  const [recipientName, setRecipientName] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [body, setBody] = useState("");
   const [myTemplates, setMyTemplates] = useState<AdminSmsTemplate[]>([]);
@@ -91,8 +93,9 @@ function AdminSmsComposeInner() {
         listingId && typeof window !== "undefined"
           ? `${window.location.origin}/listings/${listingId}`
           : undefined,
+      recipientName: recipientName.trim() || undefined,
     }),
-    [listing, listingId],
+    [listing, listingId, recipientName],
   );
 
   const templateOptions = useMemo(
@@ -127,6 +130,18 @@ function AdminSmsComposeInner() {
       if (text) setPhone(text.trim());
     } catch {
       // 클립보드 권한이 없으면 조용히 무시 — 직접 입력하면 됩니다.
+    }
+  }
+
+  /** 연락처에서 가져온 번호는 이미 010-1234-5678 형태로 정규화되어 옵니다. */
+  function handleContactPicked(contact: { name: string | undefined; phone: string }) {
+    setPhone(contact.phone);
+    if (contact.name) {
+      setRecipientName(contact.name);
+      // 이미 템플릿을 골라 본문에 {이름} 자리가 그대로 남아있을 수 있으니,
+      // 지금 본문에서도 바로 채웁니다(다음 템플릿 선택부터는 variables가
+      // 자동으로 채워줌).
+      setBody((prev) => (prev.includes("{이름}") ? prev.split("{이름}").join(contact.name!) : prev));
     }
   }
 
@@ -215,6 +230,7 @@ function AdminSmsComposeInner() {
         >
           붙여넣기
         </button>
+        <ContactPickerButton onPick={handleContactPicked} className="mt-2" />
       </section>
 
       <section className="mt-6">
