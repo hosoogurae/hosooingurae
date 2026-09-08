@@ -47,11 +47,9 @@ import { buildSiteUrl } from "../../lib/siteUrl";
 import { getUnitTypeImages } from "../../lib/unitTypeImages";
 import {
   BUILDING_UNKNOWN_LABEL,
-  buildInquiryMessage,
   formatComplexAndBuilding,
 } from "../../lib/listingInquiry";
 import ListingGallery from "../../components/ListingGallery";
-import ListingInquiryMessage from "../../components/ListingInquiryMessage";
 import TransactionPriceChart from "../../components/TransactionPriceChart";
 
 interface ListingPageProps {
@@ -169,15 +167,6 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const hasHeroVisual = Boolean(heroImage || floorPlanImages[0] || complexImages[0]);
 
   const pageUrl = buildSiteUrl(`/listings/${listing.id}`);
-
-  const inquiryMessage = buildInquiryMessage({
-    complexName: complex.name,
-    building: listing.building,
-    floor: listing.floor,
-    transactionType: listing.transactionType,
-    priceLabel: listing.priceLabel,
-    pageUrl,
-  });
   const heroFloorPlan = floorPlanImages[0];
 
   return (
@@ -256,10 +245,6 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   네이버부동산에서 보기
                 </a>
               )}
-
-              <div className="mt-4">
-                <ListingInquiryMessage message={inquiryMessage} />
-              </div>
             </div>
 
             {hasHeroVisual && (
