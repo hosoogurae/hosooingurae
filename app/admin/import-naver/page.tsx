@@ -147,6 +147,18 @@ export default function AdminImportPage() {
     // 중복이 발견됐는데 아직 관리자가 셋 중 하나를 고르지 않았다면 저장을 막습니다.
     if (duplicateMatch && !duplicateChoice) return;
 
+    // "기존 매물 업데이트"는 되돌리기 어렵습니다(원래 데이터가 사라짐) — 무엇을
+    // 덮어쓰는지(단지·동·층·가격) 반드시 보여주고 한 번 더 확인받습니다.
+    if (duplicateChoice === "update" && duplicateMatch) {
+      const target = duplicateMatch.listing;
+      const confirmed = window.confirm(
+        `${target.complexName} ${target.building} ${target.floor}층 ` +
+          `(${target.transactionType} ${target.priceLabel})\n` +
+          `이 매물을 새로 입력한 값으로 덮어씁니다. 계속할까요?`,
+      );
+      if (!confirmed) return;
+    }
+
     setSubmitting(true);
     setSubmitErrors(null);
 
@@ -375,7 +387,7 @@ export default function AdminImportPage() {
           {duplicateMatch && !duplicateChoice && (
             <NaverDuplicatePanel
               duplicate={duplicateMatch}
-              mergedPreview={mergedPreview ?? undefined}
+              draft={draft ?? undefined}
               onUpdateExisting={handleChooseUpdateExisting}
               onRegisterNew={handleChooseRegisterNew}
               onCancel={handleCancelDuplicate}
