@@ -20,6 +20,8 @@ import { DEAL_STATUS_BADGE_CLASS, DEAL_STATUS_LABELS } from "../../ListingFields
 import { patchListingFields } from "../../quickListingActions";
 import ListingSortSelect from "../../../components/ListingSortSelect";
 import type { SuspectedMatch } from "../../../lib/suspectedTransactionMatch";
+import type { DuplicateSuspectResult } from "../../../lib/duplicateSuspectedMatch";
+import DuplicateSuspectPanel from "../DuplicateSuspectPanel";
 
 function formatDealDate(dealDate: string): string {
   const date = new Date(dealDate);
@@ -123,6 +125,7 @@ function AdminListingsView() {
   // 새 필터는 전부 ?filter=<InspectionCategory>로 받습니다.
   const filterParam = searchParams.get("filter");
   const isSuspectedFilter = filterParam === "suspected";
+  const isDuplicateSuspectFilter = filterParam === "duplicate-suspected";
   const activeFilter: InspectionCategory | null =
     searchParams.get("urgent") === "1"
       ? "urgent"
@@ -154,6 +157,8 @@ function AdminListingsView() {
     string | null
   >(null);
   const [matchActionId, setMatchActionId] = useState<string | null>(null);
+  const [duplicateSuspect, setDuplicateSuspect] =
+    useState<DuplicateSuspectResult | null>(null);
 
   /** 정렬/공개여부/거래유형/검색 등 DB 쿼리 단계 조건을 바꿀 때 쓰는 공용 헬퍼 — 나머지 쿼리는 그대로 두고 하나만 갱신합니다. */
   function updateSearchParam(key: string, value: string) {
@@ -258,6 +263,25 @@ function AdminListingsView() {
       cancelled = true;
     };
   }, []);
+
+  // 중복 의심 매물도 그 필터를 볼 때만 조회합니다(다른 필터에서는 불필요한 호출 안 함).
+  useEffect(() => {
+    if (!isDuplicateSuspectFilter) return;
+    let cancelled = false;
+
+    fetch("/api/admin/listings/duplicate-suspected-matches")
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled) setDuplicateSuspect(data as DuplicateSuspectResult);
+      })
+      .catch(() => {
+        if (!cancelled) setDuplicateSuspect({ groups: [], excludedMissingBuildingCount: 0 });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDuplicateSuspectFilter]);
 
   // 평면도 커버리지는 그 필터를 볼 때만 조회합니다(다른 필터에서는 불필요한 호출 안 함).
   useEffect(() => {
@@ -384,6 +408,41 @@ function AdminListingsView() {
   async function handleMarkCompletedFromMatch(listing: ListingWithComplex) {
     await handleQuickStatusChange(listing, "completed");
     setExpandedMatchListingId(null);
+  }
+
+  // 중복 의심 매물은 "같은 매물끼리 나란히 비교"가 핵심이라 일반 매물 표와
+  // 구조가 완전히 다릅니다. 아래 공용 필터·표 렌더링을 타지 않고 여기서
+  // 별도 화면으로 반환합니다(같은 라우트 안의 특수 케이스 — suspected와
+  // 같은 방식으로 붙이되, 표시 형태만 다릅니다).
+  if (isDuplicateSuspectFilter) {
+    return (
+      <div className="mx-auto max-w-4xl px-6 py-16">
+        <p className="text-sm font-semibold tracking-wide text-gold-600">ADMIN</p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-black text-navy-950 sm:text-3xl">
+            중복 의심 매물
+          </h1>
+          <Link
+            href="/admin/listings/inspection"
+            className="text-sm font-bold text-navy-800/60 underline-offset-4 hover:text-gold-600 hover:underline"
+          >
+            ← 점검 센터로
+          </Link>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-navy-800/70">
+          같은 매물이 실수로 두 번 등록된 것 같은 경우를 모아 보여줍니다.
+        </p>
+
+        {duplicateSuspect === null ? (
+          <p className="mt-8 text-sm text-navy-800/50">불러오는 중...</p>
+        ) : (
+          <DuplicateSuspectPanel
+            groups={duplicateSuspect.groups}
+            excludedMissingBuildingCount={duplicateSuspect.excludedMissingBuildingCount}
+          />
+        )}
+      </div>
+    );
   }
 
   const visibleListings = isSuspectedFilter

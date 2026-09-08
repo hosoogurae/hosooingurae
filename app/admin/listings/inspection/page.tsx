@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ListingWithComplex } from "../../../lib/listings";
+import type { DuplicateSuspectResult } from "../../../lib/duplicateSuspectedMatch";
 import {
   countInspectionCategories,
   INSPECTION_CATEGORIES,
@@ -109,6 +110,8 @@ function CategoryCard({
 export default function ListingInspectionPage() {
   const [counts, setCounts] = useState<InspectionCounts | null>(null);
   const [suspectedCount, setSuspectedCount] = useState<number | null>(null);
+  const [duplicateSuspect, setDuplicateSuspect] =
+    useState<DuplicateSuspectResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,16 +119,22 @@ export default function ListingInspectionPage() {
 
     async function load() {
       try {
-        const [listings, unitTypesByComplex, suspectedResponse] = await Promise.all([
-          loadListings(),
-          loadUnitTypesByComplex(),
-          fetch("/api/admin/listings/suspected-matches"),
-        ]);
+        const [listings, unitTypesByComplex, suspectedResponse, duplicateResponse] =
+          await Promise.all([
+            loadListings(),
+            loadUnitTypesByComplex(),
+            fetch("/api/admin/listings/suspected-matches"),
+            fetch("/api/admin/listings/duplicate-suspected-matches"),
+          ]);
         if (!cancelled) {
           setCounts(countInspectionCategories(listings, unitTypesByComplex));
           if (suspectedResponse.ok) {
             const data = await suspectedResponse.json();
             setSuspectedCount(data.matches?.length ?? 0);
+          }
+          if (duplicateResponse.ok) {
+            const data = (await duplicateResponse.json()) as DuplicateSuspectResult;
+            setDuplicateSuspect(data);
           }
         }
       } catch (err) {
@@ -142,6 +151,15 @@ export default function ListingInspectionPage() {
       cancelled = true;
     };
   }, []);
+
+  const duplicateStrongCount =
+    duplicateSuspect?.groups.filter((group) => group.severity === "strong").length ??
+    null;
+  const duplicateWeakCount =
+    duplicateSuspect?.groups.filter((group) => group.severity === "weak").length ?? 0;
+  const duplicateFloorUnknownCount =
+    duplicateSuspect?.groups.filter((group) => group.severity === "floor-unknown")
+      .length ?? 0;
 
   const priorityCategories = PRIORITY_INSPECTION_CATEGORIES;
   const otherCategories = INSPECTION_CATEGORIES.filter(
@@ -175,6 +193,30 @@ export default function ListingInspectionPage() {
             <span className="text-2xl font-black text-purple-700">{suspectedCount === null ? "-" : `${suspectedCount}건`}</span>
           </div>
           <p className="mt-2 text-xs text-navy-800/60">국토부 실거래와 단지·거래유형·면적·층·가격이 유사한 매물을 비교하고 처리합니다.</p>
+        </Link>
+        <Link
+          href="/admin/listings/manage?filter=duplicate-suspected"
+          className={`rounded-xl border p-5 transition-colors ${
+            (duplicateStrongCount ?? 0) > 0
+              ? "border-red-400 bg-red-50 hover:bg-red-100"
+              : "border-navy-900/10 bg-white hover:border-gold-500"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-bold text-navy-950">중복 의심 매물</h2>
+            <span
+              className={`text-2xl font-black ${
+                (duplicateStrongCount ?? 0) > 0 ? "text-red-600" : "text-navy-950"
+              }`}
+            >
+              {duplicateStrongCount === null ? "-" : `${duplicateStrongCount}건`}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-navy-800/60">
+            같은 매물이 두 번 등록된 것 같은 경우를 사람이 확인하는 안전망입니다
+            (자동으로 합치지 않습니다). 강함 {duplicateStrongCount ?? "-"}건 · 약함{" "}
+            {duplicateWeakCount}건 · 층 확인 필요 {duplicateFloorUnknownCount}건
+          </p>
         </Link>
         {priorityCategories.map((category) => (
           <CategoryCard
