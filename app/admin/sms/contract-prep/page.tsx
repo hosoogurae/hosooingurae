@@ -313,6 +313,11 @@ export default function ContractPrepSmsPage() {
     Record<SpecialContractType, Set<string> | null>
   >({ 공동명의: null, 대리계약: null, 법인계약: null });
 
+  // 특수계약 세 유형이 전부 비어 있을 때만 씁니다 — 그럴 때는 섹션을
+  // 접어두고, 궁금하면 직접 펼쳐볼 수 있게 합니다. 유형 중 하나라도
+  // 항목이 생기면 이 상태와 무관하게 항상 펼쳐서 보여줍니다.
+  const [forceExpandSpecial, setForceExpandSpecial] = useState(false);
+
   const [customerName, setCustomerName] = useState("");
   const [dateStr, setDateStr] = useState(getTodayDateStr);
   const [timeStr, setTimeStr] = useState("18:00");
@@ -566,57 +571,90 @@ export default function ContractPrepSmsPage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm font-bold text-navy-900">특수계약 (선택)</h2>
-        <p className="mt-1 text-xs text-navy-800/50">
-          공동명의·대리계약·법인계약처럼 일반적인 경우와 다른 계약이면 체크해서
-          해당 준비물을 추가로 골라주세요. 아무것도 체크하지 않으면 문자에
-          영향을 주지 않습니다.
-        </p>
-        <div className="mt-2 flex flex-col gap-2">
-          {SPECIAL_CONTRACT_TYPES.map((type) => {
-            const isActive = activeSpecialTypes.has(type);
-            const typeItems = getSpecialItems(type);
-            const checkedIdsForType = getEffectiveSpecialCheckedIds(type);
-            return (
-              <div key={type}>
-                <label className="flex min-h-[48px] items-center gap-3 rounded-lg border border-navy-900/15 px-3 text-base text-navy-900">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={() => toggleSpecialType(type)}
-                    className="h-5 w-5"
-                  />
-                  {type}
-                </label>
-                {isActive && (
-                  <div className="mt-2 flex flex-col gap-2 pl-4">
-                    {typeItems.length === 0 ? (
-                      <p className="text-xs text-navy-800/50">
-                        아직 등록된 {type} 준비물이 없습니다. 아래 항목 관리에서
-                        추가해주세요.
-                      </p>
-                    ) : (
-                      typeItems.map((item) => (
-                        <label
-                          key={item.id}
-                          className="flex min-h-[44px] items-center gap-3 rounded-lg border border-navy-900/10 bg-navy-900/[0.02] px-3 text-sm text-navy-900"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checkedIdsForType.has(item.id)}
-                            onChange={() => toggleSpecialItem(type, item.id)}
-                            className="h-4 w-4"
-                          />
-                          {item.label}
-                        </label>
-                      ))
-                    )}
-                  </div>
+        {/* 항목이 하나도 없는 유형은 체크박스를 아예 안 보여줍니다 — 체크는
+            되는데 문자에 아무 효과가 없는 상태가 제일 나쁩니다. 세 유형이
+            전부 비어 있으면 섹션 전체를 접어둡니다. */}
+        {(() => {
+          const typesWithItems = SPECIAL_CONTRACT_TYPES.filter(
+            (type) => getSpecialItems(type).length > 0,
+          );
+          const hasAnySpecialItems = typesWithItems.length > 0;
+          const expanded = hasAnySpecialItems || forceExpandSpecial;
+
+          return (
+            <>
+              <button
+                type="button"
+                onClick={() => setForceExpandSpecial((prev) => !prev)}
+                disabled={hasAnySpecialItems}
+                className="flex w-full items-center justify-between text-sm font-bold text-navy-900 disabled:cursor-default"
+              >
+                <span>특수계약 (선택)</span>
+                {!hasAnySpecialItems && (
+                  <span className="text-xs font-semibold text-gold-600">
+                    {expanded ? "접기" : "펼치기"}
+                  </span>
                 )}
-              </div>
-            );
-          })}
-        </div>
+              </button>
+
+              {expanded && (
+                <>
+                  <p className="mt-1 text-xs text-navy-800/50">
+                    공동명의·대리계약·법인계약처럼 일반적인 경우와 다른
+                    계약이면 체크해서 해당 준비물을 추가로 골라주세요.
+                    아무것도 체크하지 않으면 문자에 영향을 주지 않습니다.
+                  </p>
+
+                  {!hasAnySpecialItems ? (
+                    <p className="mt-2 rounded-lg border border-dashed border-navy-900/15 px-3 py-3 text-xs text-navy-800/40">
+                      등록된 특수계약 준비물이 없습니다. &quot;항목 관리&quot;에서
+                      공동명의·대리계약·법인계약 준비물을 추가하면 여기 나타납니다.
+                    </p>
+                  ) : (
+                    <div className="mt-2 flex flex-col gap-2">
+                      {typesWithItems.map((type) => {
+                        const isActive = activeSpecialTypes.has(type);
+                        const typeItems = getSpecialItems(type);
+                        const checkedIdsForType = getEffectiveSpecialCheckedIds(type);
+                        return (
+                          <div key={type}>
+                            <label className="flex min-h-[48px] items-center gap-3 rounded-lg border border-navy-900/15 px-3 text-base text-navy-900">
+                              <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={() => toggleSpecialType(type)}
+                                className="h-5 w-5"
+                              />
+                              {type}
+                            </label>
+                            {isActive && (
+                              <div className="mt-2 flex flex-col gap-2 pl-4">
+                                {typeItems.map((item) => (
+                                  <label
+                                    key={item.id}
+                                    className="flex min-h-[44px] items-center gap-3 rounded-lg border border-navy-900/10 bg-navy-900/[0.02] px-3 text-sm text-navy-900"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checkedIdsForType.has(item.id)}
+                                      onChange={() => toggleSpecialItem(type, item.id)}
+                                      className="h-4 w-4"
+                                    />
+                                    {item.label}
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          );
+        })()}
       </section>
 
       <section className="mt-6 grid grid-cols-2 gap-3">
