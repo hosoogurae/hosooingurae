@@ -2,9 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   deleteContractPrepItem,
   updateContractPrepItem,
+  type ContractPrepItemRole,
 } from "../../../../lib/contractPrepItems";
 
-const VALID_ROLES = ["공통", "매수인", "매도인", "임차인", "임대인"];
+const VALID_ROLES = [
+  "공통",
+  "매수인",
+  "매도인",
+  "임차인",
+  "임대인",
+  "공동명의",
+  "대리계약",
+  "법인계약",
+];
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -23,8 +33,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     );
   }
 
-  const { role, label, sortOrder } =
-    (body as { role?: unknown; label?: unknown; sortOrder?: unknown } | null) ?? {};
+  const { role, label, sortOrder, defaultChecked } =
+    (body as {
+      role?: unknown;
+      label?: unknown;
+      sortOrder?: unknown;
+      defaultChecked?: unknown;
+    } | null) ?? {};
 
   if (role !== undefined && (typeof role !== "string" || !VALID_ROLES.includes(role))) {
     return NextResponse.json(
@@ -38,6 +53,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   if (sortOrder !== undefined && typeof sortOrder !== "number") {
     return NextResponse.json({ errors: ["순서 값이 올바르지 않습니다."] }, { status: 400 });
   }
+  if (defaultChecked !== undefined && typeof defaultChecked !== "boolean") {
+    return NextResponse.json(
+      { errors: ["기본 체크 값이 올바르지 않습니다."] },
+      { status: 400 },
+    );
+  }
 
   const trimmedLabel = typeof label === "string" ? label.trim() : undefined;
   if (trimmedLabel === "") {
@@ -45,9 +66,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 
   const { item, error } = await updateContractPrepItem(id, {
-    role: role as "공통" | "매수인" | "매도인" | "임차인" | "임대인" | undefined,
+    role: role as ContractPrepItemRole | undefined,
     label: trimmedLabel,
     sortOrder: sortOrder as number | undefined,
+    defaultChecked: defaultChecked as boolean | undefined,
   });
 
   if (!item) {

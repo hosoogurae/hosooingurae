@@ -2,9 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createContractPrepItem,
   getAllContractPrepItems,
+  type ContractPrepItemRole,
 } from "../../../lib/contractPrepItems";
 
-const VALID_ROLES = ["공통", "매수인", "매도인", "임차인", "임대인"];
+const VALID_ROLES = [
+  "공통",
+  "매수인",
+  "매도인",
+  "임차인",
+  "임대인",
+  "공동명의",
+  "대리계약",
+  "법인계약",
+];
 
 /** 계약 준비물 안내 문자 화면의 역할별 체크박스 항목 목록. */
 export async function GET() {
@@ -23,8 +33,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { role, label, sortOrder } =
-    (body as { role?: unknown; label?: unknown; sortOrder?: unknown } | null) ?? {};
+  const { role, label, sortOrder, defaultChecked } =
+    (body as {
+      role?: unknown;
+      label?: unknown;
+      sortOrder?: unknown;
+      defaultChecked?: unknown;
+    } | null) ?? {};
 
   if (typeof role !== "string" || !VALID_ROLES.includes(role)) {
     return NextResponse.json(
@@ -39,9 +54,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { item, error } = await createContractPrepItem({
-    role: role as "공통" | "매수인" | "매도인" | "임차인" | "임대인",
+    role: role as ContractPrepItemRole,
     label: trimmedLabel,
     sortOrder: typeof sortOrder === "number" ? sortOrder : undefined,
+    defaultChecked: typeof defaultChecked === "boolean" ? defaultChecked : undefined,
   });
 
   if (!item) {

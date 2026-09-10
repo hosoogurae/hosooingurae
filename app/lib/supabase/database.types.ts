@@ -472,6 +472,7 @@ export interface Database {
           role: string;
           label: string;
           sort_order: number;
+          default_checked: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -480,6 +481,7 @@ export interface Database {
           role: string;
           label: string;
           sort_order?: number;
+          default_checked?: boolean;
           created_at?: string;
           updated_at?: string;
         };

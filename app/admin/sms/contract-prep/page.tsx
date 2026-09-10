@@ -4,12 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { buildSmsHref } from "../../../lib/listingInquiry";
 import { normalizePhone } from "../../../lib/phoneNormalize";
-import { buildContractPrepSms } from "../../../lib/contractPrepSms";
-import type { ContractPrepItem } from "../../../lib/contractPrepItems";
+import { buildContractPrepSms, getContractTypeLabel } from "../../../lib/contractPrepSms";
+import {
+  CONTRACT_PREP_ROLES,
+  SPECIAL_CONTRACT_TYPES,
+  type ContractPrepItem,
+  type ContractPrepRole,
+  type SpecialContractType,
+} from "../../../lib/contractPrepItems";
 
-const ROLES = ["매수인", "매도인", "임차인", "임대인"] as const;
-type Role = (typeof ROLES)[number];
-const ITEM_FORM_ROLES = ["공통", ...ROLES] as const;
+const ROLES = CONTRACT_PREP_ROLES;
+const ITEM_FORM_ROLES = ["공통", ...ROLES, ...SPECIAL_CONTRACT_TYPES] as const;
 type ItemFormRole = (typeof ITEM_FORM_ROLES)[number];
 
 const inputClass =
@@ -23,9 +28,24 @@ function getTodayDateStr(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-type EditingItem = { mode: "new" | "edit"; id?: string; role: ItemFormRole; label: string } | null;
+/** 같은 라벨이 두 번 등록돼 있어도(예: 공통과 역할에 같은 이름) 화면엔 한 번만 보여줍니다. */
+function dedupeByLabel(items: ContractPrepItem[]): ContractPrepItem[] {
+  const seen = new Set<string>();
+  const result: ContractPrepItem[] = [];
+  for (const item of items) {
+    const key = item.label.trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
 
-/** 공통+역할 항목을 관리(추가/수정/삭제)하는 접이식 섹션. */
+type EditingItem =
+  | { mode: "new" | "edit"; id?: string; role: ItemFormRole; label: string; defaultChecked: boolean }
+  | null;
+
+/** 공통+역할+특수계약 항목을 관리(추가/수정/삭제/순서/기본체크)하는 접이식 섹션. */
 function ItemManager({
   items,
   onChanged,
@@ -37,6 +57,7 @@ function ItemManager({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     const groups = new Map<ItemFormRole, ContractPrepItem[]>();
@@ -66,7 +87,11 @@ function ItemManager({
         {
           method: editing.mode === "new" ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: editing.role, label }),
+          body: JSON.stringify({
+            role: editing.role,
+            label,
+            defaultChecked: editing.defaultChecked,
+          }),
         },
       );
       const data = await response.json();
@@ -97,54 +122,121 @@ function ItemManager({
     }
   }
 
+  async function handleMove(roleItems: ContractPrepItem[], index: number, direction: -1 | 1) {
+    const current = roleItems[index];
+    const other = roleItems[index + direction];
+    if (!current || !other) return;
+
+    setMovingId(current.id);
+    setSaveError(null);
+    try {
+      const responses = await Promise.all([
+        fetch(`/api/admin/contract-prep-items/${current.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sortOrder: other.sortOrder }),
+        }),
+        fetch(`/api/admin/contract-prep-items/${other.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sortOrder: current.sortOrder }),
+        }),
+      ]);
+      if (responses.some((response) => !response.ok)) {
+        throw new Error("순서 변경에 실패했습니다.");
+      }
+      onChanged();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "순서 변경에 실패했습니다.");
+    } finally {
+      setMovingId(null);
+    }
+  }
+
   return (
     <div className="mt-4 rounded-xl border border-navy-900/10 bg-white p-4">
-      {ITEM_FORM_ROLES.map((role) => (
-        <div key={role} className="mt-4 first:mt-0">
-          <p className="text-xs font-bold text-navy-800/60">{role}</p>
-          <ul className="mt-1.5 flex flex-col gap-1.5">
-            {(grouped.get(role) ?? []).map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-navy-900/10 px-3 py-2 text-sm"
-              >
-                <span className="text-navy-900">{item.label}</span>
-                <span className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setEditing({ mode: "edit", id: item.id, role, label: item.label })
-                    }
-                    className="text-xs font-semibold text-navy-800/60 hover:text-gold-600 hover:underline"
-                  >
-                    수정
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(item.id)}
-                    disabled={deletingId === item.id}
-                    className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-50"
-                  >
-                    {deletingId === item.id ? "삭제 중..." : "삭제"}
-                  </button>
-                </span>
-              </li>
-            ))}
-            {(grouped.get(role) ?? []).length === 0 && (
-              <li className="rounded-md border border-dashed border-navy-900/15 px-3 py-2 text-xs text-navy-800/40">
-                항목 없음
-              </li>
-            )}
-          </ul>
-          <button
-            type="button"
-            onClick={() => setEditing({ mode: "new", role, label: "" })}
-            className="mt-1.5 text-xs font-bold text-gold-600 hover:underline"
-          >
-            + {role}에 항목 추가
-          </button>
-        </div>
-      ))}
+      {ITEM_FORM_ROLES.map((role) => {
+        const roleItems = grouped.get(role) ?? [];
+        return (
+          <div key={role} className="mt-4 first:mt-0">
+            <p className="text-xs font-bold text-navy-800/60">{role}</p>
+            <ul className="mt-1.5 flex flex-col gap-1.5">
+              {roleItems.map((item, index) => (
+                <li
+                  key={item.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-navy-900/10 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate text-navy-900">
+                    {item.label}
+                    {!item.defaultChecked && (
+                      <span className="ml-1.5 text-xs font-normal text-navy-800/40">
+                        (기본 미체크)
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleMove(roleItems, index, -1)}
+                      disabled={index === 0 || movingId !== null}
+                      aria-label="위로 이동"
+                      className="text-xs font-semibold text-navy-800/50 hover:text-gold-600 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMove(roleItems, index, 1)}
+                      disabled={index === roleItems.length - 1 || movingId !== null}
+                      aria-label="아래로 이동"
+                      className="text-xs font-semibold text-navy-800/50 hover:text-gold-600 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditing({
+                          mode: "edit",
+                          id: item.id,
+                          role,
+                          label: item.label,
+                          defaultChecked: item.defaultChecked,
+                        })
+                      }
+                      className="text-xs font-semibold text-navy-800/60 hover:text-gold-600 hover:underline"
+                    >
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(item.id)}
+                      disabled={deletingId === item.id}
+                      className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-50"
+                    >
+                      {deletingId === item.id ? "삭제 중..." : "삭제"}
+                    </button>
+                  </span>
+                </li>
+              ))}
+              {roleItems.length === 0 && (
+                <li className="rounded-md border border-dashed border-navy-900/15 px-3 py-2 text-xs text-navy-800/40">
+                  항목 없음
+                </li>
+              )}
+            </ul>
+            <button
+              type="button"
+              onClick={() =>
+                setEditing({ mode: "new", role, label: "", defaultChecked: true })
+              }
+              className="mt-1.5 text-xs font-bold text-gold-600 hover:underline"
+            >
+              + {role}에 항목 추가
+            </button>
+          </div>
+        );
+      })}
 
       {editing && (
         <div className="mt-4 rounded-lg border border-gold-500/40 bg-gold-500/5 p-3">
@@ -159,6 +251,19 @@ function ItemManager({
             placeholder="예: 신분증"
             className={`${inputClass} mt-2`}
           />
+          <label className="mt-2 flex min-h-[40px] items-center gap-2 text-sm text-navy-900">
+            <input
+              type="checkbox"
+              checked={editing.defaultChecked}
+              onChange={(event) =>
+                setEditing((prev) =>
+                  prev ? { ...prev, defaultChecked: event.target.checked } : prev,
+                )
+              }
+              className="h-4 w-4"
+            />
+            화면에 처음 보여줄 때 기본으로 체크
+          </label>
           {saveError && <p className="mt-2 text-xs text-red-600">{saveError}</p>}
           <div className="mt-2 flex gap-2">
             <button
@@ -182,6 +287,9 @@ function ItemManager({
           </div>
         </div>
       )}
+      {saveError && !editing && (
+        <p className="mt-3 text-xs text-red-600">{saveError}</p>
+      )}
     </div>
   );
 }
@@ -191,9 +299,20 @@ export default function ContractPrepSmsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showItemManager, setShowItemManager] = useState(false);
 
-  const [role, setRole] = useState<Role>("매수인");
-  // null = 아직 사람이 손대지 않음(역할의 기본 전체 체크를 그대로 씀).
+  const [role, setRole] = useState<ContractPrepRole>("매수인");
+  // null = 아직 사람이 손대지 않음(항목별 defaultChecked를 그대로 씀).
   const [checkedIds, setCheckedIds] = useState<Set<string> | null>(null);
+
+  // 특수계약(공동명의/대리계약/법인계약) — 기본은 전부 꺼짐. 켠 유형만 그
+  // 유형의 준비물 목록을 보여줍니다. 유형별로 별도의 "손대지 않음(null)"
+  // 상태를 둬서, 다른 유형을 껐다 켜도 서로 상태가 섞이지 않게 합니다.
+  const [activeSpecialTypes, setActiveSpecialTypes] = useState<Set<SpecialContractType>>(
+    new Set(),
+  );
+  const [specialCheckedByType, setSpecialCheckedByType] = useState<
+    Record<SpecialContractType, Set<string> | null>
+  >({ 공동명의: null, 대리계약: null, 법인계약: null });
+
   const [customerName, setCustomerName] = useState("");
   const [dateStr, setDateStr] = useState(getTodayDateStr);
   const [timeStr, setTimeStr] = useState("18:00");
@@ -232,22 +351,16 @@ export default function ContractPrepSmsPage() {
   const visibleItems = useMemo(() => {
     if (!items) return [];
     const combined = items.filter((item) => item.role === "공통" || item.role === role);
-    const seenLabels = new Set<string>();
-    const deduped: ContractPrepItem[] = [];
-    for (const item of combined) {
-      const key = item.label.trim();
-      if (seenLabels.has(key)) continue;
-      seenLabels.add(key);
-      deduped.push(item);
-    }
-    return deduped;
+    return dedupeByLabel(combined);
   }, [items, role]);
 
   // checkedIds가 null이면(역할을 막 바꿨거나 항목이 막 로드된 상태) 렌더
-  // 시점에 "이 역할 전체 체크"를 즉석에서 계산합니다 — effect로 상태를
+  // 시점에 "항목별 기본 체크값"을 즉석에서 계산합니다 — effect로 상태를
   // 되돌리지 않고, 파생값을 렌더 중에 직접 구하는 방식입니다.
   const effectiveCheckedIds = useMemo(
-    () => checkedIds ?? new Set(visibleItems.map((item) => item.id)),
+    () =>
+      checkedIds ??
+      new Set(visibleItems.filter((item) => item.defaultChecked).map((item) => item.id)),
     [checkedIds, visibleItems],
   );
 
@@ -259,13 +372,48 @@ export default function ContractPrepSmsPage() {
     [visibleItems, effectiveCheckedIds],
   );
 
+  /** 특정 특수계약 유형의 항목 목록(라벨 중복 제거). */
+  function getSpecialItems(type: SpecialContractType): ContractPrepItem[] {
+    if (!items) return [];
+    return dedupeByLabel(items.filter((item) => item.role === type));
+  }
+
+  function getEffectiveSpecialCheckedIds(type: SpecialContractType): Set<string> {
+    const stored = specialCheckedByType[type];
+    if (stored) return stored;
+    return new Set(getSpecialItems(type).filter((item) => item.defaultChecked).map((item) => item.id));
+  }
+
+  // 켜진 특수계약 유형들의 체크된 준비물 라벨 전부(문자 생성에 "추가
+  // 준비물"로 들어갑니다).
+  const specialItemLabels = useMemo(() => {
+    const labels: string[] = [];
+    for (const type of SPECIAL_CONTRACT_TYPES) {
+      if (!activeSpecialTypes.has(type)) continue;
+      const typeItems = getSpecialItems(type);
+      const checked = getEffectiveSpecialCheckedIds(type);
+      for (const item of typeItems) {
+        if (checked.has(item.id)) labels.push(item.label);
+      }
+    }
+    return labels;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, activeSpecialTypes, specialCheckedByType]);
+
   const autoBody =
     dateStr && timeStr
-      ? buildContractPrepSms({ customerName, dateStr, timeStr, items: checkedLabels })
+      ? buildContractPrepSms({
+          role,
+          customerName,
+          dateStr,
+          timeStr,
+          items: checkedLabels,
+          specialItems: specialItemLabels,
+        })
       : "";
   const body = manualBody ?? autoBody;
 
-  function handleRoleSelect(nextRole: Role) {
+  function handleRoleSelect(nextRole: ContractPrepRole) {
     setRole(nextRole);
     setCheckedIds(null);
   }
@@ -278,6 +426,29 @@ export default function ContractPrepSmsPage() {
       next.add(id);
     }
     setCheckedIds(next);
+  }
+
+  function toggleSpecialType(type: SpecialContractType) {
+    setActiveSpecialTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  }
+
+  function toggleSpecialItem(type: SpecialContractType, id: string) {
+    const current = getEffectiveSpecialCheckedIds(type);
+    const next = new Set(current);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSpecialCheckedByType((prev) => ({ ...prev, [type]: next }));
   }
 
   function handleRegenerate() {
@@ -305,6 +476,7 @@ export default function ContractPrepSmsPage() {
   }
 
   const smsHref = phone.trim() ? buildSmsHref(normalizePhone(phone), body) : null;
+  const contractTypeLabel = getContractTypeLabel(role);
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-8 sm:py-16">
@@ -331,7 +503,9 @@ export default function ContractPrepSmsPage() {
       )}
 
       <section className="mt-8">
-        <h2 className="text-sm font-bold text-navy-900">역할</h2>
+        <h2 className="text-sm font-bold text-navy-900">
+          역할 <span className="font-normal text-navy-800/50">({contractTypeLabel})</span>
+        </h2>
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {ROLES.map((option) => (
             <button
@@ -391,6 +565,60 @@ export default function ContractPrepSmsPage() {
         {showItemManager && <ItemManager items={items ?? []} onChanged={loadItems} />}
       </section>
 
+      <section className="mt-6">
+        <h2 className="text-sm font-bold text-navy-900">특수계약 (선택)</h2>
+        <p className="mt-1 text-xs text-navy-800/50">
+          공동명의·대리계약·법인계약처럼 일반적인 경우와 다른 계약이면 체크해서
+          해당 준비물을 추가로 골라주세요. 아무것도 체크하지 않으면 문자에
+          영향을 주지 않습니다.
+        </p>
+        <div className="mt-2 flex flex-col gap-2">
+          {SPECIAL_CONTRACT_TYPES.map((type) => {
+            const isActive = activeSpecialTypes.has(type);
+            const typeItems = getSpecialItems(type);
+            const checkedIdsForType = getEffectiveSpecialCheckedIds(type);
+            return (
+              <div key={type}>
+                <label className="flex min-h-[48px] items-center gap-3 rounded-lg border border-navy-900/15 px-3 text-base text-navy-900">
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={() => toggleSpecialType(type)}
+                    className="h-5 w-5"
+                  />
+                  {type}
+                </label>
+                {isActive && (
+                  <div className="mt-2 flex flex-col gap-2 pl-4">
+                    {typeItems.length === 0 ? (
+                      <p className="text-xs text-navy-800/50">
+                        아직 등록된 {type} 준비물이 없습니다. 아래 항목 관리에서
+                        추가해주세요.
+                      </p>
+                    ) : (
+                      typeItems.map((item) => (
+                        <label
+                          key={item.id}
+                          className="flex min-h-[44px] items-center gap-3 rounded-lg border border-navy-900/10 bg-navy-900/[0.02] px-3 text-sm text-navy-900"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checkedIdsForType.has(item.id)}
+                            onChange={() => toggleSpecialItem(type, item.id)}
+                            className="h-4 w-4"
+                          />
+                          {item.label}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="mt-6 grid grid-cols-2 gap-3">
         <label className="block text-sm font-bold text-navy-900">
           손님 이름(선택)
@@ -403,7 +631,7 @@ export default function ContractPrepSmsPage() {
         </label>
         <div />
         <label className="block text-sm font-bold text-navy-900">
-          날짜
+          계약일
           <input
             type="date"
             value={dateStr}
