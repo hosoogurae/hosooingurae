@@ -99,6 +99,11 @@ export async function createContractPrepItem(input: {
     .single();
 
   if (error || !data) {
+    // 23505 = Postgres unique_violation. (role, label) unique 제약에 걸린
+    // 경우이며, 원문 Postgres 에러를 그대로 노출하지 않고 원인을 알려줍니다.
+    if (error?.code === "23505") {
+      return { error: "같은 이름의 준비물이 이미 있습니다." };
+    }
     console.error("[contractPrepItems] 생성 실패", error);
     return { error: "항목 저장에 실패했습니다." };
   }
@@ -139,6 +144,9 @@ export async function updateContractPrepItem(
     .maybeSingle();
 
   if (error) {
+    if (error.code === "23505") {
+      return { error: "같은 이름의 준비물이 이미 있습니다." };
+    }
     console.error("[contractPrepItems] 수정 실패", error);
     return { error: "항목 수정에 실패했습니다." };
   }
