@@ -30,9 +30,9 @@ export const DEFAULT_SMS_TEMPLATES: DefaultSmsTemplate[] = [
     body: `안녕하세요. ${COMPANY_NAME}입니다.\n문의해주셔서 감사합니다.\n\n홈페이지에서 매물과 구래동 아파트 정보를 확인하실 수 있습니다.\n{홈페이지URL}\n\n문의사항은 편하게 연락주세요. {부동산전화번호}`,
   },
   {
-    id: "viewing",
-    label: "집 보기 일정 안내",
-    body: `안녕하세요. ${COMPANY_NAME}입니다. {단지명} 집 보기 일정 관련 안내드립니다. 편하신 날짜와 시간 알려주시면 조율해드리겠습니다. 문의: {부동산전화번호}`,
+    id: "visit-confirm",
+    label: "방문 일정 확인",
+    body: `안녕하세요. {사무소명}입니다.\n{날짜} {시간}경 방문 예정으로 확인차 연락드립니다.\n일정에 변동이 있으시면 연락 부탁드립니다.\n문의: {부동산전화번호}`,
   },
   {
     id: "after-consult",
@@ -47,6 +47,15 @@ export interface SmsTemplateVariables {
   listingPageUrl?: string;
   /** 연락처에서 가져온 받는 사람 이름(있으면). 양식에 {이름} 자리가 있으면 채웁니다. */
   recipientName?: string;
+  /**
+   * "9월 11일(금)" 형태로 이미 포맷된 날짜 문자열. 포맷 자체는 이 파일이
+   * 하지 않고 호출부(문자 작성 화면)가 contractPrepSms.ts의
+   * formatContractDateKorean을 재사용해서 만들어 넘깁니다 — 같은 계산을
+   * 두 벌 만들지 않기 위함입니다.
+   */
+  dateLabel?: string;
+  /** "오후 3시" 형태로 이미 포맷된 시간 문자열. formatContractTimeKorean 재사용. */
+  timeLabel?: string;
 }
 
 /**
@@ -64,6 +73,8 @@ export function resolveSmsTemplate(body: string, variables: SmsTemplateVariables
     "{사무소명}": COMPANY_NAME,
     "{사무소주소}": ADDRESS_LINES[0],
     "{부동산전화번호}": PHONE_NUMBER,
+    "{날짜}": variables.dateLabel,
+    "{시간}": variables.timeLabel,
   };
 
   let text = body;

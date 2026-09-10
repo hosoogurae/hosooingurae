@@ -13,6 +13,7 @@ import {
   findUnresolvedSmsTokens,
   resolveSmsTemplate,
 } from "../../../lib/smsTemplateText";
+import { formatContractDateKorean, formatContractTimeKorean } from "../../../lib/contractPrepSms";
 import type { ListingWithComplex } from "../../../lib/listings";
 
 const CUSTOM_ENTRY_ID = "custom";
@@ -28,6 +29,8 @@ function AdminSmsComposeInner() {
   const [recipientName, setRecipientName] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [body, setBody] = useState("");
+  const [visitDateStr, setVisitDateStr] = useState("");
+  const [visitTimeStr, setVisitTimeStr] = useState("");
   const [myTemplates, setMyTemplates] = useState<AdminSmsTemplate[]>([]);
   const [myTemplatesError, setMyTemplatesError] = useState<string | null>(null);
   const [listing, setListing] = useState<ListingWithComplex | null>(null);
@@ -98,8 +101,10 @@ function AdminSmsComposeInner() {
           ? `${process.env.NEXT_PUBLIC_SITE_URL}/listings/${listingId}`
           : undefined,
       recipientName: recipientName.trim() || undefined,
+      dateLabel: visitDateStr ? formatContractDateKorean(visitDateStr) : undefined,
+      timeLabel: visitTimeStr ? formatContractTimeKorean(visitTimeStr) : undefined,
     }),
-    [listing, listingId, recipientName],
+    [listing, listingId, recipientName, visitDateStr, visitTimeStr],
   );
 
   const templateOptions = useMemo(
@@ -147,6 +152,22 @@ function AdminSmsComposeInner() {
       // 자동으로 채워줌).
       setBody((prev) => (prev.includes("{이름}") ? prev.split("{이름}").join(contact.name!) : prev));
     }
+  }
+
+  /** 날짜를 고르면 "9월 11일(금)"으로 포맷해 이미 작성된 본문의 {날짜} 자리를 채웁니다. */
+  function handleVisitDateChange(value: string) {
+    setVisitDateStr(value);
+    if (!value) return;
+    const label = formatContractDateKorean(value);
+    setBody((prev) => (prev.includes("{날짜}") ? prev.split("{날짜}").join(label) : prev));
+  }
+
+  /** 시간을 고르면 "오후 3시"로 포맷해 이미 작성된 본문의 {시간} 자리를 채웁니다. */
+  function handleVisitTimeChange(value: string) {
+    setVisitTimeStr(value);
+    if (!value) return;
+    const label = formatContractTimeKorean(value);
+    setBody((prev) => (prev.includes("{시간}") ? prev.split("{시간}").join(label) : prev));
   }
 
   const smsHref = phone.trim() ? buildSmsHref(normalizePhone(phone), body) : null;
@@ -268,6 +289,30 @@ function AdminSmsComposeInner() {
         >
           계약 준비물 문자 만들기 →
         </Link>
+      </section>
+
+      <section className="mt-6 grid grid-cols-2 gap-3">
+        <label className="block text-sm font-bold text-navy-900">
+          방문 날짜
+          <input
+            type="date"
+            value={visitDateStr}
+            onChange={(event) => handleVisitDateChange(event.target.value)}
+            className="mt-1.5 min-h-[52px] w-full rounded-lg border border-navy-900/15 px-3 text-base text-navy-900 outline-none focus:border-gold-500"
+          />
+        </label>
+        <label className="block text-sm font-bold text-navy-900">
+          방문 시간
+          <input
+            type="time"
+            value={visitTimeStr}
+            onChange={(event) => handleVisitTimeChange(event.target.value)}
+            className="mt-1.5 min-h-[52px] w-full rounded-lg border border-navy-900/15 px-3 text-base text-navy-900 outline-none focus:border-gold-500"
+          />
+        </label>
+        <p className="col-span-2 text-xs text-navy-800/50">
+          &quot;방문 일정 확인&quot; 같이 날짜·시간이 들어가는 양식을 쓸 때만 채워주세요.
+        </p>
       </section>
 
       <section className="mt-6">
