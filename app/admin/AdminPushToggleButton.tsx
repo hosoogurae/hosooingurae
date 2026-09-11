@@ -18,9 +18,10 @@ type PushUiState =
  */
 export function AdminPushToggleButton() {
   const [state, setState] = useState<PushUiState>("checking");
-  const [testStatus, setTestStatus] = useState<"idle" | "sending" | "sent">(
-    "idle",
-  );
+  // 알림을 막 켠 직후에만 잠깐 보여주는 안내 — 확인용 알림을 "보냈다"는
+  // 사실만 말합니다(실제 도착 여부는 사람이 눈으로 확인). title 툴팁은
+  // 이 화면을 주로 쓰는 휴대폰에서 안 보여서 인라인 텍스트로 둡니다.
+  const [enableHint, setEnableHint] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +52,7 @@ export function AdminPushToggleButton() {
 
   async function handleEnable() {
     setState("busy");
+    setEnableHint(null);
     try {
       const permission = await Notification.requestPermission();
       if (permission === "denied") {
@@ -90,6 +92,29 @@ export function AdminPushToggleButton() {
       }
 
       setState("subscribed");
+
+      // 구독 저장이 성공했다고 끝이 아니라, 실제로 확인용 알림을 한 번 보내
+      // 사람이 직접 눈으로 확인하게 합니다 — "켜진 줄 알았는데 실제로는 안
+      // 켜진" 상태를 막는 것이 이 기능의 존재 이유입니다. 켤 때만 보내고,
+      // 끌 때는 보내지 않습니다.
+      try {
+        const testResponse = await fetch("/api/admin/push-subscriptions/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        const testData = await testResponse.json();
+
+        if (!testResponse.ok) {
+          alert(testData.errors?.[0] ?? "확인용 알림 전송에 실패했습니다.");
+        } else {
+          setEnableHint("확인용 알림을 보냈습니다. 알림이 안 오면 껐다 켜보세요.");
+          setTimeout(() => setEnableHint(null), 5000);
+        }
+      } catch (err) {
+        console.error("[push] 확인용 알림 전송 실패", err);
+        alert("확인용 알림 전송에 실패했습니다.");
+      }
     } catch (err) {
       console.error("[push] 구독 실패", err);
       alert("알림 구독에 실패했습니다. 다시 시도해 주세요.");
@@ -99,6 +124,7 @@ export function AdminPushToggleButton() {
 
   async function handleDisable() {
     setState("busy");
+    setEnableHint(null);
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -114,40 +140,6 @@ export function AdminPushToggleButton() {
     } catch (err) {
       console.error("[push] 구독 해제 실패", err);
       setState("subscribed");
-    }
-  }
-
-  /** 실제 문의를 만들지 않고 설정이 제대로 됐는지 이 기기로만 확인합니다. */
-  async function handleSendTest() {
-    setTestStatus("sending");
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (!subscription) {
-        alert("먼저 알림을 켜주세요.");
-        setTestStatus("idle");
-        return;
-      }
-
-      const response = await fetch("/api/admin/push-subscriptions/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: subscription.endpoint }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.errors?.[0] ?? "테스트 알림 전송에 실패했습니다.");
-        setTestStatus("idle");
-        return;
-      }
-
-      setTestStatus("sent");
-      setTimeout(() => setTestStatus("idle"), 2000);
-    } catch (err) {
-      console.error("[push] 테스트 발송 실패", err);
-      alert("테스트 알림 전송에 실패했습니다.");
-      setTestStatus("idle");
     }
   }
 
@@ -167,21 +159,7 @@ export function AdminPushToggleButton() {
   const isSubscribed = state === "subscribed";
 
   return (
-    <>
-      {isSubscribed && (
-        <button
-          type="button"
-          onClick={handleSendTest}
-          disabled={testStatus === "sending"}
-          className="flex min-h-[44px] items-center rounded-md px-3 text-xs font-bold text-navy-800/70 transition-colors hover:bg-navy-900/5 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {testStatus === "sent"
-            ? "전송됨"
-            : testStatus === "sending"
-              ? "보내는 중..."
-              : "테스트 알림"}
-        </button>
-      )}
+    <div className="flex flex-col items-end">
       <button
         type="button"
         onClick={isSubscribed ? handleDisable : handleEnable}
@@ -190,6 +168,11 @@ export function AdminPushToggleButton() {
       >
         {isSubscribed ? "알림 끄기" : "알림 받기"}
       </button>
-    </>
+      {enableHint && (
+        <span className="max-w-[160px] px-3 pb-1 text-right text-[11px] leading-tight text-navy-800/60">
+          {enableHint}
+        </span>
+      )}
+    </div>
   );
 }
