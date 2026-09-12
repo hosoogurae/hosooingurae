@@ -35,6 +35,15 @@ export const DEFAULT_SMS_TEMPLATES: DefaultSmsTemplate[] = [
     body: `안녕하세요. {사무소명}입니다.\n{날짜} {시간}경 방문 예정으로 확인차 연락드립니다.\n일정에 변동이 있으시면 연락 부탁드립니다.\n문의: {부동산전화번호}`,
   },
   {
+    // 이 템플릿은 body를 쓰지 않습니다 — 문자 작성 화면이 이 id를 고르면
+    // 본문을 바로 채우는 대신 "매물 선택" 버튼을 보여주고,
+    // buildListingAnnouncementBody(app/lib/listingAnnouncementSms.ts)로
+    // 실제 고른 매물 데이터에서 본문을 만듭니다.
+    id: "listing-announcement",
+    label: "문의하신 매물 안내",
+    body: "",
+  },
+  {
     id: "after-consult",
     label: "상담 후 안내",
     body: `${COMPANY_NAME}입니다.\n추가로 궁금한 점 있으시면 언제든 편하게 연락주세요.\n({홈페이지URL})\n☎ {부동산전화번호}`,

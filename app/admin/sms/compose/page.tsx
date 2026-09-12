@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { ContactRequestStatus } from "../../../data/contactRequests";
 import ContactPickerButton from "../../ContactPickerButton";
+import ListingAnnouncementPickerModal from "../../ListingAnnouncementPickerModal";
 import { buildSmsHref } from "../../../lib/listingInquiry";
+import { buildListingAnnouncementBody } from "../../../lib/listingAnnouncementSms";
 import { normalizePhone } from "../../../lib/phoneNormalize";
 import type { AdminSmsTemplate } from "../../../lib/smsTemplates";
 import {
@@ -14,7 +16,9 @@ import {
   resolveSmsTemplate,
 } from "../../../lib/smsTemplateText";
 import { formatContractDateKorean, formatContractTimeKorean } from "../../../lib/contractPrepSms";
-import type { ListingWithComplex } from "../../../lib/listings";
+import type { ListingWithComplex, PublicListing } from "../../../lib/listings";
+
+const LISTING_ANNOUNCEMENT_TEMPLATE_ID = "listing-announcement";
 
 const CUSTOM_ENTRY_ID = "custom";
 
@@ -31,6 +35,11 @@ function AdminSmsComposeInner() {
   const [body, setBody] = useState("");
   const [visitDateStr, setVisitDateStr] = useState("");
   const [visitTimeStr, setVisitTimeStr] = useState("");
+  const [showListingPicker, setShowListingPicker] = useState(false);
+  // 매물 안내 문자의 링크를 못 만들었을 때만 채워지는 경고 — 조용히
+  // 사라지면 안 되므로 타이머로 지우지 않고, 다시 매물을 고르거나 다른
+  // 템플릿으로 바꿀 때만 지웁니다.
+  const [listingLinkWarning, setListingLinkWarning] = useState<string | null>(null);
   const [myTemplates, setMyTemplates] = useState<AdminSmsTemplate[]>([]);
   const [myTemplatesError, setMyTemplatesError] = useState<string | null>(null);
   const [listing, setListing] = useState<ListingWithComplex | null>(null);
@@ -120,8 +129,14 @@ function AdminSmsComposeInner() {
 
   function handleSelectTemplate(id: string) {
     setTemplateId(id);
+    setListingLinkWarning(null);
     if (id === CUSTOM_ENTRY_ID) {
       setBody("");
+      return;
+    }
+    if (id === LISTING_ANNOUNCEMENT_TEMPLATE_ID) {
+      // 이 템플릿은 실제 매물을 골라야 내용을 만들 수 있어서, 다른
+      // 템플릿과 달리 본문을 바로 채우지 않고 "매물 선택" 버튼만 보여줍니다.
       return;
     }
     if (id.startsWith("my:")) {
@@ -131,6 +146,27 @@ function AdminSmsComposeInner() {
     }
     const template = DEFAULT_SMS_TEMPLATES.find((item) => item.id === id);
     if (template) setBody(resolveSmsTemplate(template.body, variables));
+  }
+
+  /** 매물 선택 모달에서 확정한 매물(고른 순서 그대로)로 본문을 만듭니다. */
+  function handleListingsPicked(listings: PublicListing[]) {
+    const { body: rawBody, linkUrl } = buildListingAnnouncementBody(
+      listings.map((listing) => ({
+        id: listing.id,
+        complexName: listing.complexName,
+        building: listing.building,
+        floor: listing.floor,
+        transactionType: listing.transactionType,
+        priceLabel: listing.priceLabel,
+      })),
+    );
+    setBody(resolveSmsTemplate(rawBody, variables));
+    setListingLinkWarning(
+      linkUrl
+        ? null
+        : "매물 링크를 만들지 못했습니다. 이대로 보내면 손님이 매물을 볼 수 없습니다.",
+    );
+    setShowListingPicker(false);
   }
 
   async function handlePasteFromClipboard() {
@@ -277,6 +313,20 @@ function AdminSmsComposeInner() {
         {myTemplatesError && (
           <p className="mt-2 text-xs text-red-600">{myTemplatesError}</p>
         )}
+        {templateId === LISTING_ANNOUNCEMENT_TEMPLATE_ID && (
+          <button
+            type="button"
+            onClick={() => setShowListingPicker(true)}
+            className="mt-3 min-h-[48px] w-full rounded-lg border border-gold-500 bg-gold-500/10 text-sm font-bold text-gold-700"
+          >
+            매물 선택
+          </button>
+        )}
+        {listingLinkWarning && (
+          <p className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            {listingLinkWarning}
+          </p>
+        )}
         <Link
           href="/admin/sms/templates"
           className="mt-2 block text-right text-sm font-bold text-gold-600 underline-offset-2 hover:underline"
@@ -348,6 +398,13 @@ function AdminSmsComposeInner() {
         >
           문자 보내기
         </button>
+      )}
+
+      {showListingPicker && (
+        <ListingAnnouncementPickerModal
+          onConfirm={handleListingsPicked}
+          onClose={() => setShowListingPicker(false)}
+        />
       )}
     </div>
   );
