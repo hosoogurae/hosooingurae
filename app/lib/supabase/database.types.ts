@@ -490,6 +490,28 @@ export interface Database {
         >;
         Relationships: [];
       };
+      notices: {
+        Row: {
+          id: string;
+          source: string;
+          title: string;
+          source_url: string;
+          published_at: string;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          source: string;
+          title: string;
+          source_url: string;
+          published_at: string;
+          status?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["notices"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -541,3 +563,5 @@ export type PushSubscriptionRow =
   Database["public"]["Tables"]["push_subscriptions"]["Row"];
 export type PushSubscriptionInsert =
   Database["public"]["Tables"]["push_subscriptions"]["Insert"];
+export type NoticeRow = Database["public"]["Tables"]["notices"]["Row"];
+export type NoticeInsert = Database["public"]["Tables"]["notices"]["Insert"];
