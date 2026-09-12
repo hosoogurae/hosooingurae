@@ -8,10 +8,12 @@ import { getComplexRepresentativeImages } from "../lib/complexImages";
 import { findFloorPlanForUnitType, getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import type { FloorPlanImage } from "../data/floorPlans";
 import { buildSiteUrl } from "../lib/siteUrl";
+import { combineCompareRowValues } from "../lib/compareRowFormat";
 import {
   formatArea,
+  formatAreaForSentence,
+  formatFloor,
   formatFloorForSentence,
-  formatFloorRange,
   formatRooms,
   formatUnitTypeLabel,
 } from "../lib/format/listingFields";
@@ -133,17 +135,34 @@ function buildAttributeRows(
       label: "단지명",
       render: (l) => <span className="font-bold text-navy-950">{l.complex.name}</span>,
     },
-    { label: "매물종류", render: (l) => l.propertyType },
-    { label: "거래유형", render: (l) => l.transactionType },
+    {
+      label: "매물종류 / 거래유형",
+      render: (l) => `${l.propertyType} / ${l.transactionType}`,
+    },
     {
       label: "가격",
       render: (l) => <span className="font-bold text-gold-600">{l.priceLabel}</span>,
     },
     { label: "소재지", render: (l) => l.complex.address || "주소 확인 필요" },
-    { label: "동", render: (l) => (l.building?.trim() ? l.building : "동 정보 미등록") },
-    { label: "층", render: (l) => formatFloorRange(l.floor, l.totalFloors) },
-    { label: "공급면적", render: (l) => formatArea(l.supplyArea) },
-    { label: "전용면적", render: (l) => formatArea(l.exclusiveArea) },
+    {
+      label: "동 / 층",
+      render: (l) =>
+        combineCompareRowValues([
+          {
+            value: l.building && l.building.trim() !== "" ? l.building.trim() : null,
+            fallback: "동 정보 미등록",
+          },
+          { value: formatFloorForSentence(l.floor), fallback: formatFloor(l.floor) },
+        ]),
+    },
+    {
+      label: "공급 / 전용면적",
+      render: (l) =>
+        combineCompareRowValues([
+          { value: formatAreaForSentence(l.supplyArea), fallback: formatArea(l.supplyArea) },
+          { value: formatAreaForSentence(l.exclusiveArea), fallback: formatArea(l.exclusiveArea) },
+        ]),
+    },
     {
       label: "방 / 욕실",
       render: (l) => `방 ${formatRooms(l.roomCount)} · 욕실 ${formatRooms(l.bathroomCount)}`,
@@ -362,36 +381,46 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                   return (
                     <div
                       key={listing.id}
-                      className="flex items-start gap-3 rounded-xl border border-navy-900/10 p-3"
+                      className="rounded-xl border border-navy-900/10 p-3"
                     >
-                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy-950 text-xs font-bold text-white">
-                        {index + 1}
-                      </span>
-                      <ComparisonImage
-                        floorPlan={getFloorPlanForListing(listing)}
-                        photoUrl={listing.images?.[0] ?? listing.image}
-                        complexImageUrl={complexImagesByComplex.get(listing.complexId)}
-                        complexName={listing.complex.name}
-                        propertyType={listing.propertyType}
-                        className="h-14 w-14 shrink-0 rounded-md"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-navy-950">
-                          {listing.complex.name} · {listing.transactionType}{" "}
-                          {listing.priceLabel}
-                        </p>
-                        {buildingFloorParts.length > 0 && (
-                          <p className="mt-0.5 text-xs text-navy-800/60">
-                            {buildingFloorParts.join(" ")}
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy-950 text-xs font-bold text-white">
+                          {index + 1}
+                        </span>
+                        <ComparisonImage
+                          floorPlan={getFloorPlanForListing(listing)}
+                          photoUrl={listing.images?.[0] ?? listing.image}
+                          complexImageUrl={complexImagesByComplex.get(listing.complexId)}
+                          complexName={listing.complex.name}
+                          propertyType={listing.propertyType}
+                          className="h-14 w-14 shrink-0 rounded-md"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-navy-950">
+                            {listing.complex.name} · {listing.transactionType}{" "}
+                            {listing.priceLabel}
                           </p>
-                        )}
+                          {buildingFloorParts.length > 0 && (
+                            <p className="mt-0.5 text-xs text-navy-800/60">
+                              {buildingFloorParts.join(" ")}
+                            </p>
+                          )}
+                        </div>
+                        <RemoveFromCompareButton
+                          listingId={listing.id}
+                          remainingIds={validListings
+                            .map((l) => l.id)
+                            .filter((id) => id !== listing.id)}
+                        />
                       </div>
-                      <RemoveFromCompareButton
-                        listingId={listing.id}
-                        remainingIds={validListings
-                          .map((l) => l.id)
-                          .filter((id) => id !== listing.id)}
-                      />
+                      {/* "제거"와 실수로 헷갈리지 않도록 위 줄과 확실히 떨어뜨리고
+                          (mt-3 + 구분선), 손가락으로 누르기 충분한 높이를 둡니다. */}
+                      <Link
+                        href={`/listings/${listing.id}`}
+                        className="mt-3 flex min-h-[44px] items-center justify-center rounded-lg border border-navy-900/15 text-sm font-bold text-navy-800 transition-colors hover:border-gold-500 hover:text-gold-600"
+                      >
+                        상세보기 →
+                      </Link>
                     </div>
                   );
                 })}
