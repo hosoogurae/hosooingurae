@@ -28,6 +28,11 @@ const STATUS_FILTERS: { value: NoticeStatus | "all"; label: string }[] = [
   { value: "all", label: "전체" },
 ];
 
+const CUSTOMER_FILTERS: { value: "all" | "candidate"; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "candidate", label: "손님용 후보만" },
+];
+
 function formatDate(iso: string): string {
   const date = new Date(iso);
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(
@@ -45,6 +50,7 @@ export default function AdminNoticesPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<NoticeSource | "all">("all");
   const [statusFilter, setStatusFilter] = useState<NoticeStatus | "all">("new");
+  const [customerFilter, setCustomerFilter] = useState<"all" | "candidate">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -93,9 +99,10 @@ export default function AdminNoticesPage() {
     return notices.filter((n) => {
       if (sourceFilter !== "all" && n.source !== sourceFilter) return false;
       if (statusFilter !== "all" && n.status !== statusFilter) return false;
+      if (customerFilter === "candidate" && !n.customerCandidate) return false;
       return true;
     });
-  }, [notices, sourceFilter, statusFilter]);
+  }, [notices, sourceFilter, statusFilter, customerFilter]);
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8 sm:py-16">
@@ -162,6 +169,22 @@ export default function AdminNoticesPage() {
           </button>
         ))}
       </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {CUSTOMER_FILTERS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setCustomerFilter(option.value)}
+            className={`flex min-h-[40px] items-center rounded-full px-4 text-sm font-bold transition-colors ${
+              customerFilter === option.value
+                ? "bg-navy-950 text-white"
+                : "border border-navy-900/15 text-navy-800 hover:border-gold-500 hover:text-gold-600"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
 
       {notices === null ? (
         <p className="mt-8 text-sm text-navy-800/50">불러오는 중...</p>
@@ -182,6 +205,11 @@ export default function AdminNoticesPage() {
                   <span className={`rounded-full px-2.5 py-1 ${statusMeta.className}`}>
                     {statusMeta.label}
                   </span>
+                  {notice.customerCandidate && (
+                    <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-blue-700">
+                      손님용 후보
+                    </span>
+                  )}
                   <span>{formatDate(notice.publishedAt)}</span>
                 </div>
 

@@ -24,6 +24,8 @@ export interface Notice {
   sourceUrl: string;
   publishedAt: string;
   status: NoticeStatus;
+  /** 제목 필터(app/lib/noticeKeywords.ts)가 손님 관련 단어에 걸렸는지. */
+  customerCandidate: boolean;
   createdAt: string;
 }
 
@@ -35,6 +37,7 @@ function rowToNotice(row: NoticeRow): Notice {
     sourceUrl: row.source_url,
     publishedAt: row.published_at,
     status: row.status as NoticeStatus,
+    customerCandidate: row.customer_candidate,
     createdAt: row.created_at,
   };
 }
@@ -86,13 +89,28 @@ export async function updateNoticeStatus(
 }
 
 /**
- * 수집 크론 전용. (source, source_url) 유일 제약에 걸리는 행은 조용히
- * 건너뜁니다(ignoreDuplicates) — 매일 돌아도 이미 있는 글이 중복으로
- * 쌓이거나, 관리자가 이미 공개/숨김으로 바꿔둔 상태가 되돌아가지
- * 않습니다.
+ * 수집 크론 전용. (source, source_url) 유일 제약에 걸리는 행은 새로
+ * 쌓이지 않고 갱신됩니다 — 단, title/published_at/customer_candidate만
+ * 갱신 대상입니다. status(신규/공개/숨김, 사람이 정한 값)는 이 upsert가
+ * 건드리는 컬럼 목록에 아예 없어서 절대 덮어쓰이지 않습니다.
+ *
+ * customer_candidate를 이미 있는 행도 최신 판정으로 갱신하는 이유:
+ * 나중에 app/lib/noticeKeywords.ts의 단어 목록을 손보고 다시 수집했을 때,
+ * 예전에 들어온 글의 "손님용 후보" 표시가 옛날 판정 그대로 남아있으면
+ * 안 되기 때문입니다.
+ *
+ * "몇 건이 새로 들어왔는지"는 크론 결과에서 중요한 신호라서(필터가 갑자기
+ * 너무 많이 거르고 있는지 등을 알아채는 용도), upsert 전에 이미 있는
+ * source_url을 먼저 조회해 진짜 신규 건수만 따로 셉니다.
  */
 export async function upsertNotices(
-  notices: Array<{ source: NoticeSource; title: string; sourceUrl: string; publishedAt: string }>,
+  notices: Array<{
+    source: NoticeSource;
+    title: string;
+    sourceUrl: string;
+    publishedAt: string;
+    customerCandidate: boolean;
+  }>,
 ): Promise<{ inserted: number; error?: string }> {
   if (notices.length === 0) return { inserted: 0 };
 
@@ -101,22 +119,34 @@ export async function upsertNotices(
     return { inserted: 0, error: "Supabase가 설정되어 있지 않습니다." };
   }
 
-  const { data, error } = await supabase
+  const sourceUrls = [...new Set(notices.map((notice) => notice.sourceUrl))];
+  const { data: existingRows, error: existingError } = await supabase
     .from("notices")
-    .upsert(
-      notices.map((notice) => ({
-        source: notice.source,
-        title: notice.title,
-        source_url: notice.sourceUrl,
-        published_at: notice.publishedAt,
-      })),
-      { onConflict: "source,source_url", ignoreDuplicates: true },
-    )
-    .select("id");
+    .select("source_url")
+    .in("source_url", sourceUrls);
+
+  if (existingError) {
+    console.error("[notices] 기존 항목 조회 실패", existingError);
+    return { inserted: 0, error: "DB 조회에 실패했습니다." };
+  }
+
+  const existingUrls = new Set((existingRows ?? []).map((row) => row.source_url));
+  const newCount = notices.filter((notice) => !existingUrls.has(notice.sourceUrl)).length;
+
+  const { error } = await supabase.from("notices").upsert(
+    notices.map((notice) => ({
+      source: notice.source,
+      title: notice.title,
+      source_url: notice.sourceUrl,
+      published_at: notice.publishedAt,
+      customer_candidate: notice.customerCandidate,
+    })),
+    { onConflict: "source,source_url" },
+  );
 
   if (error) {
     console.error("[notices] 저장 실패", error);
     return { inserted: 0, error: "DB 저장에 실패했습니다." };
   }
-  return { inserted: data?.length ?? 0 };
+  return { inserted: newCount };
 }

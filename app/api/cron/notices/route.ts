@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchAllNotices } from "../../../lib/noticeSources";
+import { matchNoticeKeywords } from "../../../lib/noticeKeywords";
 import { upsertNotices } from "../../../lib/notices";
 
 /**
@@ -30,21 +31,38 @@ export async function GET(request: NextRequest) {
   // 그 결과를 그대로 드러내기만 하면 됩니다 — 조용히 삼키지 않습니다.
   const summary: Record<
     string,
-    { fetched: number; inserted: number; error?: string }
+    { fetched: number; filtered: number; inserted: number; error?: string }
   > = {};
 
   for (const result of results) {
     if (result.error) {
       console.error(`[cron/notices] ${result.source} 수집 실패:`, result.error);
-      summary[result.source] = { fetched: 0, inserted: 0, error: result.error };
+      summary[result.source] = { fetched: 0, filtered: 0, inserted: 0, error: result.error };
       continue;
     }
 
-    const { inserted, error: saveError } = await upsertNotices(result.notices);
+    const fetched = result.notices.length;
+    // 제목 필터: 두 목록(app/lib/noticeKeywords.ts) 중 어디든 걸린 것만
+    // 저장합니다. 필터링 건수를 응답에 남겨야 필터가 갑자기 너무 많이
+    // 거르고 있는 날을 알아챌 수 있습니다.
+    const matchedNotices = result.notices
+      .map((notice) => ({ notice, match: matchNoticeKeywords(notice.title) }))
+      .filter((entry) => entry.match.matched);
+    const filtered = fetched - matchedNotices.length;
+
+    const { inserted, error: saveError } = await upsertNotices(
+      matchedNotices.map(({ notice, match }) => ({
+        source: notice.source,
+        title: notice.title,
+        sourceUrl: notice.sourceUrl,
+        publishedAt: notice.publishedAt,
+        customerCandidate: match.customerCandidate,
+      })),
+    );
     if (saveError) {
       console.error(`[cron/notices] ${result.source} 저장 실패:`, saveError);
     }
-    summary[result.source] = { fetched: result.notices.length, inserted, error: saveError };
+    summary[result.source] = { fetched, filtered, inserted, error: saveError };
   }
 
   const hasError = Object.values(summary).some((entry) => entry.error);

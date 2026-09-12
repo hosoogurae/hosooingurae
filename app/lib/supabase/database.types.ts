@@ -498,6 +498,7 @@ export interface Database {
           source_url: string;
           published_at: string;
           status: string;
+          customer_candidate: boolean;
           created_at: string;
         };
         Insert: {
@@ -507,6 +508,7 @@ export interface Database {
           source_url: string;
           published_at: string;
           status?: string;
+          customer_candidate?: boolean;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["notices"]["Insert"]>;
