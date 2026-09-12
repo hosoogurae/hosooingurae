@@ -31,6 +31,28 @@ export interface NoticeParseResult {
   error?: string;
 }
 
+/**
+ * (source, source_url) 기준으로 중복을 제거합니다. 국토부 RSS는 같은
+ * 기사가 카테고리만 다르게 여러 번 실릴 수 있는데, 한 번의 upsert 묶음
+ * 안에 (source, source_url)이 같은 행이 둘 이상 있으면 Postgres가
+ * "ON CONFLICT DO UPDATE command cannot affect row a second time"로
+ * 그 upsert 전체를 거부합니다(실제로 재현해서 같은 에러를 확인함).
+ * 같은 링크가 여럿이면 published_at이 가장 최근인 것 하나만 남깁니다.
+ */
+export function dedupeNoticesBySourceUrl<
+  T extends { source: NoticeSource; sourceUrl: string; publishedAt: string },
+>(notices: T[]): T[] {
+  const bestByKey = new Map<string, T>();
+  for (const notice of notices) {
+    const key = `${notice.source}:${notice.sourceUrl}`;
+    const existing = bestByKey.get(key);
+    if (!existing || new Date(notice.publishedAt).getTime() > new Date(existing.publishedAt).getTime()) {
+      bestByKey.set(key, notice);
+    }
+  }
+  return [...bestByKey.values()];
+}
+
 export interface NoticeFetchResult {
   source: NoticeSource;
   notices: ParsedNotice[];

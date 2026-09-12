@@ -15,6 +15,31 @@ import type { NoticeSource } from "./noticeSources";
  * service_role이 필요합니다.
  */
 
+/**
+ * Supabase가 돌려준 원본 에러 정보(code/message/details/hint)입니다.
+ * "DB 저장에 실패했습니다" 같은 사람이 읽을 문구는 원인을 가리지 않고
+ * 이 값과 함께 돌려줘야 합니다 — floorPlans.ts의 FloorPlanErrorDetail과
+ * 같은 원칙입니다.
+ */
+export interface NoticeErrorDetail {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+function toErrorDetail(
+  error: { code?: string; message?: string; details?: string | null; hint?: string | null } | null,
+): NoticeErrorDetail | undefined {
+  if (!error) return undefined;
+  return {
+    code: error.code,
+    message: error.message,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+  };
+}
+
 export type NoticeStatus = "new" | "published" | "hidden";
 
 export interface Notice {
@@ -65,7 +90,7 @@ export async function getAllNotices(filters?: {
 export async function updateNoticeStatus(
   id: string,
   status: NoticeStatus,
-): Promise<{ notice?: Notice; error?: string }> {
+): Promise<{ notice?: Notice; error?: string; errorDetail?: NoticeErrorDetail }> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return { error: "Supabase가 설정되어 있지 않습니다." };
@@ -80,7 +105,7 @@ export async function updateNoticeStatus(
 
   if (error) {
     console.error("[notices] 상태 변경 실패", error);
-    return { error: "상태를 변경하지 못했습니다." };
+    return { error: "상태를 변경하지 못했습니다.", errorDetail: toErrorDetail(error) };
   }
   if (!data) {
     return { error: "글을 찾을 수 없습니다." };
@@ -111,7 +136,7 @@ export async function upsertNotices(
     publishedAt: string;
     customerCandidate: boolean;
   }>,
-): Promise<{ inserted: number; error?: string }> {
+): Promise<{ inserted: number; error?: string; errorDetail?: NoticeErrorDetail }> {
   if (notices.length === 0) return { inserted: 0 };
 
   const supabase = getSupabaseAdminClient();
@@ -127,7 +152,11 @@ export async function upsertNotices(
 
   if (existingError) {
     console.error("[notices] 기존 항목 조회 실패", existingError);
-    return { inserted: 0, error: "DB 조회에 실패했습니다." };
+    return {
+      inserted: 0,
+      error: "DB 조회에 실패했습니다.",
+      errorDetail: toErrorDetail(existingError),
+    };
   }
 
   const existingUrls = new Set((existingRows ?? []).map((row) => row.source_url));
@@ -146,7 +175,7 @@ export async function upsertNotices(
 
   if (error) {
     console.error("[notices] 저장 실패", error);
-    return { inserted: 0, error: "DB 저장에 실패했습니다." };
+    return { inserted: 0, error: "DB 저장에 실패했습니다.", errorDetail: toErrorDetail(error) };
   }
   return { inserted: newCount };
 }

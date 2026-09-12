@@ -29,10 +29,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     );
   }
 
-  const { notice, error } = await updateNoticeStatus(id, status as "new" | "published" | "hidden");
+  const { notice, error, errorDetail } = await updateNoticeStatus(
+    id,
+    status as "new" | "published" | "hidden",
+  );
   if (!notice) {
     return NextResponse.json(
-      { errors: [error ?? "상태 변경에 실패했습니다."] },
+      { errors: [error ?? "상태 변경에 실패했습니다."], errorDetail },
       { status: 400 },
     );
   }
