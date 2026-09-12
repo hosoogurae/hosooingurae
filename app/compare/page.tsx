@@ -5,8 +5,16 @@ import type { ListingWithComplex } from "../lib/listings";
 import { getListingById } from "../lib/listings";
 import { buildCompareInquiryMessage } from "../lib/listingInquiry";
 import { getComplexRepresentativeImages } from "../lib/complexImages";
+import { findFloorPlanForUnitType, getFloorPlanImagesByComplex } from "../lib/floorPlans";
+import type { FloorPlanImage } from "../data/floorPlans";
 import { buildSiteUrl } from "../lib/siteUrl";
-import { formatArea, formatFloorRange, formatRooms } from "../lib/format/listingFields";
+import {
+  formatArea,
+  formatFloorForSentence,
+  formatFloorRange,
+  formatRooms,
+  formatUnitTypeLabel,
+} from "../lib/format/listingFields";
 import { formatSubwayTransportation } from "../lib/format/transportation";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 import InquirySmsButton from "../components/InquirySmsButton";
@@ -39,45 +47,87 @@ interface AttributeRow {
 }
 
 /**
- * "대표 사진" 행만 단지별 대표 이미지 맵이 필요해서, 이 배열 전체를
- * 컴포넌트 안에서 그 맵을 받아 만드는 함수로 뺐습니다(나머지 행은 맵과
+ * 매물 목록·상세 화면은 "매물 사진 → 평면도 → 단지 사진" 순서지만, 비교
+ * 페이지는 의도적으로 그 반대(평면도 → 매물 사진 → 단지 사진 →
+ * 플레이스홀더)입니다. 비교의 목적은 집 구조를 나란히 놓고 보는 것인데,
+ * 같은 단지의 매물끼리는 단지 조경사진이나 비슷비슷한 실내 사진으로는
+ * 서로 구분이 안 되기 때문입니다. 목록/상세와 순서가 다르다고 "일관성이
+ * 없다"며 되돌리지 마세요 — 이 페이지에서만 의도된 차이입니다.
+ */
+function ComparisonImage({
+  floorPlan,
+  photoUrl,
+  complexImageUrl,
+  complexName,
+  propertyType,
+  className,
+}: {
+  floorPlan: FloorPlanImage | undefined;
+  photoUrl: string | undefined;
+  complexImageUrl: string | undefined;
+  complexName: string;
+  propertyType: ListingWithComplex["propertyType"];
+  className: string;
+}) {
+  if (floorPlan) {
+    const floorPlanUrl = floorPlan.previewUrl || floorPlan.url;
+    return (
+      <div className={`relative bg-white ${className}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={floorPlanUrl}
+          alt={`${formatUnitTypeLabel(floorPlan.unitType)} 평면도`}
+          className="h-full w-full object-contain p-2"
+        />
+      </div>
+    );
+  }
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt={`${complexName} 대표 이미지`}
+        className={`object-cover ${className}`}
+      />
+    );
+  }
+  if (complexImageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={complexImageUrl}
+        alt={`${complexName} 단지 사진`}
+        className={`object-cover ${className}`}
+      />
+    );
+  }
+  return <ListingBrandPlaceholder propertyType={propertyType} className={className} />;
+}
+
+/**
+ * "대표 사진" 행만 단지별 평면도·대표 이미지 맵이 필요해서, 이 배열 전체를
+ * 컴포넌트 안에서 그 맵들을 받아 만드는 함수로 뺐습니다(나머지 행은 맵과
  * 무관하지만 하나의 배열로 같이 순회해야 해서 통째로 함수화).
  */
-function buildAttributeRows(complexImagesByComplex: Map<string, string>): AttributeRow[] {
+function buildAttributeRows(
+  getFloorPlanForListing: (listing: ListingWithComplex) => FloorPlanImage | undefined,
+  complexImagesByComplex: Map<string, string>,
+): AttributeRow[] {
   return [
     {
       label: "대표 사진",
       hideOnMobile: true,
-      render: (l) => {
-        const src = l.images?.[0] ?? l.image;
-        const complexImageUrl = complexImagesByComplex.get(l.complexId);
-        if (src) {
-          return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={src}
-              alt={`${l.complex.name} 대표 이미지`}
-              className="h-28 w-full rounded-md object-cover"
-            />
-          );
-        }
-        if (complexImageUrl) {
-          return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={complexImageUrl}
-              alt={`${l.complex.name} 단지 사진`}
-              className="h-28 w-full rounded-md object-cover"
-            />
-          );
-        }
-        return (
-          <ListingBrandPlaceholder
-            propertyType={l.propertyType}
-            className="h-28 w-full rounded-md"
-          />
-        );
-      },
+      render: (l) => (
+        <ComparisonImage
+          floorPlan={getFloorPlanForListing(l)}
+          photoUrl={l.images?.[0] ?? l.image}
+          complexImageUrl={complexImagesByComplex.get(l.complexId)}
+          complexName={l.complex.name}
+          propertyType={l.propertyType}
+          className="h-28 w-full rounded-md"
+        />
+      ),
     },
     {
       label: "단지명",
@@ -151,10 +201,24 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
     (listing): listing is ListingWithComplex => listing !== undefined,
   );
   const someExcluded = validListings.length < requestedIds.length;
-  const complexImagesByComplex = await getComplexRepresentativeImages(
-    validListings.map((l) => l.complexId),
-  );
-  const attributeRows = buildAttributeRows(complexImagesByComplex);
+
+  // 평면도·단지 대표사진 둘 다 단지별로 한 번씩만 조회합니다(매물 개수만큼
+  // 쿼리를 보내지 않기 위함 — listings/page.tsx와 같은 배치 조회 패턴).
+  const distinctComplexIds = [...new Set(validListings.map((l) => l.complexId))];
+  const [floorPlansByComplex, complexImagesByComplex] = await Promise.all([
+    Promise.all(
+      distinctComplexIds.map(
+        async (complexId) => [complexId, await getFloorPlanImagesByComplex(complexId)] as const,
+      ),
+    ).then((entries) => new Map<string, FloorPlanImage[]>(entries)),
+    getComplexRepresentativeImages(distinctComplexIds),
+  ]);
+
+  function getFloorPlanForListing(listing: ListingWithComplex): FloorPlanImage | undefined {
+    return findFloorPlanForUnitType(floorPlansByComplex.get(listing.complexId), listing.unitType);
+  }
+
+  const attributeRows = buildAttributeRows(getFloorPlanForListing, complexImagesByComplex);
 
   const pageUrl =
     validListings.length > 0
@@ -285,43 +349,42 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
             <div className="flex flex-col gap-6 sm:hidden">
               <div className="flex flex-col gap-3">
                 {validListings.map((listing, index) => {
-                  const src = listing.images?.[0] ?? listing.image;
-                  const complexImageUrl = complexImagesByComplex.get(listing.complexId);
+                  // 동·층은 없으면 지어내지 않고 그 부분만 생략합니다(표
+                  // 아래 개별 "동"/"층" 행과 달리, 이 요약 줄에는 "동 정보
+                  // 미등록" 같은 placeholder를 쓰지 않습니다).
+                  const buildingFloorParts: string[] = [];
+                  if (listing.building && listing.building.trim() !== "") {
+                    buildingFloorParts.push(listing.building.trim());
+                  }
+                  const floorText = formatFloorForSentence(listing.floor);
+                  if (floorText) buildingFloorParts.push(floorText);
+
                   return (
                     <div
                       key={listing.id}
-                      className="flex items-center gap-3 rounded-xl border border-navy-900/10 p-3"
+                      className="flex items-start gap-3 rounded-xl border border-navy-900/10 p-3"
                     >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy-950 text-xs font-bold text-white">
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy-950 text-xs font-bold text-white">
                         {index + 1}
                       </span>
-                      {src ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={src}
-                          alt=""
-                          className="h-14 w-14 shrink-0 rounded-md object-cover"
-                        />
-                      ) : complexImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={complexImageUrl}
-                          alt=""
-                          className="h-14 w-14 shrink-0 rounded-md object-cover"
-                        />
-                      ) : (
-                        <ListingBrandPlaceholder
-                          propertyType={listing.propertyType}
-                          className="h-14 w-14 shrink-0 rounded-md"
-                        />
-                      )}
+                      <ComparisonImage
+                        floorPlan={getFloorPlanForListing(listing)}
+                        photoUrl={listing.images?.[0] ?? listing.image}
+                        complexImageUrl={complexImagesByComplex.get(listing.complexId)}
+                        complexName={listing.complex.name}
+                        propertyType={listing.propertyType}
+                        className="h-14 w-14 shrink-0 rounded-md"
+                      />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-navy-950">
-                          {listing.complex.name}
+                        <p className="text-sm font-bold text-navy-950">
+                          {listing.complex.name} · {listing.transactionType}{" "}
+                          {listing.priceLabel}
                         </p>
-                        <p className="text-xs text-navy-800/60">
-                          {listing.building?.trim() ? listing.building : "동 정보 미등록"}
-                        </p>
+                        {buildingFloorParts.length > 0 && (
+                          <p className="mt-0.5 text-xs text-navy-800/60">
+                            {buildingFloorParts.join(" ")}
+                          </p>
+                        )}
                       </div>
                       <RemoveFromCompareButton
                         listingId={listing.id}

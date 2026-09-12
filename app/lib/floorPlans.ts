@@ -210,6 +210,21 @@ export async function getFloorPlanImagesByComplex(
   return data.map(rowToFloorPlanImage);
 }
 
+/**
+ * 단지의 평면도 목록에서 이 매물의 unitType과 일치하는 것을 찾습니다.
+ * listings/page.tsx, recommend/page.tsx, RecentListings.tsx는 각자
+ * 이 한 줄짜리 매칭을 그대로 복붙해서 쓰고 있어(이번 정리 범위 밖이라
+ * 그대로 둠), 적어도 새로 추가하는 곳(app/compare/page.tsx)부터는
+ * 이 공용 함수를 쓰도록 합니다.
+ */
+export function findFloorPlanForUnitType(
+  floorPlans: FloorPlanImage[] | undefined,
+  unitType: string | undefined,
+): FloorPlanImage | undefined {
+  if (!unitType) return undefined;
+  return floorPlans?.find((image) => image.unitType === unitType);
+}
+
 /** 버킷이 없으면 만듭니다(최초 1회만 실제로 생성 요청이 나감). 공개 읽기 버킷입니다. */
 async function ensureBucket(
   supabase: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
