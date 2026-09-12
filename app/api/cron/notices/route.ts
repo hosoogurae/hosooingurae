@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     // 저장합니다. 필터링 건수를 응답에 남겨야 필터가 갑자기 너무 많이
     // 거르고 있는 날을 알아챌 수 있습니다.
     const matchedNotices = deduped
-      .map((notice) => ({ notice, match: matchNoticeKeywords(notice.title) }))
+      .map((notice) => ({ notice, match: matchNoticeKeywords(notice.source, notice.title) }))
       .filter((entry) => entry.match.matched);
     const filtered = fetched - matchedNotices.length;
 
