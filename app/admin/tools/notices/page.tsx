@@ -125,6 +125,10 @@ export default function AdminNoticesPage() {
         &quot;공개&quot;로 바꿔주세요. 수집만 자동이고, 공개는 항상 사람이
         직접 정합니다.
       </p>
+      <p className="mt-2 text-xs text-navy-800/50">
+        공개로 바꾼 글은 손님 화면(/notices)에 최대 5분 뒤 나타납니다. 바로 안
+        보여도 고장난 게 아니니 여러 번 누르지 않아도 됩니다.
+      </p>
 
       {loadError && (
         <p className="mt-6 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
