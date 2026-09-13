@@ -11,7 +11,7 @@ const SIMPLE_NAV_ITEMS = [
   { label: "상가", href: "/listings?propertyType=commercial" },
   { label: "우리 집 시세", href: "/sise" },
   { label: "매물 내놓기", href: "/sell" },
-  { label: "구래동 소식", href: "/notices" },
+  { label: "부동산 정보", href: "/notices" },
 ];
 
 const APARTMENT_ALL_HREF = "/listings?propertyType=apartment";
