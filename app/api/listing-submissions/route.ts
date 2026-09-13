@@ -44,6 +44,12 @@ export async function POST(request: NextRequest) {
     errors.push("거래유형이 올바르지 않습니다.");
   }
 
+  // 화면 체크박스는 우회될 수 있으니, 실제로 막는 건 여기뿐입니다.
+  const consent = data.consent === true;
+  if (!consent) {
+    errors.push("개인정보 수집·이용에 동의해주세요.");
+  }
+
   const building = optionalString("building");
   const floorRaw = data.floor;
   let floor: number | undefined;

@@ -49,6 +49,7 @@ function SellForm() {
     notes: searchParams.get("notes") ?? EMPTY_FORM.notes,
   }));
   const [complexOptions, setComplexOptions] = useState<ComplexOption[]>([]);
+  const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[] | null>(null);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
@@ -80,6 +81,8 @@ function SellForm() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!consent || submitting) return;
+
     setSubmitting(true);
     setErrors(null);
 
@@ -90,6 +93,7 @@ function SellForm() {
         body: JSON.stringify({
           ...form,
           floor: form.floor.trim() === "" ? undefined : Number(form.floor),
+          consent,
         }),
       });
       const data = await response.json();
@@ -310,6 +314,30 @@ function SellForm() {
             </Field>
           </div>
 
+          <p className="mt-4 text-xs leading-relaxed text-navy-800/50">
+            이름·연락처는 매물 접수 확인 및 상담 연락 목적으로만 수집하며,
+            접수일로부터 1년간 보관 후 파기합니다(그 전에 삭제를 요청하시면
+            즉시 파기합니다).{" "}
+            <Link
+              href="/privacy"
+              target="_blank"
+              className="underline hover:text-navy-800"
+            >
+              개인정보처리방침 보기
+            </Link>
+          </p>
+
+          <label className="mt-2 flex items-start gap-2 text-xs text-navy-800/70">
+            <input
+              type="checkbox"
+              required
+              checked={consent}
+              onChange={(event) => setConsent(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>개인정보 수집·이용에 동의합니다. (필수)</span>
+          </label>
+
           {errors && (
             <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               <ul className="list-disc space-y-0.5 pl-4">
@@ -323,7 +351,7 @@ function SellForm() {
           <div className="mt-6">
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !consent}
               className="w-full rounded-md bg-gradient-to-r from-gold-500 to-gold-600 px-6 py-3 text-sm font-bold text-navy-950 shadow-md shadow-gold-500/30 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {submitting ? "접수 중..." : "접수하기"}
