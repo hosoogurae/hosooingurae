@@ -320,6 +320,7 @@ export interface Database {
           phone: string;
           preferred_time: string | null;
           status: "new" | "contacted" | "closed";
+          consented_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -329,6 +330,7 @@ export interface Database {
           phone: string;
           preferred_time?: string | null;
           status?: "new" | "contacted" | "closed";
+          consented_at?: string | null;
           created_at?: string;
         };
         Update: Partial<
@@ -383,6 +385,7 @@ export interface Database {
           contact_phone: string;
           status: "new" | "confirmed" | "converted";
           converted_listing_id: string | null;
+          consented_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -402,6 +405,7 @@ export interface Database {
           contact_phone: string;
           status?: "new" | "confirmed" | "converted";
           converted_listing_id?: string | null;
+          consented_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

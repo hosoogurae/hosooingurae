@@ -44,6 +44,11 @@ export async function createContactRequest(
       name: input.name,
       phone: input.phone,
       preferred_time: input.preferredTime?.trim() || null,
+      // 이 함수는 API 라우트가 이미 동의(consent === true)를 확인한 뒤에만
+      // 호출되므로, 호출되는 이 순간의 서버 시각을 동의 시각으로 기록합니다
+      // — 나중에 "동의한 적 없다"는 이의가 들어오면 입증할 근거가 됩니다.
+      // 화면에는 노출하지 않는 감사용 컬럼입니다.
+      consented_at: new Date().toISOString(),
     })
     .select("*")
     .single();
