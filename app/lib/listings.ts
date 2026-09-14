@@ -286,6 +286,84 @@ function standaloneCommercialComplex(listing: Listing): Complex {
 }
 
 /**
+ * 검색어 필터를 먼저 매물 id 목록으로 풀어냅니다. getAllListings와
+ * getListingsPage가 똑같이 씁니다 — 검색어가 있는데 매칭되는 매물이
+ * 하나도 없으면(searchMatchedIds가 빈 배열) 호출부가 메인 쿼리를 보낼
+ * 필요 없이 바로 "0건"으로 처리할 수 있도록 null과 구분해서 돌려줍니다.
+ */
+async function resolveSearchFilter(
+  supabase: SupabaseClient,
+  filters: ListingSearchFilters | undefined,
+): Promise<{ searchMatchedIds: string[] | null; matchedNothing: boolean }> {
+  if (!filters?.search || filters.search.trim() === "") {
+    return { searchMatchedIds: null, matchedNothing: false };
+  }
+  const searchMatchedIds = await resolveSearchListingIds(supabase, filters.search.trim());
+  return { searchMatchedIds, matchedNothing: searchMatchedIds.length === 0 };
+}
+
+/**
+ * status/deal_status 기본 조건 + 검색 필터(propertyType 등)를 쿼리에
+ * 체이닝합니다. getAllListings와 getListingsPage가 완전히 같은 필터 규칙을
+ * 쓰도록 공용화한 것 — 필터를 하나 추가/변경할 때 이 함수만 고치면 두
+ * 함수가 같이 갱신됩니다.
+ */
+function applyListingFilters<
+  Q extends {
+    eq(column: string, value: unknown): Q;
+    in(column: string, values: unknown[]): Q;
+    gte(column: string, value: unknown): Q;
+    lte(column: string, value: unknown): Q;
+  },
+>(
+  query: Q,
+  filters: ListingSearchFilters | undefined,
+  options: { includeDrafts?: boolean },
+  searchMatchedIds: string[] | null,
+): Q {
+  let result = query;
+
+  if (!options.includeDrafts) {
+    // completed/hold는 status(공개 여부)와 무관하게 항상 공개 조회에서 제외 —
+    // 관리자가 status를 따로 안 바꿔도 계약완료/보류 매물이 계속 광고되는
+    // 사고를 막기 위함(app/data/listings.ts의 DealStatus 주석 참고).
+    result = result.eq("status", "published").in("deal_status", [
+      "advertising",
+      "negotiating",
+    ]);
+  }
+
+  if (filters?.propertyType) {
+    result = result.eq("property_type", filters.propertyType);
+  }
+  if (filters?.transactionType) {
+    result = result.eq("transaction_type", filters.transactionType);
+  }
+  if (filters?.featured) {
+    result = result.eq("is_featured", true);
+  }
+  if (filters?.complexId) {
+    result = result.eq("complex_id", filters.complexId);
+  }
+  if (filters?.minPrice !== undefined) {
+    result = result.gte("price", filters.minPrice);
+  }
+  if (filters?.maxPrice !== undefined) {
+    result = result.lte("price", filters.maxPrice);
+  }
+  // 관리자 전용(공개/비공개 필터) — includeDrafts로 draft를 보이게 한 뒤,
+  // 이 필터로 공개중/비공개 중 하나만 더 좁힙니다.
+  if (filters?.status) {
+    result = result.eq("status", filters.status);
+  }
+  if (searchMatchedIds) {
+    result = result.in("id", searchMatchedIds);
+  }
+
+  return result;
+}
+
+/**
  * 매물 목록을 조회합니다. includeDrafts가 true가 아니면 공개(published) 매물만
  * 반환합니다 — 홈페이지·전체매물 페이지 등 공개 화면은 기본값(false)을 쓰고,
  * 관리자 화면(app/api/listings)만 true로 임시저장 매물까지 봅니다.
@@ -305,14 +383,9 @@ export async function getAllListings(
 
   const filters = options.filters;
 
-  // 검색어가 있는데 매칭되는 매물이 하나도 없으면, 메인 쿼리를 보낼 필요 없이
-  // 바로 빈 배열을 돌려줍니다.
-  let searchMatchedIds: string[] | null = null;
-  if (filters?.search && filters.search.trim() !== "") {
-    searchMatchedIds = await resolveSearchListingIds(supabase, filters.search.trim());
-    if (searchMatchedIds.length === 0) {
-      return [];
-    }
+  const { searchMatchedIds, matchedNothing } = await resolveSearchFilter(supabase, filters);
+  if (matchedNothing) {
+    return [];
   }
 
   const { column, ascending, nullsFirst } = getListingSortColumn(
@@ -323,42 +396,8 @@ export async function getAllListings(
     .select(options.includeDrafts ? "*" : PUBLIC_LISTING_COLUMNS)
     .order(column, { ascending, nullsFirst });
 
-  if (!options.includeDrafts) {
-    // completed/hold는 status(공개 여부)와 무관하게 항상 공개 조회에서 제외 —
-    // 관리자가 status를 따로 안 바꿔도 계약완료/보류 매물이 계속 광고되는
-    // 사고를 막기 위함(app/data/listings.ts의 DealStatus 주석 참고).
-    query = query.eq("status", "published").in("deal_status", [
-      "advertising",
-      "negotiating",
-    ]);
-  }
+  query = applyListingFilters(query, filters, options, searchMatchedIds);
 
-  if (filters?.propertyType) {
-    query = query.eq("property_type", filters.propertyType);
-  }
-  if (filters?.transactionType) {
-    query = query.eq("transaction_type", filters.transactionType);
-  }
-  if (filters?.featured) {
-    query = query.eq("is_featured", true);
-  }
-  if (filters?.complexId) {
-    query = query.eq("complex_id", filters.complexId);
-  }
-  if (filters?.minPrice !== undefined) {
-    query = query.gte("price", filters.minPrice);
-  }
-  if (filters?.maxPrice !== undefined) {
-    query = query.lte("price", filters.maxPrice);
-  }
-  // 관리자 전용(공개/비공개 필터) — includeDrafts로 draft를 보이게 한 뒤,
-  // 이 필터로 공개중/비공개 중 하나만 더 좁힙니다.
-  if (filters?.status) {
-    query = query.eq("status", filters.status);
-  }
-  if (searchMatchedIds) {
-    query = query.in("id", searchMatchedIds);
-  }
   if (options.limit !== undefined) {
     query = query.limit(options.limit);
   }
@@ -386,6 +425,94 @@ export async function getAllListings(
   );
 
   return attachComplexes(listings, complexes);
+}
+
+export interface ListingsPageResult {
+  listings: ListingWithComplex[];
+  /** 이번 페이지가 아니라 필터 기준 전체 건수. 페이지 수 계산에 씁니다. */
+  totalCount: number;
+}
+
+/**
+ * /listings(공개 전체매물 화면) 전용 페이지네이션 조회입니다. getAllListings와
+ * 달리 전체를 가져와 자르지 않고, Supabase에 해당 페이지 범위만 요청합니다
+ * (.range()) — 117건을 다 가져오던 걸 24건만 가져오도록 바꾼 지점입니다.
+ * 항상 공개(published) 매물만 봅니다(관리자 화면은 다른 경로를 씁니다).
+ */
+export async function getListingsPage(options: {
+  filters?: ListingSearchFilters;
+  sort?: ListingSortKey;
+  /** 1부터 시작. */
+  page: number;
+  pageSize: number;
+}): Promise<ListingsPageResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { listings: [], totalCount: 0 };
+  }
+
+  const filters = options.filters;
+
+  const { searchMatchedIds, matchedNothing } = await resolveSearchFilter(supabase, filters);
+  if (matchedNothing) {
+    return { listings: [], totalCount: 0 };
+  }
+
+  const { column, ascending, nullsFirst } = getListingSortColumn(
+    options.sort ?? DEFAULT_LISTING_SORT,
+  );
+  let query = supabase
+    .from("listings")
+    .select(PUBLIC_LISTING_COLUMNS, { count: "exact" })
+    .order(column, { ascending, nullsFirst });
+
+  query = applyListingFilters(query, filters, { includeDrafts: false }, searchMatchedIds);
+
+  const from = (options.page - 1) * options.pageSize;
+  const to = from + options.pageSize - 1;
+
+  // select()에 동적 문자열을 넘기면 타입 추론을 잃으므로 getAllListings와
+  // 동일하게 실행 직전에 .returns()로 행 모양을 명시합니다.
+  const [{ data: rows, error, count }, complexes] = await Promise.all([
+    query.range(from, to).returns<ListingRow[]>(),
+    getAllComplexes(),
+  ]);
+
+  if (error) {
+    // 요청한 page가 실제 데이터보다 훨씬 뒤에 있으면(offset이 전체 행 수를
+    // 넘음) PostgREST가 행을 주는 대신 에러를 냅니다(PGRST103 "Requested
+    // range not satisfiable" 등) — count도 함께 못 받습니다. 이 경우 range
+    // 없이 건수만 다시 물어봐서, 호출부(listings/page.tsx)가 정확한
+    // totalCount로 올바른 마지막 페이지로 리다이렉트할 수 있게 합니다.
+    let countOnlyQuery = supabase
+      .from("listings")
+      .select("id", { count: "exact", head: true });
+    countOnlyQuery = applyListingFilters(
+      countOnlyQuery,
+      filters,
+      { includeDrafts: false },
+      searchMatchedIds,
+    );
+    const { count: totalOnly, error: countError } = await countOnlyQuery;
+    if (countError) {
+      console.error("[listings] 매물 페이지 조회 실패", error);
+    }
+    return { listings: [], totalCount: totalOnly ?? 0 };
+  }
+
+  if (!rows) {
+    console.error("[listings] 매물 페이지 조회 실패", error);
+    return { listings: [], totalCount: 0 };
+  }
+
+  const imagesByListingId = await fetchImagesByListingId(supabase, rows);
+  const listings = rows.map((row) =>
+    listingRowToListing(row, imagesByListingId.get(row.id) ?? [], {
+      includeRawSourceText: false,
+    }),
+  );
+
+  return { listings: attachComplexes(listings, complexes), totalCount: count ?? 0 };
 }
 
 export interface ApartmentComplexOption {

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { LISTINGS_PAGE_SIZE } from "./lib/listingPagination";
 import { getAllListings } from "./lib/listings";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
@@ -21,6 +22,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.1 },
   ];
 
+  // /listings는 필터 없는 기본 목록을 페이지 단위(LISTINGS_PAGE_SIZE)로
+  // 나눠 보여줍니다(app/listings/page.tsx 참고). 필터 조합까지 sitemap에
+  // 넣으면 조합이 지나치게 많아지므로, 기본(필터 없음) 정렬의 목록
+  // 페이지들만 넣습니다 — 이미 들고 있는 listings 배열 길이로 페이지 수를
+  // 계산해서 추가 쿼리 없이 만듭니다. 1페이지는 위 staticPages의
+  // "/listings"와 같은 주소라 2페이지부터만 추가합니다.
+  const listingsTotalPages = Math.max(1, Math.ceil(listings.length / LISTINGS_PAGE_SIZE));
+  const listingsPaginationPages: MetadataRoute.Sitemap = Array.from(
+    { length: Math.max(0, listingsTotalPages - 1) },
+    (_, index) => ({
+      url: `${SITE_URL}/listings?page=${index + 2}`,
+      changeFrequency: "daily",
+      priority: 0.6,
+    }),
+  );
+
   const listingPages: MetadataRoute.Sitemap = listings.map((listing) => ({
     url: `${SITE_URL}/listings/${listing.id}`,
     lastModified: listing.updatedAt ?? undefined,
@@ -28,5 +45,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...listingPages];
+  return [...staticPages, ...listingsPaginationPages, ...listingPages];
 }
