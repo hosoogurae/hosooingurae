@@ -366,7 +366,10 @@ function parsePriceCondition(text: string): {
     consumedText = consume(consumedText, new RegExp(escapeRegExp(bandMatch[0])));
     // "3억 초반"의 3.3억(max)이라는 숫자 자체는 파서가 만들었지만, 상한이
     // 있다는 의도는 손님이 "초반"이라고 말한 데서 나온 것이라 constraint로
-    // 봅니다. 3.0억(min)은 그 의도가 없는 계산상 하한이라 padding입니다.
+    // 봅니다. 3.0억(min)은 그 의도가 없는 계산상 하한이라 padding입니다 —
+    // 하드필터에서 하한을 무시해 더 저렴한 매물을 놓치지 않습니다. 그래서
+    // 화면 문구도 "이하로 찾았습니다"처럼 상한만 말하는 것으로 맞춥니다
+    // (실제로 안 거르는 하한을 검색했다고 말하면 안 되므로).
     return {
       condition: {
         min,
@@ -374,7 +377,7 @@ function parsePriceCondition(text: string): {
         openEnded: false,
         minSource: "padding",
         maxSource: "constraint",
-        interpretation: `"${bandMatch[0]}" → 약 ${formatPriceFull(min)}~${formatPriceFull(max)}으로 검색했습니다.`,
+        interpretation: `"${bandMatch[0]}" → ${formatPriceFull(max)} 이하로 찾았습니다. (조금 더 저렴한 매물도 함께 보여드립니다)`,
       },
       consumedText,
     };
@@ -385,15 +388,17 @@ function parsePriceCondition(text: string): {
     const amount = parseKoreanAmountToManwon(`${exactMatch[1]}억${exactMatch[2]}`);
     if (amount !== null) {
       consumedText = consume(consumedText, new RegExp(escapeRegExp(exactMatch[0])));
-      // 숫자 하나("3억5000")를 던진 것도 "이 정도까지"라는 상한 의도로
-      // 보고 +1000만원 패딩된 상한을 constraint로 봅니다. 하한은 그런
-      // 의도가 없어 padding입니다.
+      // "3억5000"처럼 만원 단위까지 정확한 금액을 찍은 경우는 band/bare와
+      // 성격이 다릅니다 — 손님이 특정 금액을 콕 집어 말한 것이라 위아래 모두
+      // constraint로 보고 그 금액 근처(±1,000만원, 상한과 대칭)로만 좁힙니다.
+      // band("4억대")·bare("3억")처럼 구간·대략적 표현이 아니므로 하한을
+      // 열어두면 오히려 손님 의도(이 금액 근처)를 배신하게 됩니다.
       return {
         condition: {
           min: amount - 1000,
           max: amount + 1000,
           openEnded: false,
-          minSource: "padding",
+          minSource: "constraint",
           maxSource: "constraint",
           interpretation: `"${exactMatch[0]}" → ${formatPriceFull(amount)} 근처로 검색했습니다.`,
         },
@@ -408,7 +413,9 @@ function parsePriceCondition(text: string): {
     const base = eok * 10000;
     consumedText = consume(consumedText, new RegExp(escapeRegExp(bareEokMatch[0])));
     // "3억"도 마찬가지로 "이 정도까지"라는 상한 의도로 보고 +9000만원
-    // 패딩된 상한을 constraint로 봅니다. 하한은 padding입니다.
+    // 패딩된 상한을 constraint로 봅니다. 하한은 padding입니다(더 저렴한
+    // 매물을 놓치지 않기 위해 하드필터에서 무시) — 문구도 그에 맞춰
+    // 상한만 말합니다.
     return {
       condition: {
         min: base,
@@ -416,7 +423,7 @@ function parsePriceCondition(text: string): {
         openEnded: false,
         minSource: "padding",
         maxSource: "constraint",
-        interpretation: `"${bareEokMatch[0]}" → 약 ${formatPriceFull(base)}~${formatPriceFull(base + 9000)}으로 검색했습니다.`,
+        interpretation: `"${bareEokMatch[0]}" → ${formatPriceFull(base + 9000)} 이하로 찾았습니다. (조금 더 저렴한 매물도 함께 보여드립니다)`,
       },
       consumedText,
     };

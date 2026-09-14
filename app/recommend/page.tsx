@@ -9,7 +9,11 @@ import { getFloorPlanImagesByComplex } from "../lib/floorPlans";
 import { getAllListings } from "../lib/listings";
 import { ruleBasedQueryParser } from "../lib/recommend/queryParser";
 import type { PriceCondition } from "../lib/recommend/queryParser";
-import { rankListings, type NearMissListing } from "../lib/recommend/scoring";
+import {
+  rankListings,
+  type NearMissListing,
+  type RankedListing,
+} from "../lib/recommend/scoring";
 import { formatPriceFull } from "../lib/transactions";
 import { PHONE_HREF, PHONE_NUMBER } from "../data/contact";
 
@@ -74,12 +78,19 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
     ? ruleBasedQueryParser.parse(query, { knownComplexNames })
     : null;
   const recommendation = parsedQuery ? rankListings(listings, parsedQuery) : null;
+  // 거래유형을 명시했으면 results, 안 했으면 resultGroups(유형별 묶음)가
+  // 채워집니다(scoring.ts 참고) — 둘 중 하나는 항상 빈 배열입니다.
+  const isGrouped = (recommendation?.resultGroups.length ?? 0) > 0;
+  const allRankedResults: RankedListing[] = isGrouped
+    ? (recommendation?.resultGroups.flatMap((group) => group.results) ?? [])
+    : (recommendation?.results ?? []);
+  const totalResultsCount = allRankedResults.length;
 
   // 매물마다 평면도를 따로 조회하면 카드 개수만큼 쿼리가 나가므로(N+1),
   // 결과+근접초과 목록에 나온 단지 id별로 한 번씩만 조회합니다.
   const distinctComplexIds = [
     ...new Set(
-      [...(recommendation?.results ?? []), ...(recommendation?.nearMisses ?? [])].map(
+      [...allRankedResults, ...(recommendation?.nearMisses ?? [])].map(
         (r) => r.listing.complexId,
       ),
     ),
@@ -102,6 +113,51 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
     return floorPlansByComplex
       .get(complexId)
       ?.find((image) => image.unitType === unitType);
+  }
+
+  /** 결과 카드 하나(순위 배지 + ListingCard + 추천 이유/비고). 평평한 목록과
+   * 거래유형별 묶음 양쪽에서 그대로 재사용합니다. */
+  function renderResultCard(ranked: RankedListing, index: number) {
+    const summary = formatMatchSummary(
+      ranked.satisfiedCount,
+      ranked.totalCount,
+      ranked.unknownCount,
+    );
+    // 미충족 항목은 눈에 띄지 않게 작고 중립적인 톤으로만 보여줍니다
+    // — 카드 자체가 부정적으로 보이면 안 됩니다.
+    const unmetDetails = ranked.criteria
+      .filter((c) => !c.satisfied && !c.unknown && c.unmetDetail)
+      .map((c) => c.unmetDetail as string);
+
+    return (
+      <li key={ranked.listing.id} className="relative flex flex-col">
+        <span className="absolute right-3 top-3 z-10 rounded-full bg-navy-950/90 px-3 py-1 text-xs font-bold text-gold-400">
+          {index + 1}위{summary && ` · ${summary}`}
+        </span>
+        <ListingCard
+          listing={ranked.listing}
+          floorPlanImage={getFloorPlanForListing(
+            ranked.listing.complexId,
+            ranked.listing.unitType,
+          )}
+          complexImageUrl={complexImagesByComplex.get(ranked.listing.complexId)}
+          priority={index < 3}
+        />
+        {ranked.reasons.length > 0 && (
+          <div className="mt-3 rounded-lg bg-navy-900/[0.03] p-3">
+            <p className="text-xs font-semibold text-gold-600">추천 이유</p>
+            <p className="mt-1 text-sm text-navy-800/70">{ranked.reasons.join(" ")}</p>
+          </div>
+        )}
+        {ranked.notes.length > 0 && (
+          <p className="mt-2 text-xs text-navy-800/40">{ranked.notes.join(" · ")}</p>
+        )}
+        {unmetDetails.length > 0 && (
+          <p className="mt-1 text-xs text-navy-800/30">{unmetDetails.join(" · ")}</p>
+        )}
+        <CompareToggle listingId={ranked.listing.id} />
+      </li>
+    );
   }
 
   const interpretedLines: string[] = [];
@@ -213,75 +269,58 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                   {parsedQuery.unrecognizedPhrases.join(", ")}
                 </p>
               )}
+              {parsedQuery && !parsedQuery.transactionType && (
+                <p className="mt-3 text-xs text-navy-800/40">
+                  거래유형(매매/전세/월세)을 말씀해주시면 더 정확하게 찾아드립니다.
+                </p>
+              )}
             </div>
 
-            {recommendation.results.length === 0 && recommendation.nearMisses.length === 0 && (
+            {totalResultsCount === 0 && recommendation.nearMisses.length === 0 && (
               <p className="mt-8 rounded-xl border border-navy-900/10 px-6 py-16 text-center text-sm text-navy-800/50">
                 현재 등록된 매물이 없습니다.
               </p>
             )}
 
-            {recommendation.results.length > 0 && !recommendation.hasExactMatch && (
+            {/* 거래유형을 명시하지 않은 경우 — 매매/전세/월세 묶음을 각각 따로
+                보여줍니다. 묶음마다 "정확히 일치" 배너를 개별 판단합니다(한
+                유형은 정확히 맞고 다른 유형은 아닐 수 있어, 배너 하나로
+                뭉뚱그리면 거짓 문구가 될 수 있으므로). */}
+            {isGrouped &&
+              recommendation.resultGroups.map((group) => {
+                const top = group.results[0];
+                const groupHasExactMatch =
+                  top !== undefined && top.satisfiedCount === top.totalCount;
+
+                return (
+                  <div key={group.transactionType} className="mt-10 first:mt-8">
+                    <p className="text-sm font-bold text-navy-950">
+                      {group.transactionType} {group.results.length}건
+                    </p>
+                    {!groupHasExactMatch && (
+                      <p className="mt-2 rounded-md border border-gold-500/30 bg-gold-500/10 px-4 py-3 text-sm font-medium text-navy-900">
+                        조건과 정확히 일치하는 매물은 없지만 가까운 매물을
+                        추천합니다.
+                      </p>
+                    )}
+                    <ul className="mt-4 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                      {group.results.map((ranked, index) => renderResultCard(ranked, index))}
+                    </ul>
+                  </div>
+                );
+              })}
+
+            {/* 거래유형을 명시한 경우 — 지금까지와 동일한 단일 목록. */}
+            {!isGrouped && recommendation.results.length > 0 && !recommendation.hasExactMatch && (
               <p className="mt-6 rounded-md border border-gold-500/30 bg-gold-500/10 px-4 py-3 text-sm font-medium text-navy-900">
                 조건과 정확히 일치하는 매물은 없지만 가까운 매물을
                 추천합니다.
               </p>
             )}
 
-            {recommendation.results.length > 0 && (
+            {!isGrouped && recommendation.results.length > 0 && (
               <ul className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                {recommendation.results.map((ranked, index) => {
-                  const summary = formatMatchSummary(
-                    ranked.satisfiedCount,
-                    ranked.totalCount,
-                    ranked.unknownCount,
-                  );
-                  // 미충족 항목은 눈에 띄지 않게 작고 중립적인 톤으로만 보여줍니다
-                  // — 카드 자체가 부정적으로 보이면 안 됩니다.
-                  const unmetDetails = ranked.criteria
-                    .filter((c) => !c.satisfied && !c.unknown && c.unmetDetail)
-                    .map((c) => c.unmetDetail as string);
-
-                  return (
-                    <li key={ranked.listing.id} className="relative flex flex-col">
-                      <span className="absolute right-3 top-3 z-10 rounded-full bg-navy-950/90 px-3 py-1 text-xs font-bold text-gold-400">
-                        {index + 1}위{summary && ` · ${summary}`}
-                      </span>
-                      <ListingCard
-                        listing={ranked.listing}
-                        floorPlanImage={getFloorPlanForListing(
-                          ranked.listing.complexId,
-                          ranked.listing.unitType,
-                        )}
-                        complexImageUrl={complexImagesByComplex.get(
-                          ranked.listing.complexId,
-                        )}
-                        priority={index < 3}
-                      />
-                      {ranked.reasons.length > 0 && (
-                        <div className="mt-3 rounded-lg bg-navy-900/[0.03] p-3">
-                          <p className="text-xs font-semibold text-gold-600">
-                            추천 이유
-                          </p>
-                          <p className="mt-1 text-sm text-navy-800/70">
-                            {ranked.reasons.join(" ")}
-                          </p>
-                        </div>
-                      )}
-                      {ranked.notes.length > 0 && (
-                        <p className="mt-2 text-xs text-navy-800/40">
-                          {ranked.notes.join(" · ")}
-                        </p>
-                      )}
-                      {unmetDetails.length > 0 && (
-                        <p className="mt-1 text-xs text-navy-800/30">
-                          {unmetDetails.join(" · ")}
-                        </p>
-                      )}
-                      <CompareToggle listingId={ranked.listing.id} />
-                    </li>
-                  );
-                })}
+                {recommendation.results.map((ranked, index) => renderResultCard(ranked, index))}
               </ul>
             )}
 
@@ -289,7 +328,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
                 초과 사실을 분명히 밝히고 가장 가까운 매물을 보여줍니다. 허용오차를
                 적용하지 않은 결과라 위 "예산이 조금 넘지만" 섹션과는 톤을
                 구분합니다(뱃지에 예산 초과 금액을 그대로 노출). */}
-            {recommendation.results.length === 0 && recommendation.nearMisses.length > 0 && (
+            {totalResultsCount === 0 && recommendation.nearMisses.length > 0 && (
               <div className="mt-8">
                 <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4">
                   <p className="text-base font-bold text-navy-950">
@@ -340,7 +379,7 @@ export default async function RecommendPage({ searchParams }: RecommendPageProps
               </div>
             )}
 
-            {recommendation.results.length > 0 &&
+            {totalResultsCount > 0 &&
               !recommendation.resultsAreFull &&
               recommendation.nearMisses.length > 0 && (
                 <div className="mt-12">

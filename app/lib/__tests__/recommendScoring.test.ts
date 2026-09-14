@@ -85,6 +85,7 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
     const farOver = buildListing({ id: "over-4500", price: 45000 }); // 초과 5000만원 > 2000만원 허용오차
 
     const query = buildQuery({
+      transactionType: "매매",
       price: { min: 0, max: 40000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
     });
 
@@ -101,6 +102,7 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
     const nearMiss = buildListing({ id: "near-miss", price: 41500 });
 
     const query = buildQuery({
+      transactionType: "매매",
       price: { min: 0, max: 40000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
     });
 
@@ -170,6 +172,7 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
     const tooExpensive = buildListing({ id: "listing-35", price: 35000 });
 
     const query = buildQuery({
+      transactionType: "매매",
       price: {
         min: 30000,
         max: 33000,
@@ -189,6 +192,7 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
     const expensive = buildListing({ id: "listing-65", price: 65000 });
 
     const query = buildQuery({
+      transactionType: "매매",
       price: {
         min: 30000,
         max: 60000, // 패딩된 상한(amount*2) — 하드필터 대상 아님
@@ -203,6 +207,32 @@ describe("rankListings — 예산 하드필터 + 근접초과(nearMiss)", () => 
 
     expect(ids(result.results)).toContain("listing-65");
   });
+
+  it("'3억5000'(콕 집은 금액, 상하한 모두 constraint)으로 검색 시 하한도 실제로 걸린다", () => {
+    // queryParser.ts의 exact 분기(minSource: constraint로 변경됨)를 그대로
+    // 재현한다 — 손님이 특정 금액을 찍어 말했으면 그 근처(±1000만원)만
+    // 나와야 하고, 한참 싼 매물이 섞여 나오면 안 된다.
+    const withinRange = buildListing({ id: "within-34500", price: 34500 });
+    const farUnder = buildListing({ id: "under-30000", price: 30000 }); // 4000만원 부족 > 1700만원 허용오차
+
+    const query = buildQuery({
+      transactionType: "매매",
+      price: {
+        min: 34000,
+        max: 36000,
+        openEnded: false,
+        minSource: "constraint",
+        maxSource: "constraint",
+        interpretation: "",
+      },
+    });
+
+    const result = rankListings([withinRange, farUnder], query);
+
+    expect(ids(result.results)).toContain("within-34500");
+    expect(ids(result.results)).not.toContain("under-30000");
+    expect(ids(result.nearMisses)).not.toContain("under-30000");
+  });
 });
 
 describe("rankListings — resultsAreFull은 고정 상수가 아니라 실제 limit에 연동된다", () => {
@@ -212,6 +242,7 @@ describe("rankListings — resultsAreFull은 고정 상수가 아니라 실제 l
       buildListing({ id: "l2", price: 38500 }),
     ];
     const query = buildQuery({
+      transactionType: "매매",
       price: { min: 0, max: 40000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
     });
 
@@ -227,6 +258,7 @@ describe("rankListings — resultsAreFull은 고정 상수가 아니라 실제 l
       buildListing({ id: "l2", price: 38500 }),
     ];
     const query = buildQuery({
+      transactionType: "매매",
       price: { min: 0, max: 40000, openEnded: false, minSource: "padding", maxSource: "constraint", interpretation: "" },
     });
 
@@ -234,6 +266,20 @@ describe("rankListings — resultsAreFull은 고정 상수가 아니라 실제 l
 
     expect(result.results.length).toBe(2);
     expect(result.resultsAreFull).toBe(false);
+  });
+
+  it("거래유형 미지정 시(그룹 모드)에도 그룹 합계 기준으로 resultsAreFull을 계산한다", () => {
+    const listings = [
+      buildListing({ id: "l1", transactionType: "매매", price: 38000 }),
+      buildListing({ id: "l2", transactionType: "전세", price: 20000 }),
+    ];
+    const query = buildQuery({ roomCount: 3 }); // transactionType 미지정 → 그룹 모드
+
+    const result = rankListings(listings, query, 2, 3);
+
+    expect(result.results).toEqual([]);
+    expect(result.resultGroups.reduce((sum, g) => sum + g.results.length, 0)).toBe(2);
+    expect(result.resultsAreFull).toBe(true);
   });
 });
 
@@ -270,6 +316,7 @@ describe("rankListings — unknown 조건은 분모에서 빠진다", () => {
     const listing = buildListing({ id: "no-data", complex: noDataComplex });
 
     const query = buildQuery({
+      transactionType: "매매",
       wantsStationProximity: true,
       schoolLevel: "초등학교",
     });
@@ -304,5 +351,166 @@ describe("rankListings — unknown 조건은 분모에서 빠진다", () => {
     expect(priceCriterion?.unknown).toBe(true);
     expect(ranked!.unknownCount).toBeGreaterThanOrEqual(1);
     expect(ranked!.totalCount).toBe(0);
+  });
+});
+
+describe("rankListings — 거래유형 미지정 시 유형별 묶음(resultGroups)", () => {
+  it("'구래역 가까운 4억대 아파트' 재현 — 매매/전세가 한 목록에 섞이지 않는다(회귀)", () => {
+    // 실제 사고 사례: transactionType 미지정 + "4억대"(하한 padding, 40000~49000)로
+    // 검색했을 때 3.3억 전세가 4.2억 매매와 한 목록에 섞여 나왔다. 이제는
+    // 유형별로 나뉘어야 하고, 각 묶음 안에는 그 유형만 있어야 한다.
+    const maemae = buildListing({ id: "maemae-42000", transactionType: "매매", price: 42000 });
+    const jeonse = buildListing({ id: "jeonse-33000", transactionType: "전세", price: 33000 });
+
+    const query = buildQuery({
+      price: {
+        min: 40000,
+        max: 49000,
+        openEnded: false,
+        minSource: "padding",
+        maxSource: "constraint",
+        interpretation: "",
+      },
+    });
+
+    const result = rankListings([maemae, jeonse], query);
+
+    expect(result.results).toEqual([]); // 그룹 모드에선 항상 빈 배열
+    expect(result.resultGroups.map((g) => g.transactionType).sort()).toEqual(["매매", "전세"]);
+
+    const maemaeGroup = result.resultGroups.find((g) => g.transactionType === "매매");
+    const jeonseGroup = result.resultGroups.find((g) => g.transactionType === "전세");
+    expect(maemaeGroup?.results.every((r) => r.listing.transactionType === "매매")).toBe(true);
+    expect(jeonseGroup?.results.every((r) => r.listing.transactionType === "전세")).toBe(true);
+  });
+
+  it("'4억대 매매'(거래유형 명시) — 그룹화되지 않고 매매만 나온다(회귀)", () => {
+    const maemae = buildListing({ id: "maemae-42000", transactionType: "매매", price: 42000 });
+    const jeonse = buildListing({ id: "jeonse-33000", transactionType: "전세", price: 33000 });
+
+    const query = buildQuery({
+      transactionType: "매매",
+      price: {
+        min: 40000,
+        max: 49000,
+        openEnded: false,
+        minSource: "padding",
+        maxSource: "constraint",
+        interpretation: "",
+      },
+    });
+
+    const result = rankListings([maemae, jeonse], query);
+
+    expect(result.resultGroups).toEqual([]);
+    expect(ids(result.results)).toEqual(["maemae-42000"]);
+  });
+
+  it("배분받은 몫보다 후보가 적은 그룹의 남는 자리를 다른 그룹에 돌려줘 총 5건을 채운다", () => {
+    const maemaeListings = [1, 2, 3, 4].map((n) =>
+      buildListing({ id: `maemae-${n}`, transactionType: "매매", price: 38000 + n * 100 }),
+    );
+    const jeonseListings = [buildListing({ id: "jeonse-1", transactionType: "전세", price: 25000 })];
+
+    const query = buildQuery({ roomCount: 3 }); // transactionType 미지정 → 그룹 모드, 후보 전원 통과
+
+    const result = rankListings([...maemaeListings, ...jeonseListings], query, 5, 3);
+
+    const maemaeGroup = result.resultGroups.find((g) => g.transactionType === "매매");
+    const jeonseGroup = result.resultGroups.find((g) => g.transactionType === "전세");
+    // 원래 배분은 3/2이지만 전세 후보가 1건뿐이라 남는 1자리를 매매로 돌려 4/1(총 5).
+    expect(maemaeGroup?.results.length).toBe(4);
+    expect(jeonseGroup?.results.length).toBe(1);
+  });
+
+  it("그래도 못 채우면(전체 후보가 limit보다 적으면) 적게 나온다", () => {
+    const maemae = buildListing({ id: "maemae-1", transactionType: "매매", price: 38000 });
+    const jeonse = buildListing({ id: "jeonse-1", transactionType: "전세", price: 25000 });
+
+    const query = buildQuery({ roomCount: 3 });
+
+    const result = rankListings([maemae, jeonse], query, 5, 3);
+
+    const total = result.resultGroups.reduce((sum, g) => sum + g.results.length, 0);
+    expect(total).toBe(2);
+  });
+});
+
+describe("rankListings — 가격이 순위에 반영된다(evaluatePriceFit)", () => {
+  it("요청 범위 안 매물이 범위보다 한참 아래인 매물보다 순위가 높다", () => {
+    // '4억대'(40000~49000, 하한 padding)로 검색했을 때 3.3억(범위보다 한참
+    // 아래)이 4.2억(범위 안)보다 위에 뜨던 원래 버그의 재현.
+    const inRange = buildListing({ id: "in-range-42000", price: 42000 });
+    const wayBelow = buildListing({ id: "way-below-33000", price: 33000 });
+
+    const query = buildQuery({
+      transactionType: "매매",
+      price: {
+        min: 40000,
+        max: 49000,
+        openEnded: false,
+        minSource: "padding",
+        maxSource: "constraint",
+        interpretation: "",
+      },
+    });
+
+    const result = rankListings([wayBelow, inRange], query);
+
+    expect(result.results[0]?.listing.id).toBe("in-range-42000");
+    const inRangeCriterion = result.results
+      .find((r) => r.listing.id === "in-range-42000")
+      ?.criteria.find((c) => c.key === "price");
+    const wayBelowCriterion = result.results
+      .find((r) => r.listing.id === "way-below-33000")
+      ?.criteria.find((c) => c.key === "price");
+    expect(inRangeCriterion?.satisfied).toBe(true);
+    expect(wayBelowCriterion?.satisfied).toBe(false);
+  });
+
+  it("범위 바로 아래(살짝 아래)는 만족으로 잡힐 만큼 점수가 높다", () => {
+    const justBelow = buildListing({ id: "just-below-39000", price: 39000 }); // 1000만원 부족(폭 9000의 11%)
+
+    const query = buildQuery({
+      transactionType: "매매",
+      price: {
+        min: 40000,
+        max: 49000,
+        openEnded: false,
+        minSource: "padding",
+        maxSource: "constraint",
+        interpretation: "",
+      },
+    });
+
+    const result = rankListings([justBelow], query);
+    const priceCriterion = result.results[0]?.criteria.find((c) => c.key === "price");
+
+    expect(priceCriterion?.satisfied).toBe(true);
+  });
+
+  it("월세는 가격 조건이 있어도 price 기준이 unknown 처리된다(스케일이 달라 비교 불가)", () => {
+    const monthlyRent = buildListing({
+      id: "monthly-rent",
+      transactionType: "월세",
+      price: 3000,
+    });
+
+    const query = buildQuery({
+      transactionType: "월세",
+      price: {
+        min: 40000,
+        max: 49000,
+        openEnded: false,
+        minSource: "padding",
+        maxSource: "constraint",
+        interpretation: "",
+      },
+    });
+
+    const result = rankListings([monthlyRent], query);
+    const priceCriterion = result.results[0]?.criteria.find((c) => c.key === "price");
+
+    expect(priceCriterion?.unknown).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import type { ComplexTransportation } from "../../data/complexes";
+import type { TransactionType } from "../../data/listings";
 import type { ListingWithComplex } from "../listings";
 import { formatPriceFull } from "../transactions";
 import type { ParsedQuery, PriceCondition } from "./queryParser";
@@ -71,15 +72,37 @@ export interface NearMissListing extends RankedListing {
   violation: PriceViolation;
 }
 
+/** 거래유형을 명시하지 않았을 때, 유형별로 나눠 담는 묶음. */
+export interface ResultGroup {
+  transactionType: TransactionType;
+  results: RankedListing[];
+}
+
 export interface RecommendationResult {
+  /**
+   * 거래유형을 명시한 경우에만 채워집니다(순위 매긴 전체 목록). 명시하지
+   * 않은 경우 항상 빈 배열이며, 대신 resultGroups를 봅니다 — 매매/전세가
+   * 섞인 채 한 목록으로 보이면 "N억대로 검색했습니다"라는 화면 설명과
+   * 실제 결과가 어긋나 보이기 때문입니다(거래유형마다 가격 스케일이 달라
+   * 하나로 섞으면 순위 자체도 의미가 없어짐).
+   */
   results: RankedListing[];
   /**
-   * 예산 조건을 벗어나 메인 results에서 빠진 매물(별도 섹션 전용, 메인
-   * results와 절대 섞이지 않습니다). 두 가지 경우로 채워집니다.
-   * - results가 1건 이상일 때: 허용오차(상한 대비 5%, 최대 3,000만원) 이내로
+   * 거래유형을 명시하지 않은 경우에만 채워집니다(매물이 1건이라도 있는
+   * 유형만, 매매→전세→월세 순). 명시한 경우 항상 빈 배열입니다.
+   */
+  resultGroups: ResultGroup[];
+  /**
+   * 예산 조건을 벗어나 메인 results/resultGroups에서 빠진 매물(별도 섹션
+   * 전용, 메인 결과와 절대 섞이지 않습니다). 거래유형별로 나누지 않고
+   * 하나의 목록으로 둡니다 — 이미 예외 상황을 별도 섹션+경고 배지로
+   * 구분해서 보여주고 있고(ListingCard가 각 매물의 거래유형도 표시),
+   * 최대 건수 자체가 적어(nearMissLimit) 더 쪼개면 그룹이 자주 비게
+   * 됩니다. 두 가지 경우로 채워집니다.
+   * - 결과가 1건 이상일 때: 허용오차(상한 대비 5%, 최대 3,000만원) 이내로
    *   "살짝 넘는" 매물만 참고용으로 담습니다. 화면은 resultsAreFull이면
    *   보여주지 않습니다(조건에 맞는 매물이 이미 충분하므로).
-   * - results가 0건일 때: 허용오차를 적용하지 않고, 거래유형·매물종류만
+   * - 결과가 0건일 때: 허용오차를 적용하지 않고, 거래유형·매물종류만
    *   맞으면 예산 초과/부족분이 적은 순으로 채웁니다 — 빈 화면을 보여주느니
    *   초과 사실을 밝히고 가장 가까운 매물을 보여주는 게 낫습니다. 이 경우
    *   recommend/page.tsx는 별도 문구("조건에 맞는 매물이 없어...")로
@@ -87,15 +110,22 @@ export interface RecommendationResult {
    */
   nearMisses: NearMissListing[];
   /**
-   * results가 이번 호출의 limit만큼 꽉 찼는지. 꽉 찼으면 조건에 맞는 매물이
-   * 이미 충분하다는 뜻이라 nearMisses(허용오차 이내 참고 매물)를 화면에
-   * 보여줄 이유가 없습니다. 고정 상수 대신 실제 사용된 limit으로 계산해서,
-   * limit을 바꿔도 "결과가 꽉 찼다"는 의미가 어긋나지 않게 합니다.
+   * 결과가 이번 호출의 limit만큼 꽉 찼는지(거래유형 명시 시 results 기준,
+   * 미명시 시 resultGroups 합계 기준). 꽉 찼으면 조건에 맞는 매물이 이미
+   * 충분하다는 뜻이라 nearMisses(허용오차 이내 참고 매물)를 화면에 보여줄
+   * 이유가 없습니다. 고정 상수 대신 실제 사용된 limit으로 계산해서, limit을
+   * 바꿔도 "결과가 꽉 찼다"는 의미가 어긋나지 않게 합니다.
    */
   resultsAreFull: boolean;
   /** 인식된 조건이 하나도 없어 추천 자체를 시도하지 않은 경우. */
   noCriteriaRecognized: boolean;
-  /** 1위가 인식된 소프트 조건을 전부(satisfiedCount === totalCount) 만족하는 경우. */
+  /**
+   * 1위가 인식된 소프트 조건을 전부(satisfiedCount === totalCount) 만족하는
+   * 경우. 거래유형을 명시하지 않아 resultGroups로 나뉜 경우에는 그룹마다
+   * "정확히 일치" 여부가 다를 수 있어(예: 매매는 정확히 맞고 전세는 아닐 때
+   * 하나의 배너로 뭉뚱그리면 거짓 문구가 됨) 이 필드를 쓰지 않고 항상
+   * false를 반환합니다 — recommend/page.tsx가 그룹별로 직접 판단합니다.
+   */
   hasExactMatch: boolean;
 }
 
@@ -116,6 +146,9 @@ const WEIGHTS = {
   parking: 10,
   largeComplex: 10,
   priceLow: 15,
+  /** 역세권(station)과 동급 — 손님이 구체적 가격대를 말했으면 그것도 역세권만큼
+   * 중요한 조건이라고 보되, complexName(20)처럼 다른 조건을 압도하진 않게 함. */
+  price: 15,
 } as const;
 
 /** 조건 충족 여부를 나눌 때 쓰는 연속 점수 기준(기존 "reason 표시" 기준과 동일하게 맞춤). */
@@ -522,6 +555,59 @@ function evaluateMonthlyRentPriceUnknown(): SoftCriterionEvaluation {
   };
 }
 
+/**
+ * 구체적 가격 조건(query.price)이 요청 범위에 얼마나 부합하는지 점수화합니다.
+ * 지금까지는 가격이 하드필터로만 쓰이고 순위에는 전혀 반영되지 않아, 하한이
+ * padding이라 하드필터를 통과한 "범위보다 한참 싼" 매물이 역세권·학교 등
+ * 다른 조건 덕분에 1위로 뜨는 문제가 있었습니다(예: "4억대" 검색에 3.3억
+ * 매물이 1위로 노출).
+ *
+ * - 범위 안(min~effectiveMax)이면 만점.
+ * - 범위 아래면 얼마나 못 미치는지에 비례해 선형으로 감쇠합니다(범위 폭만큼
+ *   벗어나면 0). minSource가 constraint인 조건(예: 범위 지정, "3억5000"처럼
+ *   콕 집은 금액)은 애초에 하드필터가 이 구간 밖 매물을 걸러내므로 이 분기에
+ *   도달하지 않고, minSource가 padding인 조건(예: "4억대")에서만 실제로
+ *   쓰입니다.
+ * - 범위 위는 maxSource가 constraint면 하드필터가 이미 제외해 도달하지
+ *   않습니다("3억 이상"처럼 openEnded라 상한이 padding인 경우는 상한 자체가
+ *   없는 의도이므로 effectiveMax를 무한대로 두어 "범위 안"으로 취급합니다).
+ */
+function evaluatePriceFit(
+  listing: ListingWithComplex,
+  condition: PriceCondition,
+): SoftCriterionEvaluation {
+  const effectiveMax = condition.maxSource === "constraint" ? condition.max : Infinity;
+  const price = listing.price;
+
+  let score: number;
+  if (price >= condition.min && price <= effectiveMax) {
+    score = 1;
+  } else if (price < condition.min) {
+    const span = effectiveMax === Infinity ? condition.min : effectiveMax - condition.min;
+    score = Math.max(0, 1 - (condition.min - price) / (span || 1));
+  } else {
+    // maxSource가 constraint인데 price > max인 경우 — 하드필터를 통과한
+    // listing에서는 이론상 발생하지 않습니다(evaluatePriceHardFilter가 이미
+    // 제외). 안전망으로만 0 처리합니다.
+    score = 0;
+  }
+
+  const satisfied = score >= SATISFIED_SCORE_THRESHOLD;
+  return {
+    key: "price",
+    label: "가격",
+    weight: WEIGHTS.price,
+    score,
+    satisfied,
+    reason: satisfied
+      ? `가격 ${listing.priceLabel}이 요청하신 가격대에 부합합니다.`
+      : undefined,
+    unmetDetail: satisfied
+      ? undefined
+      : `가격 ${listing.priceLabel}로 요청하신 가격대보다 낮습니다.`,
+  };
+}
+
 function scoreOne(
   listing: ListingWithComplex,
   query: ParsedQuery,
@@ -564,8 +650,15 @@ function scoreOne(
     criteria.push(evaluateLowerPrice(listing, priceRange));
   }
 
-  if (query.price && listing.transactionType === "월세") {
-    criteria.push(evaluateMonthlyRentPriceUnknown());
+  // 구체적 가격 조건이 있으면 순위에도 반영합니다. 월세는 listing.price가
+  // 보증금만 담고 있어 query.price와 스케일이 다를 수 있으므로(위 주석
+  // 참고) 판단을 포기하고 "확인 불가"로 집계합니다.
+  if (query.price) {
+    if (listing.transactionType === "월세") {
+      criteria.push(evaluateMonthlyRentPriceUnknown());
+    } else {
+      criteria.push(evaluatePriceFit(listing, query.price));
+    }
   }
 
   return { criteria };
@@ -676,6 +769,58 @@ function evaluatePriceHardFilter(
 const DEFAULT_LIMIT = 5;
 const DEFAULT_NEAR_MISS_LIMIT = 3;
 
+/** 거래유형 미지정 시 묶음을 보여줄 고정 순서. */
+const TRANSACTION_TYPE_ORDER: TransactionType[] = ["매매", "전세", "월세"];
+
+/**
+ * 총 limit 건을 활성 거래유형 수만큼 최대한 고르게 나눠주고(나머지는
+ * TRANSACTION_TYPE_ORDER 순으로 하나씩 더), 배분받은 몫보다 후보가 적은
+ * 유형이 있으면 그 남는 자리를 후보가 남아있는 다른 유형에 순서대로
+ * 돌려줍니다. 예: 5건을 매매/전세로 나누면 3/2인데 전세 후보가 1건뿐이면
+ * 매매에 1자리를 더 줘서 4/1(총 5)로 채웁니다. 그래도 못 채우면(전체
+ * 후보가 limit보다 적으면) 있는 만큼만 돌려줍니다.
+ */
+function allocateGroupSlots(
+  activeTypes: TransactionType[],
+  availableCounts: Map<TransactionType, number>,
+  totalLimit: number,
+): Map<TransactionType, number> {
+  const n = activeTypes.length;
+  const base = Math.floor(totalLimit / n);
+  const remainder = totalLimit % n;
+  const allocation = new Map<TransactionType, number>();
+  activeTypes.forEach((type, index) => {
+    allocation.set(type, base + (index < remainder ? 1 : 0));
+  });
+
+  let leftover = 0;
+  for (const type of activeTypes) {
+    const available = availableCounts.get(type) ?? 0;
+    const alloc = allocation.get(type) ?? 0;
+    if (alloc > available) {
+      leftover += alloc - available;
+      allocation.set(type, available);
+    }
+  }
+
+  while (leftover > 0) {
+    let distributedThisRound = false;
+    for (const type of activeTypes) {
+      if (leftover === 0) break;
+      const available = availableCounts.get(type) ?? 0;
+      const alloc = allocation.get(type) ?? 0;
+      if (alloc < available) {
+        allocation.set(type, alloc + 1);
+        leftover -= 1;
+        distributedThisRound = true;
+      }
+    }
+    if (!distributedThisRound) break; // 더 줄 수 있는 유형이 없음(전체 후보 부족)
+  }
+
+  return allocation;
+}
+
 export function rankListings(
   listings: ListingWithComplex[],
   query: ParsedQuery,
@@ -699,6 +844,7 @@ export function rankListings(
   if (!hasCriteria) {
     return {
       results: [],
+      resultGroups: [],
       nearMisses: [],
       resultsAreFull: false,
       noCriteriaRecognized: true,
@@ -738,44 +884,125 @@ export function rankListings(
     passed.push(listing);
   }
 
-  // 매매가/전세보증금/월세보증금은 성격이 달라 그대로 섞어 비교하면 "저렴한
-  // 편"이 왜곡됩니다. 거래유형을 지정했으면 같은 유형끼리만, 안 정했으면
-  // (모호함은 사용자 몫) 통과한 전체끼리 비교합니다.
-  const priceComparisonPool = query.transactionType
-    ? passed.filter((listing) => listing.transactionType === query.transactionType)
-    : passed;
-  const priceRange = computePriceRange(priceComparisonPool);
+  if (query.transactionType) {
+    // 거래유형을 명시한 경우 — 지금까지와 동일한 단일 목록 흐름입니다.
+    // passed가 이미 그 유형만 남아있으므로 priceRange도 자연히 같은
+    // 유형끼리만 비교됩니다.
+    const priceRange = computePriceRange(passed);
 
-  const scored = passed.map((listing) => {
-    const { criteria } = scoreOne(listing, query, priceRange);
-    return buildRankedListing(listing, criteria);
-  });
-  scored.sort(compareScored);
-  const results = scored.slice(0, limit).map((s) => s.ranked);
-  const resultsAreFull = results.length >= limit;
+    const scored = passed.map((listing) => {
+      const { criteria } = scoreOne(listing, query, priceRange);
+      return buildRankedListing(listing, criteria);
+    });
+    scored.sort(compareScored);
+    const results = scored.slice(0, limit).map((s) => s.ranked);
+    const resultsAreFull = results.length >= limit;
 
-  // 2) nearMisses. results가 있으면(정상 케이스) 허용오차 이내로 "살짝
-  // 넘는" 매물만 참고용으로 보여줍니다. results가 0건이면(예: DB에 실제로
-  // 그 예산 안의 매물이 없는 경우) 허용오차를 적용하지 않고, 거래유형·
-  // 매물종류만 맞으면 초과/부족분이 적은 순으로 채웁니다 — 빈 화면보다
-  // "이 정도까지 벗어난 매물이라도 있다"고 보여주는 쪽이 손님에게 낫습니다.
+    // nearMisses. results가 있으면(정상 케이스) 허용오차 이내로 "살짝
+    // 넘는" 매물만 참고용으로 보여줍니다. results가 0건이면(예: DB에 실제로
+    // 그 예산 안의 매물이 없는 경우) 허용오차를 적용하지 않고, 거래유형·
+    // 매물종류만 맞으면 초과/부족분이 적은 순으로 채웁니다 — 빈 화면보다
+    // "이 정도까지 벗어난 매물이라도 있다"고 보여주는 쪽이 손님에게 낫습니다.
+    const nearMissPool =
+      results.length === 0
+        ? priceViolations
+        : priceViolations.filter((v) => v.withinTolerance);
+
+    const scoredNearMisses = nearMissPool.map(({ listing, violation }) => {
+      const { criteria } = scoreOne(listing, query, priceRange);
+      const { ranked } = buildRankedListing(listing, criteria);
+      return { ...ranked, violation };
+    });
+    // "예산 초과/부족분이 적은 순" — nearMisses는 소프트 점수가 아니라 예산에
+    // 얼마나 가까운지로 정렬합니다(참고용 목록의 목적 자체가 그것이므로).
+    scoredNearMisses.sort((a, b) => a.violation.amountManwon - b.violation.amountManwon);
+    const nearMisses = scoredNearMisses.slice(0, nearMissLimit);
+
+    const top = results[0];
+    const hasExactMatch = top !== undefined && top.satisfiedCount === top.totalCount;
+
+    return {
+      results,
+      resultGroups: [],
+      nearMisses,
+      resultsAreFull,
+      noCriteriaRecognized: false,
+      hasExactMatch,
+    };
+  }
+
+  // 거래유형을 명시하지 않은 경우 — 매매/전세/월세를 한 목록에 섞으면
+  // "N억대로 검색했습니다"라는 화면 설명이 거짓말이 됩니다(가격 스케일이
+  // 다른 매물이 같은 순위표에 섞여 순위 자체가 의미 없어짐). 유형별로 따로
+  // 순위를 매겨 묶습니다. priceRange도 유형별로 따로 계산합니다 — 그래야
+  // "저렴한 편"(wantsLowerPrice) 비교가 매매/전세를 섞은 값으로 왜곡되지
+  // 않습니다.
+  const passedByType = new Map<TransactionType, ListingWithComplex[]>();
+  for (const listing of passed) {
+    const bucket = passedByType.get(listing.transactionType) ?? [];
+    bucket.push(listing);
+    passedByType.set(listing.transactionType, bucket);
+  }
+
+  const activeTypes = TRANSACTION_TYPE_ORDER.filter(
+    (type) => (passedByType.get(type)?.length ?? 0) > 0,
+  );
+
+  const scoredByType = new Map<
+    TransactionType,
+    { ranked: RankedListing; internalScore: number }[]
+  >();
+  const priceRangeByType = new Map<TransactionType, { min: number; max: number } | null>();
+  for (const type of activeTypes) {
+    const typeListings = passedByType.get(type) ?? [];
+    const priceRange = computePriceRange(typeListings);
+    priceRangeByType.set(type, priceRange);
+    const scored = typeListings.map((listing) => {
+      const { criteria } = scoreOne(listing, query, priceRange);
+      return buildRankedListing(listing, criteria);
+    });
+    scored.sort(compareScored);
+    scoredByType.set(type, scored);
+  }
+
+  const availableCounts = new Map<TransactionType, number>(
+    activeTypes.map((type) => [type, scoredByType.get(type)?.length ?? 0]),
+  );
+  const allocation =
+    activeTypes.length > 0
+      ? allocateGroupSlots(activeTypes, availableCounts, limit)
+      : new Map<TransactionType, number>();
+
+  const resultGroups: ResultGroup[] = activeTypes
+    .map((type) => ({
+      transactionType: type,
+      results: (scoredByType.get(type) ?? [])
+        .slice(0, allocation.get(type) ?? 0)
+        .map((s) => s.ranked),
+    }))
+    .filter((group) => group.results.length > 0);
+
+  const totalResults = resultGroups.reduce((sum, group) => sum + group.results.length, 0);
+  const resultsAreFull = totalResults >= limit;
+
   const nearMissPool =
-    results.length === 0
-      ? priceViolations
-      : priceViolations.filter((v) => v.withinTolerance);
+    totalResults === 0 ? priceViolations : priceViolations.filter((v) => v.withinTolerance);
 
   const scoredNearMisses = nearMissPool.map(({ listing, violation }) => {
+    const priceRange = priceRangeByType.get(listing.transactionType) ?? null;
     const { criteria } = scoreOne(listing, query, priceRange);
     const { ranked } = buildRankedListing(listing, criteria);
     return { ...ranked, violation };
   });
-  // "예산 초과/부족분이 적은 순" — nearMisses는 소프트 점수가 아니라 예산에
-  // 얼마나 가까운지로 정렬합니다(참고용 목록의 목적 자체가 그것이므로).
   scoredNearMisses.sort((a, b) => a.violation.amountManwon - b.violation.amountManwon);
   const nearMisses = scoredNearMisses.slice(0, nearMissLimit);
 
-  const top = results[0];
-  const hasExactMatch = top !== undefined && top.satisfiedCount === top.totalCount;
-
-  return { results, nearMisses, resultsAreFull, noCriteriaRecognized: false, hasExactMatch };
+  return {
+    results: [],
+    resultGroups,
+    nearMisses,
+    resultsAreFull,
+    noCriteriaRecognized: false,
+    hasExactMatch: false,
+  };
 }
