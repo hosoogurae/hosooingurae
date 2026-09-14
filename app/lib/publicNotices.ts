@@ -21,9 +21,21 @@ export interface PublicNotice {
   publishedAt: string;
 }
 
-async function fetchPublishedNotices(): Promise<PublicNotice[]> {
+/**
+ * 조회에 실패하면(Supabase 클라이언트 미설정 포함) 절대 빈 배열을 반환하지
+ * 않고 예외를 던집니다 — 아래 getPublishedNotices의 unstable_cache는 이
+ * 함수가 "성공적으로 반환한 값"만 캐싱하므로(Next.js 소스로 확인: 콜백이
+ * throw하면 cacheNewResult 자체가 호출되지 않음), 예외를 던져야만 일시적
+ * 조회 실패가 "소식 0건"으로 5분(그 이상, 재검증도 계속 실패하면) 동안
+ * 굳어버리는 걸 막을 수 있습니다. 실제로 0건인 것(정상 성공, 빈 배열)과
+ * 못 가져온 것(예외)은 이 함수 레벨에서부터 구분됩니다 — 호출부(notices/
+ * page.tsx)가 이 둘을 다른 화면으로 보여줍니다.
+ */
+export async function fetchPublishedNotices(): Promise<PublicNotice[]> {
   const supabase = getSupabaseClient();
-  if (!supabase) return [];
+  if (!supabase) {
+    throw new Error("Supabase가 설정되어 있지 않습니다.");
+  }
 
   const { data, error } = await supabase
     .from("notices")
@@ -33,7 +45,7 @@ async function fetchPublishedNotices(): Promise<PublicNotice[]> {
 
   if (error || !data) {
     console.error("[publicNotices] 조회 실패", error);
-    return [];
+    throw new Error("공개 소식 조회에 실패했습니다.");
   }
 
   return data.map((row) => ({
@@ -54,6 +66,10 @@ async function fetchPublishedNotices(): Promise<PublicNotice[]> {
  * 5분: 소식은 하루 한 번만 바뀌어 매 요청마다 DB를 읽을 필요는 없지만,
  * 관리자가 "공개로 전환"을 눌렀을 때 5분보다 오래 기다리게 하고 싶지
  * 않습니다(관리자 화면에도 이 지연을 안내해뒀습니다).
+ *
+ * 조회가 실패하면 fetchPublishedNotices가 예외를 던지므로 이 함수도
+ * 그대로 reject됩니다 — 호출부(notices/page.tsx)는 반드시 try/catch로
+ * 감싸서 "못 가져옴"을 "0건"과 다른 화면으로 보여줘야 합니다.
  */
 export const getPublishedNotices = unstable_cache(
   fetchPublishedNotices,

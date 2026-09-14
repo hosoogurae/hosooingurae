@@ -21,7 +21,16 @@ function formatDate(iso: string): string {
 }
 
 export default async function NoticesPage() {
-  const notices = await getPublishedNotices();
+  let notices: Awaited<ReturnType<typeof getPublishedNotices>> = [];
+  let loadFailed = false;
+  try {
+    notices = await getPublishedNotices();
+  } catch (error) {
+    // 실제로 0건인 것과 못 가져온 것을 구분합니다 — 여기서 조용히 빈
+    // 배열로 넘기면 "소식이 없다"는 거짓 안내가 됩니다.
+    console.error("[NoticesPage] 소식 조회 실패", error);
+    loadFailed = true;
+  }
 
   return (
     <>
@@ -35,7 +44,17 @@ export default async function NoticesPage() {
       </section>
 
       <section className="mx-auto max-w-3xl px-6 py-16">
-        {notices.length === 0 ? (
+        {loadFailed ? (
+          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            <p>소식을 일시적으로 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p>
+            <a
+              href="/notices"
+              className="mt-2 inline-block font-bold underline underline-offset-2"
+            >
+              다시 시도
+            </a>
+          </div>
+        ) : notices.length === 0 ? (
           <p className="rounded-xl border border-navy-900/10 px-6 py-16 text-center text-sm text-navy-800/50">
             아직 올라온 소식이 없습니다.
           </p>
