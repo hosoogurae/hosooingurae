@@ -46,7 +46,7 @@ function ApartmentDropdown({
     >
       <Link
         href={APARTMENT_ALL_HREF}
-        className="flex items-center gap-1 text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
+        className="flex items-center gap-1 whitespace-nowrap text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
         aria-expanded={open}
         aria-haspopup="true"
       >
@@ -167,15 +167,21 @@ export default function Header({
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link
           href="/#home"
-          className="text-lg font-bold tracking-tight text-navy-900 sm:text-xl"
+          className="whitespace-nowrap text-lg font-bold tracking-tight text-navy-900 sm:text-xl"
         >
           호수공인중개사사무소
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        {/* 실측 기준 최소 필요폭이 약 930px(항목 5개 + "아파트" 드롭다운 +
+            전화번호 기준)이라, 여유를 두고 Tailwind 기본 lg(1024px)에서
+            펼칩니다 — md(768px)에서 펼치면 태블릿 세로 폭에서 글자가
+            단어 중간에 줄바꿈됩니다("아파/트" 등). whitespace-nowrap은
+            혹시 폭이 또 부족해져도 조용히 깨지지 않고 눈에 띄게
+            넘치도록 하는 안전장치입니다. */}
+        <nav className="hidden items-center gap-8 lg:flex">
           <Link
             href="/"
-            className="text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
+            className="whitespace-nowrap text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
           >
             홈
           </Link>
@@ -184,7 +190,7 @@ export default function Header({
             <a
               key={item.label}
               href={item.href}
-              className="text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
+              className="whitespace-nowrap text-sm font-medium text-navy-800 transition-colors hover:text-gold-600"
             >
               {item.label}
             </a>
@@ -194,7 +200,7 @@ export default function Header({
         <div className="flex items-center gap-2">
           <a
             href={PHONE_HREF}
-            className="hidden items-center gap-2 rounded-full border border-gold-500/40 px-4 py-2 text-sm font-bold text-navy-900 transition-colors hover:border-gold-500 hover:bg-gold-500/10 sm:flex"
+            className="hidden items-center gap-2 whitespace-nowrap rounded-full border border-gold-500/40 px-4 py-2 text-sm font-bold text-navy-900 transition-colors hover:border-gold-500 hover:bg-gold-500/10 sm:flex"
           >
             <PhoneIcon className="h-4 w-4 text-gold-600" />
             {PHONE_NUMBER}
@@ -210,7 +216,7 @@ export default function Header({
           <button
             type="button"
             onClick={() => setIsMenuOpen((prev) => !prev)}
-            className="flex h-10 w-10 items-center justify-center rounded-md text-navy-900 md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-navy-900 lg:hidden"
             aria-label="메뉴 열기"
             aria-expanded={isMenuOpen}
           >
@@ -236,7 +242,7 @@ export default function Header({
       </div>
 
       {isMenuOpen && (
-        <nav className="flex flex-col gap-1 border-t border-navy-900/10 bg-white px-6 py-4 md:hidden">
+        <nav className="flex flex-col gap-1 border-t border-navy-900/10 bg-white px-6 py-4 lg:hidden">
           <Link
             href="/"
             onClick={() => setIsMenuOpen(false)}
