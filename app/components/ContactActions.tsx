@@ -281,7 +281,7 @@ function ContactRequestModalBody({ listingId }: { listingId: string }) {
 }
 
 interface ContactActionsProps {
-  /** 문의 문구에 매물번호를 담을 필요는 없지만("고객 화면엔 내부 id를 노출하지
+  /** 문의 문구에 내부 ID를 담을 필요는 없지만("고객 화면엔 내부 id를 노출하지
    *  않는다" — listingInquiry.ts 주석), "연락받기" 폼 제출값에는 어떤 매물인지
    *  구조화된 값으로 남겨야 관리자가 정확히 특정할 수 있습니다. */
   listingId: string;

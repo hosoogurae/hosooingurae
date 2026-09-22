@@ -572,13 +572,13 @@ function AdminListingsView() {
 
         <form onSubmit={handleSearchSubmit} className="flex flex-col gap-1">
           <span className="text-xs font-semibold text-navy-800/60">
-            단지명·동·매물번호 검색
+            단지명·동·내부ID·매물번호 검색
           </span>
           <div className="flex gap-2">
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="예: 호수마을, 201동, 26385..."
+              placeholder="예: 호수마을, 201동, 2648856867"
               className={`${selectClass} w-56`}
             />
             <button
@@ -692,7 +692,7 @@ function AdminListingsView() {
                   </button>
                 </div>
 
-                {/* 2줄: 배지(실제로 쓰는 정보라 크기 그대로 유지) + 확인일·매물번호.
+                {/* 2줄: 배지(실제로 쓰는 정보라 크기 그대로 유지) + 확인일·내부ID·매물번호.
                     dealStatus는 오른쪽 드롭다운이 이미 보여주므로 배지를 따로 안 둡니다. */}
                 <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-navy-800/50 sm:col-start-1 sm:row-start-2">
                   <span className="rounded-full bg-navy-900/5 px-2 py-0.5 text-navy-800">
@@ -756,8 +756,15 @@ function AdminListingsView() {
                     {formatLastVerified(listing.lastVerifiedAt)} · 최근 수정{" "}
                     {formatUpdatedAt(listing.updatedAt)}
                   </span>
-                  {/* 매물번호: 검색에 쓰이니 지우지 않되, 판단에 중요하지 않아 작고 흐리게. */}
-                  <span className="font-normal text-navy-800/30">· {listing.id}</span>
+                  {/* 내부 ID: 검색에 쓰이니 지우지 않되, 판단에 중요하지 않아 작고 흐리게. */}
+                  <span className="font-normal text-navy-800/30">· 내부ID {listing.id}</span>
+                  {/* 네이버 매물번호. 관리자 전용 표시입니다 — 손님 화면(app/listings 등)에는
+                      절대 넣지 않습니다. 값이 없는 매물(직접 등록 등)은 이 줄 자체를 생략합니다. */}
+                  {listing.articleNumber && (
+                    <span className="font-normal text-navy-800/30">
+                      · 매물번호 {listing.articleNumber}
+                    </span>
+                  )}
                 </div>
 
                 <div className="sm:col-start-2 sm:row-start-2 sm:justify-self-end">

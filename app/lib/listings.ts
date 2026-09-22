@@ -16,19 +16,24 @@ export interface ListingWithComplex extends Listing {
 }
 
 /**
- * listings 테이블의 모든 컬럼 중 raw_source_text(네이버 원문 스크랩 텍스트,
- * 관리자 전용)만 뺀 목록. 공개 조회(getAllListings의 includeDrafts=false
- * 경로)는 이 컬럼을 절대 쓰지 않으므로 select 단계에서부터 가져오지
- * 않습니다. listingRowToListing이 이 컬럼 외의 모든 필드를 무조건 읽으므로,
- * 여기서 더 줄이면 다른 화면(recommend/compare 등)이 조용히 깨질 수 있어
- * 이 필드 하나만 제외합니다.
+ * listings 테이블의 모든 컬럼 중 관리자 전용 필드를 뺀 목록. 공개 조회
+ * (getAllListings의 includeDrafts=false 경로)는 이 컬럼들을 절대 쓰지
+ * 않으므로 select 단계에서부터 가져오지 않습니다 — "우연히 안 새는" 상태에
+ * 기대지 않고, 애초에 공개 쿼리 결과에 값 자체가 없게 만드는 것이 목적입니다.
+ * listingRowToListing이 이 컬럼 외의 모든 필드를 무조건 읽으므로, 여기서
+ * 더 줄이면 다른 화면(recommend/compare 등)이 조용히 깨질 수 있어 신중하게
+ * 골라야 합니다.
+ *
+ * - raw_source_text: 네이버 원문 스크랩 전체 텍스트.
+ * - article_number: 네이버 매물번호. 손님에게 절대 노출하면 안 되는 값이라
+ *   관리자 조회(includeDrafts=true, select("*"))에서만 가져옵니다.
  */
 const PUBLIC_LISTING_COLUMNS =
   "id, complex_id, property_type, status, deal_status, last_verified_at, " +
   "transaction_type, price, price_label, building, floor, total_floors, " +
   "supply_area, exclusive_area, room_count, bathroom_count, direction, " +
   "move_in_date, maintenance_fee, has_loan, loan_amount, short_description, " +
-  "features, naver_url, article_number, verified_date, is_featured, " +
+  "features, naver_url, verified_date, is_featured, " +
   "source_type, source_article_id, unit_type, created_at, updated_at, " +
   "suspected_match_acknowledged_at";
 
@@ -223,8 +228,17 @@ async function fetchImagesByListingId(
 }
 
 /**
- * 검색어(단지명·동·매물번호)에 매칭되는 매물 id 목록을 DB 쿼리로 찾습니다.
- * 세 조건을 각각 별도의 안전한(파라미터화된) 쿼리로 찾은 뒤 합칩니다 —
+ * naverTextParser.ts의 매물번호 추출 정규식(/매물\s*번호\s*[:：]?\s*(\d{6,})/)이
+ * 이미 "6자리 미만은 진짜 매물번호로 안 친다"고 정해둔 기준입니다. 검색어에서
+ * 뽑은 숫자가 이보다 짧으면(예: "201동" 검색의 "2") article_number ilike가
+ * 웬만한 매물에 다 걸려버려 엉뚱한 결과가 섞이므로, 매물번호 검색 자체를
+ * 건너뜁니다.
+ */
+const MIN_ARTICLE_NUMBER_SEARCH_DIGITS = 6;
+
+/**
+ * 검색어(단지명·동·내부ID·매물번호)에 매칭되는 매물 id 목록을 DB 쿼리로
+ * 찾습니다. 각 조건을 별도의 안전한(파라미터화된) 쿼리로 찾은 뒤 합칩니다 —
  * PostgREST .or() 문자열에 사용자 입력을 그대로 끼워 넣으면 쉼표/괄호로
  * 필터 구문 자체가 깨지거나 의도치 않은 조건이 섞일 위험이 있어 피합니다.
  */
@@ -234,11 +248,19 @@ async function resolveSearchListingIds(
 ): Promise<string[]> {
   // %, _는 ilike 와일드카드라서 검색어에 그대로 있으면 리터럴로 이스케이프합니다.
   const pattern = `%${query.replace(/[%_]/g, "\\$&")}%`;
+  // 매물번호는 숫자만 저장돼 있으므로, 검색어에 섞인 글자(예: "매물번호
+  // 2648856867"을 그대로 붙여넣은 경우)를 무시하고 숫자만 뽑아 비교합니다.
+  const digitsOnly = query.replace(/[^0-9]/g, "");
+  const articleNumberPattern =
+    digitsOnly.length >= MIN_ARTICLE_NUMBER_SEARCH_DIGITS ? `%${digitsOnly}%` : null;
 
-  const [complexMatches, buildingMatches, idMatches] = await Promise.all([
+  const [complexMatches, buildingMatches, idMatches, articleNumberMatches] = await Promise.all([
     supabase.from("complexes").select("id").ilike("name", pattern),
     supabase.from("listings").select("id").ilike("building", pattern),
     supabase.from("listings").select("id").ilike("id", pattern),
+    articleNumberPattern
+      ? supabase.from("listings").select("id").ilike("article_number", articleNumberPattern)
+      : Promise.resolve({ data: [] as { id: string }[] }),
   ]);
 
   const matchedComplexIds = (complexMatches.data ?? []).map((row) => row.id);
@@ -250,6 +272,7 @@ async function resolveSearchListingIds(
   for (const row of byComplexName.data ?? []) ids.add(row.id);
   for (const row of buildingMatches.data ?? []) ids.add(row.id);
   for (const row of idMatches.data ?? []) ids.add(row.id);
+  for (const row of articleNumberMatches.data ?? []) ids.add(row.id);
 
   return Array.from(ids);
 }

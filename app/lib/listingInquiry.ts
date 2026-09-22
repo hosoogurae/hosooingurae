@@ -14,8 +14,8 @@ export function formatComplexAndBuilding(
 /**
  * 전화상담·문자문의 등 어떤 경로로 연락하든 상담원이 매물을 정확히 특정할 수
  * 있도록 단지명·동·층·거래유형·가격과 상세페이지 링크를 담은 문의 문구를
- * 만듭니다. 고객 화면/문자에는 내부 listing id(매물번호)를 노출하지
- * 않습니다 — DB 식별은 관리자 화면에서만 씁니다.
+ * 만듭니다. 고객 화면/문자에는 내부 listing id(관리자 화면의 "내부 ID")를
+ * 노출하지 않습니다 — DB 식별은 관리자 화면에서만 씁니다.
  */
 export function buildInquiryMessage(params: {
   complexName: string;

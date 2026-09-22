@@ -59,7 +59,7 @@ export interface ListingSearchFilters {
   complexId?: string;
   /** 관리자 화면 전용(공개/비공개 필터). 공개 조회 경로는 이 필드를 쓰지 않습니다. */
   status?: ListingStatus;
-  /** 관리자 화면 전용(단지명·동·매물번호 검색어). */
+  /** 관리자 화면 전용(단지명·동·내부ID·매물번호 검색어). */
   search?: string;
 }
 
