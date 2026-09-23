@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { BUSINESS_HOURS, COMPANY_NAME, NAVER_MAP_URL, WEEKLY_CLOSED_LABEL } from "../data/contact";
-import { ASSOCIATION_HOLIDAY_CONTEXT_LABEL, type UpcomingHolidays } from "../lib/holiday";
+import { formatHolidayPeriodRangeLabel, type UpcomingHolidays } from "../lib/holiday";
 import BrokerageInfo from "./BrokerageInfo";
 import { LocationIcon } from "./icons";
 
 export default function Footer({ holidayInfo }: { holidayInfo: UpcomingHolidays }) {
-  const holidayDateLine = holidayInfo.thisMonth
-    ? `${holidayInfo.thisMonth.label} · 다음 ${holidayInfo.next.label} · ${ASSOCIATION_HOLIDAY_CONTEXT_LABEL}`
-    : `${holidayInfo.next.label} · ${ASSOCIATION_HOLIDAY_CONTEXT_LABEL}`;
+  // 오늘 이후의 휴무 기간을 전부 나열합니다("이번 달·다음 달" 둘로 고정하던
+  // 예전과 달리, 지정 기간(설날·추석)이 몇 개든 매달 규칙과 함께 자동으로
+  // 붙습니다 — 지난 기간은 holiday.ts에서 이미 걸러져 여기 안 나타납니다).
+  const holidayDateLine = holidayInfo.upcoming
+    .map((period) => `${formatHolidayPeriodRangeLabel(period)} ${period.name}`)
+    .join(" · ");
 
   return (
     <footer className="border-t border-navy-900/10 bg-white px-6 py-12">
