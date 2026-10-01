@@ -142,6 +142,17 @@ export function ListingFormFields({
     (option) => option.id === draft.complexId,
   );
 
+  // "단지내상가"처럼 단지명에 "상가"가 있는데 매물종류를 다른 걸로 고르면
+  // (보통 실수로) 손님용 "아파트" 드롭다운에 상가가 섞여 나옵니다(2026-10-01
+  // 실제 사고). 이름만 보고 자동으로 매물종류를 바꿔버리진 않고, 사람이
+  // 보고 넘길 수 있게 경고만 띄웁니다 — "구래동 아이파크"처럼 이름에
+  // "상가"가 없어도 실제로는 상가인 단지도 있어서, 이름 기준 자동 보정은
+  // 오히려 그런 경우를 망가뜨립니다.
+  const relevantComplexName =
+    complexMode === "existing" ? selectedComplex?.name : newComplex?.name;
+  const showShopNameMismatchWarning =
+    Boolean(relevantComplexName?.includes("상가")) && draft.propertyType !== "상가";
+
   // 선택된 단지에 이미 등록된 평면도 타입 후보(면적 포함). 있으면 드롭다운으로
   // 고르게 하고("해당 없음" 포함, 필수), 없으면(또는 단지 미선택) 새로 입력할
   // 수 있게 자유 입력칸을 보여줍니다(그 경우는 선택 사항으로 남겨둠).
@@ -291,6 +302,12 @@ export function ListingFormFields({
           {draft.propertyType === "상가" && (
             <span className="text-xs text-navy-800/50">
               상가 매물은 주거 단지를 선택하지 않아도 등록할 수 있습니다.
+            </span>
+          )}
+          {showShopNameMismatchWarning && (
+            <span className="text-xs font-semibold text-amber-700">
+              단지명(“{relevantComplexName}”)에 “상가”가 들어 있습니다. 매물종류가
+              “상가”가 맞는지 확인해주세요.
             </span>
           )}
         </Field>
