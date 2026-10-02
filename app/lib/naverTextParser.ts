@@ -57,7 +57,24 @@ export interface ParsedNaverListing {
 }
 
 const TRANSACTION_TYPES: TransactionType[] = ["매매", "전세", "월세"];
-const PROPERTY_TYPES: PropertyType[] = ["아파트", "오피스텔", "상가", "단독주택"];
+/**
+ * parsePropertyType이 원문을 훑는 순서입니다. "아파트"가 맨 앞이 아니라
+ * 맨 뒤에 있는 것이 의도적입니다 — 바꾸지 마세요.
+ *
+ * .find()는 이 배열 순서대로 돌다 처음 매치되는 단어를 반환합니다. 즉 원문
+ * 안에서 실제로 어느 단어가 먼저 나오는지와 무관하게, 이 배열의 순서 자체가
+ * 곧 우선순위입니다. 그런데 상가 매물의 "매물특징" 줄에는 "전시성 좋은
+ * 대단지 아파트 상가"처럼 입지 설명으로 "아파트"라는 단어가 섞여 들어가는
+ * 경우가 실제로 있습니다(2026-10-02 조사, 실제 사고 매물 "단지내상가
+ * 단지상가1층" 포함 5건 확인). "아파트"를 먼저 두면 이런 상가 매물이 전부
+ * 아파트로 잘못 판정됩니다. 아무 단서도 못 찾았을 때만 "아파트"로 떨어지는
+ * 사실상 기본값 역할이라 맨 뒤에 둡니다.
+ *
+ * ⚠️ 이 순서를 되돌리면 naverTextParser.test.ts의 "매물특징에 '아파트'가
+ * 섞인 상가 매물" 테스트가 깨집니다 — 의도적인 안전장치이니 복구하지 말고
+ * 왜 깨졌는지부터 확인하세요.
+ */
+const PROPERTY_TYPES: PropertyType[] = ["상가", "오피스텔", "단독주택", "아파트"];
 const DIRECTIONS = [
   "남동향",
   "남서향",
@@ -251,7 +268,18 @@ function parsePriceFromBasicInfo(text: string): {
   return {};
 }
 
+// "건축물 용도"는 네이버가 건축물대장에서 긁어온 값이라 "매물특징" 같은
+// 자유 서술문보다 신뢰도가 높습니다. 있으면 이 값을 최우선으로 쓰고,
+// 없을 때만(실제 DB의 약 32%는 이 줄 자체가 없는 신형 레이아웃) 아래
+// PROPERTY_TYPES 배열 검색으로 넘어갑니다.
+function parseBuildingUsage(text: string): string | undefined {
+  return text.match(/건축물\s*용도\s*[:：]?\s*\n?\s*([^\n\t]{1,20})/)?.[1];
+}
+
 function parsePropertyType(text: string): PropertyType | undefined {
+  const usage = parseBuildingUsage(text);
+  if (usage?.includes("근린생활시설")) return "상가";
+  if (usage?.includes("공동주택")) return "아파트";
   return PROPERTY_TYPES.find((type) => text.includes(type));
 }
 

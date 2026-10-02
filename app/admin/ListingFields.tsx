@@ -299,6 +299,12 @@ export function ListingFormFields({
               </option>
             ))}
           </select>
+          {isUncertain("매물종류") && (
+            <span className="text-xs font-semibold text-amber-700">
+              원문에서 매물종류를 확인하지 못해 기본값(“{draft.propertyType}”)을
+              넣었습니다. 실제 매물종류가 맞는지 확인해주세요.
+            </span>
+          )}
           {draft.propertyType === "상가" && (
             <span className="text-xs text-navy-800/50">
               상가 매물은 주거 단지를 선택하지 않아도 등록할 수 있습니다.
