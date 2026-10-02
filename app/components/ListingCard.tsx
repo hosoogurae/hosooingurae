@@ -10,16 +10,13 @@ import {
   formatRooms,
   formatUnitTypeLabel,
 } from "../lib/format/listingFields";
+import { getVerifiedBadgeLabel } from "../lib/listingVerifiedBadge";
 import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
 
 // 목록 그리드(sm:2열/lg:3열, 컨테이너 max-w-6xl)에서 카드 이미지가 실제로
 // 차지하는 폭 근사치입니다. 이 값이 있어야 next/image가 큰 원본 대신 실제
 // 표시 크기에 맞는 작은 변형을 요청합니다.
 const CARD_IMAGE_SIZES = "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw";
-
-function formatVerifiedDate(dateStr: string) {
-  return dateStr.replaceAll("-", ".");
-}
 
 /** "201동 · 3층 / 20층"처럼 대표 식별 정보를 만듭니다. 없는 값은 추측하지 않고 생략합니다. */
 function formatBuildingFloor(listing: ListingWithComplex): string | undefined {
@@ -66,6 +63,7 @@ export default function ListingCard({
   const floorPlanThumbnail =
     floorPlanImage && (floorPlanImage.previewUrl || floorPlanImage.url);
   const buildingFloorLine = formatBuildingFloor(listing);
+  const verifiedBadgeLabel = getVerifiedBadgeLabel(listing.lastVerifiedAt);
   const loading = priority ? "eager" : "lazy";
 
   return (
@@ -137,9 +135,9 @@ export default function ListingCard({
           </span>
           {/* 이미지(특히 평면도) 위에 겹쳐 방 이름을 가리던 배지를 정보
               영역으로 옮겼습니다 — 도면은 가려지면 정보 자체가 사라지므로. */}
-          {listing.verifiedDate && (
+          {verifiedBadgeLabel && (
             <span className="text-xs font-semibold text-navy-800/50">
-              확인매물 {formatVerifiedDate(listing.verifiedDate)}
+              {verifiedBadgeLabel}
             </span>
           )}
         </div>

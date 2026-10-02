@@ -36,6 +36,7 @@ import {
   resolveListingHeroImage,
 } from "../../lib/listingGalleryImages";
 import { getListingById } from "../../lib/listings";
+import { getVerifiedBadgeLabel } from "../../lib/listingVerifiedBadge";
 import {
   formatArea,
   formatFloorRange,
@@ -85,10 +86,6 @@ export async function generateMetadata({
       images: [ogImage],
     },
   };
-}
-
-function formatVerifiedDate(dateStr: string) {
-  return dateStr.replaceAll("-", ".");
 }
 
 function InfoItem({
@@ -168,6 +165,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
 
   const pageUrl = buildSiteUrl(`/listings/${listing.id}`);
   const heroFloorPlan = floorPlanImages[0];
+  const verifiedBadgeLabel = getVerifiedBadgeLabel(listing.lastVerifiedAt);
 
   return (
     <>
@@ -202,9 +200,9 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 {listing.shortDescription}
               </p>
 
-              {listing.verifiedDate && (
+              {verifiedBadgeLabel && (
                 <span className="mt-4 inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-gold-400">
-                  확인매물 {formatVerifiedDate(listing.verifiedDate)}
+                  {verifiedBadgeLabel}
                 </span>
               )}
 
