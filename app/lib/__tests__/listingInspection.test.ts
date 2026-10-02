@@ -68,6 +68,23 @@ describe("matchesInspectionCategory — no-transaction-match", () => {
   });
 });
 
+describe("matchesInspectionCategory — auto-held", () => {
+  it("hold이고 autoHeldAt이 있으면(자동 보류) 걸린다", () => {
+    const listing = { ...BASE, dealStatus: "hold" as const, autoHeldAt: "2026-09-01T00:00:00.000Z" };
+    expect(matchesInspectionCategory(listing, "auto-held", {})).toBe(true);
+  });
+
+  it("hold이지만 autoHeldAt이 없으면(사람이 직접 보류) 걸리지 않는다", () => {
+    const listing = { ...BASE, dealStatus: "hold" as const };
+    expect(matchesInspectionCategory(listing, "auto-held", {})).toBe(false);
+  });
+
+  it("hold가 아니면 autoHeldAt이 있어도 걸리지 않는다", () => {
+    const listing = { ...BASE, dealStatus: "advertising" as const, autoHeldAt: "2026-09-01T00:00:00.000Z" };
+    expect(matchesInspectionCategory(listing, "auto-held", {})).toBe(false);
+  });
+});
+
 describe("describeMissingFieldsReason", () => {
   it("정상 매물은 빈 문자열을 반환한다", () => {
     expect(describeMissingFieldsReason(BASE)).toBe("");

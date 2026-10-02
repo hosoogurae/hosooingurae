@@ -48,6 +48,13 @@ export interface Listing {
    * 노출하지 않습니다.
    */
   lastVerifiedAt?: string;
+  /**
+   * 90일 자동 보류 cron이 deal_status를 'hold'로 바꾼 시각(ISO 문자열).
+   * 사람이 직접 보류한 매물은 이 값이 비어 있습니다 — 관리자 목록에서
+   * "자동으로 내려간 매물"과 "내가 보류한 매물"을 구분하는 용도입니다.
+   * deal_status가 'hold'에서 벗어나면(되살리기) 서버가 함께 비웁니다.
+   */
+  autoHeldAt?: string;
   transactionType: TransactionType;
   /** 만원 단위 가격 (정렬·필터링용). 매매가/보증금 기준. */
   price: number;

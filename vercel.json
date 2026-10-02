@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/notices",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/auto-hold-stale-listings",
+      "schedule": "0 1 * * *"
     }
   ]
 }

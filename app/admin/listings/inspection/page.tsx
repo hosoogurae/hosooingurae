@@ -24,6 +24,8 @@ const CATEGORY_DESCRIPTIONS: Record<InspectionCategory, string> = {
   "no-floorplan": "평형 타입이 없거나, 있어도 그 단지에 등록된 평면도와 연결되지 않는 매물입니다.",
   draft: "아직 공개하지 않은 매물입니다.",
   negotiating: "계약이 진행 중이라 곧 완료될 수 있는 매물입니다.",
+  "auto-held":
+    "90일 넘게 확인하지 않아 cron이 자동으로 보류 처리한 매물입니다. 확인 후 광고중으로 되돌리면 자동으로 다시 광고됩니다.",
 };
 
 async function loadListings(): Promise<ListingWithComplex[]> {

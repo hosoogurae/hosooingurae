@@ -137,6 +137,10 @@ export function parseListingPayload(input: unknown): {
     errors.push("마지막 확인일 값이 올바르지 않습니다.");
   }
 
+  if (data.autoHeldAt !== undefined && typeof data.autoHeldAt !== "string") {
+    errors.push("자동 보류 시각 값이 올바르지 않습니다.");
+  }
+
   if (errors.length > 0) {
     return { errors };
   }
@@ -152,6 +156,8 @@ export function parseListingPayload(input: unknown): {
     dealStatus: (data.dealStatus as DealStatus | undefined) ?? "advertising",
     lastVerifiedAt:
       typeof data.lastVerifiedAt === "string" ? data.lastVerifiedAt : undefined,
+    autoHeldAt:
+      typeof data.autoHeldAt === "string" ? data.autoHeldAt : undefined,
     transactionType: data.transactionType as TransactionType,
     price: data.price as number,
     priceLabel: data.priceLabel as string,

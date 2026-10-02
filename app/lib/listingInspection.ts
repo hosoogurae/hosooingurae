@@ -16,7 +16,8 @@ export type InspectionCategory =
   | "no-transaction-match"
   | "no-floorplan"
   | "draft"
-  | "negotiating";
+  | "negotiating"
+  | "auto-held";
 
 export const INSPECTION_CATEGORY_LABELS: Record<InspectionCategory, string> = {
   urgent: "재확인이 필요한 매물",
@@ -27,6 +28,7 @@ export const INSPECTION_CATEGORY_LABELS: Record<InspectionCategory, string> = {
   "no-floorplan": "평형타입 또는 평면도 연결이 부족한 매물",
   draft: "비공개 매물",
   negotiating: "계약 진행중 매물",
+  "auto-held": "자동 보류된 매물",
 };
 
 /** 우선순위 카테고리(사진 없는 공개 매물, 재확인 필요) — 점검 페이지에서 먼저·강조 표시. */
@@ -44,6 +46,7 @@ export const INSPECTION_CATEGORIES: InspectionCategory[] = [
   "no-floorplan",
   "draft",
   "negotiating",
+  "auto-held",
 ];
 
 const MIN_DESCRIPTION_LENGTH = 10;
@@ -91,6 +94,8 @@ export function matchesInspectionCategory(
       return listing.status === "draft";
     case "negotiating":
       return listing.dealStatus === "negotiating";
+    case "auto-held":
+      return listing.dealStatus === "hold" && Boolean(listing.autoHeldAt);
   }
 }
 

@@ -106,3 +106,20 @@ export async function sendNewSuspectedMatchesPush(count: number): Promise<void> 
   };
   await Promise.all(subscriptions.map((sub) => sendToOne(sub, payload)));
 }
+
+/**
+ * 90일 자동 보류 cron이 매물을 실제로 보류시켰을 때만 호출합니다(0건이면
+ * 호출하는 쪽에서부터 호출하지 않음). 손님 화면에서 매물이 조용히 사라지면
+ * 나중에 "왜 줄었지"가 되므로, 몇 건이 내려갔는지 바로 알립니다.
+ */
+export async function sendAutoHoldPush(count: number): Promise<void> {
+  if (!vapidConfigured || count <= 0) return;
+  const subscriptions = await getAllSubscriptions();
+  if (subscriptions.length === 0) return;
+  const payload: PushPayload = {
+    title: "매물 자동 보류",
+    body: `매물 ${count}건이 자동 보류되었습니다.`,
+    url: "/admin/listings/manage?filter=auto-held",
+  };
+  await Promise.all(subscriptions.map((sub) => sendToOne(sub, payload)));
+}

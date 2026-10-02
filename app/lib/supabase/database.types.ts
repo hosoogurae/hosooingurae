@@ -88,6 +88,7 @@ export interface Database {
           status: "draft" | "published";
           deal_status: "advertising" | "negotiating" | "completed" | "hold";
           last_verified_at: string | null;
+          auto_held_at: string | null;
           transaction_type: "매매" | "전세" | "월세";
           price: number;
           price_label: string;
@@ -124,6 +125,7 @@ export interface Database {
           status?: "draft" | "published";
           deal_status?: "advertising" | "negotiating" | "completed" | "hold";
           last_verified_at?: string | null;
+          auto_held_at?: string | null;
           transaction_type: "매매" | "전세" | "월세";
           price: number;
           price_label: string;

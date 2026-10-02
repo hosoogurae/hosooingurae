@@ -59,6 +59,25 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ errors: [NOT_CONFIGURED_ERROR] }, { status: 500 });
   }
 
+  // 90일 자동 보류(hold)에서 벗어날 때는 어느 화면·어느 버튼으로 바꾸든
+  // 서버에서 일관되게 처리합니다 — auto_held_at만 비우면 last_verified_at은
+  // 여전히 90일을 넘은 상태라 다음날 cron이 같은 매물을 또 보류시켜
+  // 무한반복에 빠집니다. 그래서 두 값을 항상 함께 갱신합니다. 'completed'로
+  // 바뀔 때는 last_verified_at을 건드리지 않습니다(확인 행위가 아님).
+  const { data: currentRow } = await supabase
+    .from("listings")
+    .select("deal_status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (
+    currentRow?.deal_status === "hold" &&
+    (listing.dealStatus === "advertising" || listing.dealStatus === "negotiating")
+  ) {
+    listing.autoHeldAt = undefined;
+    listing.lastVerifiedAt = new Date().toISOString();
+  }
+
   if (listing.propertyType !== "상가") {
     const { data: existingComplex, error: complexError } = await supabase
       .from("complexes")
