@@ -10,7 +10,6 @@ import {
   formatRooms,
   formatUnitTypeLabel,
 } from "../lib/format/listingFields";
-import { getVerifiedBadgeLabel } from "../lib/listingVerifiedBadge";
 import ListingBrandPlaceholder from "./ListingBrandPlaceholder";
 
 // 목록 그리드(sm:2열/lg:3열, 컨테이너 max-w-6xl)에서 카드 이미지가 실제로
@@ -63,7 +62,6 @@ export default function ListingCard({
   const floorPlanThumbnail =
     floorPlanImage && (floorPlanImage.previewUrl || floorPlanImage.url);
   const buildingFloorLine = formatBuildingFloor(listing);
-  const verifiedBadgeLabel = getVerifiedBadgeLabel(listing.lastVerifiedAt);
   const loading = priority ? "eager" : "lazy";
 
   return (
@@ -129,17 +127,10 @@ export default function ListingCard({
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-6">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           <span className="w-fit rounded-full bg-navy-900/5 px-3 py-1 text-xs font-semibold text-navy-800">
             {listing.propertyType}
           </span>
-          {/* 이미지(특히 평면도) 위에 겹쳐 방 이름을 가리던 배지를 정보
-              영역으로 옮겼습니다 — 도면은 가려지면 정보 자체가 사라지므로. */}
-          {verifiedBadgeLabel && (
-            <span className="text-xs font-semibold text-navy-800/50">
-              {verifiedBadgeLabel}
-            </span>
-          )}
         </div>
 
         <h3 className="text-lg font-bold leading-snug text-navy-950">
