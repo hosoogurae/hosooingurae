@@ -8,6 +8,7 @@ import { normalizeComplexName } from "../../../lib/complexNameNormalize";
 import type { DuplicateMatch } from "../../../lib/naverDuplicate";
 import type { ComplexOption } from "../../../lib/naverImport";
 import { parseKoreanAmountToManwon } from "../../../lib/naverTextParser";
+import LastRegisteredListing from "../../LastRegisteredListing";
 import {
   Field,
   ListingFormFields,
@@ -505,6 +506,10 @@ export default function AdminRegisterPage() {
         아래 항목을 채우고 맨 아래 &quot;등록하기&quot; 버튼을 누르면 바로
         저장돼요. 사진을 골라두면 등록과 동시에 함께 올라갑니다.
       </p>
+
+      <div className="mt-4">
+        <LastRegisteredListing />
+      </div>
 
       {sourceSubmission && (
         <div className="mt-4 rounded-md border border-gold-500/30 bg-gold-500/10 px-3 py-2 text-sm text-navy-900">

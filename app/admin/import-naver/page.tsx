@@ -6,6 +6,7 @@ import type { Listing } from "../../data/listings";
 import type { DuplicateMatch } from "../../lib/naverDuplicate";
 import type { ComplexOption } from "../../lib/naverImport";
 import { buildNaverPhotosBookmarklet } from "../../lib/naverPhotosBookmarklet";
+import LastRegisteredListing from "../LastRegisteredListing";
 import { Field, ListingFormFields, inputClass } from "../ListingFields";
 import NaverDuplicatePanel from "../NaverDuplicatePanel";
 
@@ -329,10 +330,14 @@ export default function AdminImportPage() {
       </div>
 
       {step === "input" && (
-        <form
-          onSubmit={handleImport}
-          className="mt-8 rounded-xl border border-navy-900/10 p-6 sm:p-8"
-        >
+        <>
+          <div className="mt-6">
+            <LastRegisteredListing />
+          </div>
+          <form
+            onSubmit={handleImport}
+            className="rounded-xl border border-navy-900/10 p-6 sm:p-8"
+          >
           <Field label="네이버 부동산 URL (선택)" hint="입력하면 매물번호로 중복 등록을 막아줍니다.">
             <input
               type="url"
@@ -372,7 +377,8 @@ export default function AdminImportPage() {
           >
             {loading ? "분석 중..." : "정보 채우기"}
           </button>
-        </form>
+          </form>
+        </>
       )}
 
       {step === "preview" && draft && (

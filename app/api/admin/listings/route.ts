@@ -34,9 +34,16 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("q")?.trim() || undefined;
   const complexId = searchParams.get("complexId")?.trim() || undefined;
 
+  const limitParam = searchParams.get("limit");
+  const limit =
+    limitParam && Number.isInteger(Number(limitParam)) && Number(limitParam) > 0
+      ? Number(limitParam)
+      : undefined;
+
   const listings = await getAllListings({
     includeDrafts: true,
     sort,
+    limit,
     filters: { status, transactionType, search, complexId },
   });
   return NextResponse.json({ listings });
