@@ -8,6 +8,9 @@ import {
   isUnknownListingNumber,
 } from "../lib/format/listingFields";
 
+/** 보여줄 최근 등록 매물 건수. 바꿀 땐 이 값만 고치면 됩니다. */
+export const RECENT_REGISTERED_LISTINGS_COUNT = 5;
+
 function formatListingTitle(listing: ListingWithComplex): string {
   const segments: string[] = [listing.complex.name];
   const building = listing.building.trim();
@@ -35,16 +38,16 @@ function formatRegisteredAt(iso: string | undefined): string {
 }
 
 /**
- * 매물을 연속으로 등록할 때 "방금 거 들어갔나"를 바로 확인하는 한 줄
- * 표시입니다. 마운트될 때 1회만 조회합니다 — 네이버 붙여넣기 화면·직접
- * 등록 화면 둘 다 등록에 성공하면 이 컴포넌트가 걸린 입력 화면 자체가
- * (성공 화면으로) 사라졌다가 "다른 매물 등록하기"로 되돌아올 때 다시
- * 마운트되는 구조라, 그 재마운트 자체가 곧 새로고침입니다. 이 구조가
- * 바뀌어 같은 마운트 상태로 계속 머무르게 되면, 등록 성공 시점에
- * 다시 조회하는 로직을 추가해야 합니다.
+ * 매물을 연속으로 등록할 때 "방금 거 들어갔나"를 바로 확인하는 작은
+ * 목록입니다(최근 RECENT_REGISTERED_LISTINGS_COUNT건, 최신순). 마운트될
+ * 때 1회만 조회합니다 — 네이버 붙여넣기 화면·직접 등록 화면 둘 다 등록에
+ * 성공하면 이 컴포넌트가 걸린 입력 화면 자체가(성공 화면으로) 사라졌다가
+ * "다른 매물 등록하기"로 되돌아올 때 다시 마운트되는 구조라, 그 재마운트
+ * 자체가 곧 새로고침입니다. 이 구조가 바뀌어 같은 마운트 상태로 계속
+ * 머무르게 되면, 등록 성공 시점에 다시 조회하는 로직을 추가해야 합니다.
  */
 export default function LastRegisteredListing() {
-  const [listing, setListing] = useState<ListingWithComplex | null | undefined>(
+  const [listings, setListings] = useState<ListingWithComplex[] | undefined>(
     undefined,
   );
   const [failed, setFailed] = useState(false);
@@ -53,15 +56,14 @@ export default function LastRegisteredListing() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/admin/listings?sort=created_desc&limit=1")
+    fetch(`/api/admin/listings?sort=created_desc&limit=${RECENT_REGISTERED_LISTINGS_COUNT}`)
       .then((response) => {
         if (!response.ok) throw new Error("조회 실패");
         return response.json();
       })
       .then((data) => {
         if (cancelled) return;
-        const listings = data.listings as ListingWithComplex[];
-        setListing(listings[0] ?? null);
+        setListings(data.listings as ListingWithComplex[]);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -90,20 +92,26 @@ export default function LastRegisteredListing() {
     );
   }
 
-  // 로딩 중(undefined)이거나 등록된 매물이 하나도 없으면(null) 조용히
+  // 로딩 중(undefined)이거나 등록된 매물이 하나도 없으면(빈 배열) 조용히
   // 생략합니다 — 로딩 중에 "없음"을 보여주는 건 거짓 정보입니다.
-  if (!listing) return null;
+  if (!listings || listings.length === 0) return null;
 
   return (
-    <p className="mb-4 text-xs text-navy-800/50">
-      마지막으로 등록한 매물:{" "}
-      <Link
-        href={`/admin/listings/${listing.id}/edit`}
-        className="font-semibold text-navy-800/70 hover:text-gold-600 hover:underline"
-      >
-        {formatListingTitle(listing)}
-      </Link>{" "}
-      · {formatRegisteredAt(listing.createdAt)}
-    </p>
+    <div className="mb-4 text-xs text-navy-800/50">
+      <p>마지막으로 등록한 매물:</p>
+      <ul className="mt-0.5 list-none">
+        {listings.map((listing) => (
+          <li key={listing.id}>
+            <Link
+              href={`/admin/listings/${listing.id}/edit`}
+              className="font-semibold text-navy-800/70 hover:text-gold-600 hover:underline"
+            >
+              {formatListingTitle(listing)}
+            </Link>{" "}
+            · {formatRegisteredAt(listing.createdAt)}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
