@@ -1,4 +1,6 @@
 import { NAVER_MAP_URL, PHONE_HREF, PHONE_NUMBER } from "../data/contact";
+import { isConsultPickerEnabled } from "../lib/consultPhones";
+import ConsultStylePicker from "./ConsultStylePicker";
 import { LocationIcon } from "./icons";
 
 export default function ContactCta() {
@@ -30,6 +32,11 @@ export default function ContactCta() {
             오시는 길
           </a>
         </div>
+
+        {/* 두 상담 번호(CONSULT_PHONE_FACT/HEART)가 모두 설정돼 있을 때만
+            보입니다. 번호 자체는 여기서 넘기지 않습니다 — 손님이 선택지를
+            누를 때 /api/consult-phone에서 받아갑니다(app/lib/consultPhones.ts). */}
+        {isConsultPickerEnabled() && <ConsultStylePicker />}
       </div>
     </section>
   );
