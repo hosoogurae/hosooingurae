@@ -165,8 +165,12 @@ export default function ConsultStylePicker() {
   );
 }
 
+/**
+ * 번호는 버튼 링크(tel:/sms:)와 클립보드에만 들어가고, 화면에 글자로는
+ * 어디에도 표시하지 않습니다.
+ */
 function PhoneActions({ phone }: { phone: string }) {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   // 모달은 클릭 후에만 그려지므로(서버 렌더링 없음) 여기서 바로 기기를 판별해도
   // 하이드레이션 불일치가 생기지 않습니다.
   const isMobile = isMobileDevice();
@@ -175,17 +179,18 @@ function PhoneActions({ phone }: { phone: string }) {
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(phone);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 2000);
     } catch {
-      // 클립보드 권한이 없는 환경 등은 조용히 무시합니다.
+      // 클립보드 권한이 없는 환경 등. PC에서는 tel:/sms:도 안 될 수 있어
+      // 조용히 넘기면 손님이 연락할 길이 없으므로 대표전화로 안내합니다.
+      setCopyState("failed");
     }
   }
 
   return (
     <div className="mt-5">
-      <p className="text-center text-lg font-black text-gold-600">{phone}</p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <a
           href={`tel:${digits}`}
           className="rounded-md bg-gradient-to-r from-gold-400 to-gold-600 px-4 py-2.5 text-center text-sm font-bold text-navy-950 transition-transform hover:scale-[1.02]"
@@ -200,13 +205,20 @@ function PhoneActions({ phone }: { phone: string }) {
         </a>
       </div>
       {!isMobile && (
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="mt-2 w-full text-center text-xs text-navy-800/60 hover:text-gold-600"
-        >
-          {copied ? "복사되었습니다" : "번호 복사"}
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="mt-2 w-full text-center text-xs text-navy-800/60 hover:text-gold-600"
+          >
+            {copyState === "copied" ? "번호를 복사했습니다" : "번호 복사"}
+          </button>
+          {copyState === "failed" && (
+            <p className="mt-1 text-center text-xs text-red-600">
+              복사하지 못했어요. 대표전화 {PHONE_NUMBER}로 연락 주세요.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
